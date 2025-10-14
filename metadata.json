@@ -1,0 +1,5 @@
+{
+  "name": "Sketcher RC 0.2",
+  "description": "An application for artists and designers to create and manipulate bitmap visual content. It features a realistic brush engine, layer management, and smart image importing, optimized for touch and stylus interaction.",
+  "requestFramePermissions": []
+}
