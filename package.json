@@ -4,24 +4,30 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-  "dev": "vite",
-  "test": "vitest",
-  "build": "vite build",
+    "dev": "vite",
+    "test": "vitest",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@google/genai": "^1.24.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "@google/genai": "^1.24.0"
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.0.0",
+    "@testing-library/react": "^14.0.0",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "jsdom": "^22.0.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
-    "vitest": "^0.34.0",
-    "@testing-library/react": "^14.0.0",
-    "@testing-library/jest-dom": "^6.0.0",
-    "jsdom": "^22.0.0"
+    "vitest": "^0.34.0"
+  },
+  "vitest": {
+    "globals": true,
+    "environment": "jsdom",
+    "setupFiles": "vitest.setup.ts"
   }
 }
