@@ -274,37 +274,3 @@ export const createThumbnail = (sourceCanvas: HTMLCanvasElement, maxWidth: numbe
         }, 'image/png', 0.9);
     });
 };
-
-export const catmullRom = (p0: Point, p1: Point, p2: Point, p3: Point, t: number): Point => {
-    const t2 = t * t;
-    const t3 = t2 * t;
-
-    const x = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3);
-    const y = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3);
-    
-    // Interpolate pressure linearly for simplicity
-    const pressure = p1.pressure && p2.pressure ? p1.pressure + (p2.pressure - p1.pressure) * t : 1.0;
-
-    return { x, y, pressure };
-};
-
-export const generateSpline = (points: Point[], detail: number = 10): Point[] => {
-    if (points.length < 2) return points;
-
-    const splinedPoints: Point[] = [points[0]];
-    const detailLevel = Math.max(1, detail);
-
-    for (let i = 0; i < points.length - 1; i++) {
-        const p0 = i > 0 ? points[i - 1] : points[i];
-        const p1 = points[i];
-        const p2 = points[i + 1];
-        const p3 = i < points.length - 2 ? points[i + 2] : p2;
-
-        for (let j = 1; j <= detailLevel; j++) {
-            const t = j / detailLevel;
-            splinedPoints.push(catmullRom(p0, p1, p2, p3, t));
-        }
-    }
-
-    return splinedPoints;
-};

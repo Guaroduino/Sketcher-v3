@@ -7,9 +7,8 @@ export function useGuides(canvasSize: { width: number, height: number }) {
     const [rulerGuides, setRulerGuides] = useState<RulerGuide[]>([]);
     const [mirrorGuides, setMirrorGuides] = useState<MirrorGuide[]>([]);
     const [perspectiveGuide, setPerspectiveGuide] = useState<PerspectiveGuide | null>(null);
-    const [perspectiveMatchState, setPerspectiveMatchState] = useState<{ enabled: boolean; points: Point[] } | null>(null);
     const [orthogonalGuide, setOrthogonalGuide] = useState<OrthogonalGuide>({ angle: 0 });
-    const [gridGuide, setGridGuide] = useState<GridGuide>({ type: 'none', spacing: 50, majorLineFrequency: 5, isoAngle: 30 });
+    const [gridGuide, setGridGuide] = useState<GridGuide>({ type: 'cartesian', spacing: 10, majorLineFrequency: 10, isoAngle: 60, majorLineColor: 'rgba(239, 68, 68, 0.6)', minorLineColor: 'rgba(128, 128, 128, 0.3)' });
     const [areGuidesLocked, setAreGuidesLocked] = useState<boolean>(false);
     const [isPerspectiveStrokeLockEnabled, setIsPerspectiveStrokeLockEnabled] = useState(false);
     const [isSnapToGridEnabled, setIsSnapToGridEnabled] = useState(false);
@@ -36,19 +35,21 @@ export function useGuides(canvasSize: { width: number, height: number }) {
             if (newGuide === 'perspective' && !perspectiveGuide) {
                 const { width, height } = canvasSize;
                 const horizon = height * 0.4;
+                const vp1_x = width * 0.1;
+                const vp2_x = width * 0.9;
                 setPerspectiveGuide({
                     lines: {
                         green: [
-                            { id: 'g1', start: { x: -200, y: horizon - 150 }, end: { x: width * 0.25, y: horizon } },
-                            { id: 'g2', start: { x: -200, y: height + 50 }, end: { x: width * 0.25, y: horizon } },
+                            { id: 'g1', start: { x: 0, y: 0 }, end: { x: vp1_x, y: horizon } },
+                            { id: 'g2', start: { x: 0, y: height }, end: { x: vp1_x, y: horizon } },
                         ],
                         red: [
-                            { id: 'r1', start: { x: width + 200, y: horizon - 150 }, end: { x: width * 0.75, y: horizon } },
-                            { id: 'r2', start: { x: width + 200, y: height + 50 }, end: { x: width * 0.75, y: horizon } },
+                            { id: 'r1', start: { x: width, y: 0 }, end: { x: vp2_x, y: horizon } },
+                            { id: 'r2', start: { x: width, y: height }, end: { x: vp2_x, y: horizon } },
                         ],
                         blue: [
-                            { id: 'b1', start: { x: width * 0.4, y: -200 }, end: { x: width * 0.45, y: height } },
-                            { id: 'b2', start: { x: width * 0.6, y: -200 }, end: { x: width * 0.55, y: height } },
+                            { id: 'b1', start: { x: width * 0.3, y: 0 }, end: { x: width * 0.3, y: height } },
+                            { id: 'b2', start: { x: width * 0.7, y: 0 }, end: { x: width * 0.7, y: height } },
                         ],
                     },
                     guidePoint: { x: width / 2, y: height * 0.8 },
@@ -97,46 +98,14 @@ export function useGuides(canvasSize: { width: number, height: number }) {
         }
     }, []);
 
-    const handleStartPerspectiveMatch = useCallback(() => {
-        setPerspectiveGuide(null);
-        setPerspectiveMatchState({ enabled: true, points: [] });
+    const handleSetGridMajorLineColor = useCallback((color: string) => {
+        setGridGuide(g => ({ ...g, majorLineColor: color }));
     }, []);
 
-    const handleCancelPerspectiveMatch = useCallback(() => {
-        setPerspectiveMatchState(null);
+    const handleSetGridMinorLineColor = useCallback((color: string) => {
+        setGridGuide(g => ({ ...g, minorLineColor: color }));
     }, []);
 
-    const handleAddPerspectivePoint = useCallback((point: Point) => {
-        if (!perspectiveMatchState || !perspectiveMatchState.enabled) return;
-
-        const newPoints = [...perspectiveMatchState.points, point];
-
-        if (newPoints.length === 12) {
-            const newGuide: PerspectiveGuide = {
-                lines: {
-                    green: [
-                        { id: 'g1', start: newPoints[0], end: newPoints[1] },
-                        { id: 'g2', start: newPoints[2], end: newPoints[3] },
-                    ],
-                    red: [
-                        { id: 'r1', start: newPoints[4], end: newPoints[5] },
-                        { id: 'r2', start: newPoints[6], end: newPoints[7] },
-                    ],
-                    blue: [
-                        { id: 'b1', start: newPoints[8], end: newPoints[9] },
-                        { id: 'b2', start: newPoints[10], end: newPoints[11] },
-                    ],
-                },
-                guidePoint: { x: canvasSize.width / 2, y: canvasSize.height * 0.8 },
-                extraGuideLines: { green: [], red: [], blue: [] }
-            };
-            setPerspectiveGuide(newGuide);
-            setPerspectiveMatchState(null);
-        } else {
-            setPerspectiveMatchState({ enabled: true, points: newPoints });
-        }
-    }, [perspectiveMatchState, canvasSize]);
-    
     const loadGuideState = useCallback((guideState: any) => {
         setActiveGuide(guideState.activeGuide);
         setIsOrthogonalVisible(guideState.isOrthogonalVisible);
@@ -146,9 +115,9 @@ export function useGuides(canvasSize: { width: number, height: number }) {
         setOrthogonalGuide(guideState.orthogonalGuide);
         
         if (guideState.gridGuide) { // New format
-            setGridGuide(guideState.gridGuide);
+            setGridGuide({ ...guideState.gridGuide, majorLineColor: guideState.gridGuide.majorLineColor || 'rgba(128, 128, 128, 0.6)', minorLineColor: guideState.gridGuide.minorLineColor || 'rgba(128, 128, 128, 0.3)' });
         } else { // Old format for backward compatibility
-            setGridGuide(g => ({ ...g, type: guideState.isGridVisible ? 'cartesian' : 'none' }));
+            setGridGuide(g => ({ ...g, type: guideState.isGridVisible ? 'cartesian' : 'none', majorLineColor: g.majorLineColor || 'rgba(128, 128, 128, 0.6)', minorLineColor: g.minorLineColor || 'rgba(128, 128, 128, 0.3)' }));
         }
 
         setAreGuidesLocked(guideState.areGuidesLocked);
@@ -162,7 +131,6 @@ export function useGuides(canvasSize: { width: number, height: number }) {
         rulerGuides, setRulerGuides,
         mirrorGuides, setMirrorGuides,
         perspectiveGuide, setPerspectiveGuide,
-        perspectiveMatchState,
         orthogonalGuide,
         gridGuide,
         areGuidesLocked, setAreGuidesLocked,
@@ -176,9 +144,8 @@ export function useGuides(canvasSize: { width: number, height: number }) {
         onSetGridSpacing: handleSetGridSpacing,
         onSetGridMajorLineFrequency: handleSetGridMajorLineFrequency,
         onSetGridIsoAngle: handleSetGridIsoAngle,
-        onStartPerspectiveMatch: handleStartPerspectiveMatch,
-        onCancelPerspectiveMatch: handleCancelPerspectiveMatch,
-        onAddPerspectivePoint: handleAddPerspectivePoint,
+        onSetGridMajorLineColor: handleSetGridMajorLineColor,
+        onSetGridMinorLineColor: handleSetGridMinorLineColor,
         loadGuideState,
     };
 }

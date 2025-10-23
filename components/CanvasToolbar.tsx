@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
-import type { Tool, Guide, Point, OrthogonalGuide, TransformState, GridGuide, GridType } from '../types';
-import { HandIcon, ZoomInIcon, ZoomOutIcon, CrosshairIcon, UndoIcon, RedoIcon, TrashIcon, CheckIcon, XIcon, ImageSquareIcon, LockIcon, LockOpenIcon, GridIcon, SnapIcon, ExpandIcon, MinimizeIcon, IsometricIcon } from './icons';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import type { Tool, Guide, Point, OrthogonalGuide, TransformState, GridGuide, GridType, ScaleUnit } from '../types';
+import { HandIcon, ZoomInIcon, ZoomOutIcon, CrosshairIcon, UndoIcon, RedoIcon, TrashIcon, CheckIcon, XIcon, LockIcon, LockOpenIcon, GridIcon, SnapIcon, IsometricIcon, PasteIcon } from './icons';
 
 interface CanvasToolbarProps {
   tool: Tool;
@@ -27,22 +27,27 @@ interface CanvasToolbarProps {
   onCancelTransform: () => void;
   isAspectRatioLocked: boolean;
   onSetAspectRatioLocked: React.Dispatch<React.SetStateAction<boolean>>;
+  isAngleSnapEnabled: boolean;
+  onToggleAngleSnap: () => void;
+  angleSnapValue: 1 | 5 | 10 | 15;
+  onSetAngleSnapValue: (value: 1 | 5 | 10 | 15) => void;
   activeGuide: Guide;
-  perspectiveMatchState: { enabled: boolean; points: Point[] } | null;
-  onStartPerspectiveMatch: () => void;
-  onCancelPerspectiveMatch: () => void;
   orthogonalGuide: OrthogonalGuide | null;
   onSetOrthogonalAngle: (angle: number) => void;
   gridGuide: GridGuide | null;
   onSetGridSpacing: (spacing: number) => void;
   onSetGridMajorLineFrequency: (frequency: number) => void;
   onSetGridIsoAngle: (angle: number) => void;
+  onSetGridMajorLineColor: (color: string) => void;
+  onSetGridMinorLineColor: (color: string) => void;
   areGuidesLocked: boolean;
   onSetAreGuidesLocked: React.Dispatch<React.SetStateAction<boolean>>;
   isPerspectiveStrokeLockEnabled: boolean;
   onSetIsPerspectiveStrokeLockEnabled: React.Dispatch<React.SetStateAction<boolean>>;
-  isFullscreen: boolean;
-  onToggleFullscreen: () => void;
+  scaleFactor: number;
+  scaleUnit: ScaleUnit;
+  onPaste: () => void;
+  hasClipboardContent: boolean;
 }
 
 export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
@@ -70,22 +75,27 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
   onCancelTransform,
   isAspectRatioLocked,
   onSetAspectRatioLocked,
+  isAngleSnapEnabled,
+  onToggleAngleSnap,
+  angleSnapValue,
+  onSetAngleSnapValue,
   activeGuide,
-  perspectiveMatchState,
-  onStartPerspectiveMatch,
-  onCancelPerspectiveMatch,
   orthogonalGuide,
   onSetOrthogonalAngle,
   gridGuide,
   onSetGridSpacing,
   onSetGridMajorLineFrequency,
   onSetGridIsoAngle,
+  onSetGridMajorLineColor,
+  onSetGridMinorLineColor,
   areGuidesLocked,
   onSetAreGuidesLocked,
   isPerspectiveStrokeLockEnabled,
   onSetIsPerspectiveStrokeLockEnabled,
-  isFullscreen,
-  onToggleFullscreen,
+  scaleFactor,
+  scaleUnit,
+  onPaste,
+  hasClipboardContent,
 }) => {
   const [customAngle, setCustomAngle] = useState('');
   const [gridSpacing, setGridSpacing] = useState('50');
@@ -94,6 +104,21 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
   const gridSettingsRef = useRef<HTMLDivElement>(null);
   const gridButtonRef = useRef<HTMLButtonElement>(null);
 
+  const majorLineColors = [
+      { name: 'Gris', value: 'rgba(128, 128, 128, 0.6)' },
+      { name: 'Rojo', value: 'rgba(239, 68, 68, 0.6)' },
+      { name: 'Verde', value: 'rgba(34, 197, 94, 0.6)' },
+      { name: 'Azul', value: 'rgba(59, 130, 246, 0.6)' },
+      { name: 'Negro', value: 'rgba(0, 0, 0, 0.6)' },
+  ];
+
+  const minorLineColors = [
+      { name: 'Gris', value: 'rgba(128, 128, 128, 0.3)' },
+      { name: 'Rojo', value: 'rgba(239, 68, 68, 0.3)' },
+      { name: 'Verde', value: 'rgba(34, 197, 94, 0.3)' },
+      { name: 'Azul', value: 'rgba(59, 130, 246, 0.3)' },
+      { name: 'Negro', value: 'rgba(0, 0, 0, 0.3)' },
+  ];
 
   useEffect(() => {
     if (gridGuide) {
@@ -114,6 +139,34 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const gridSpacingDisplay = useMemo(() => {
+    if (!gridGuide || !scaleFactor) {
+        return `${gridSpacing}px`;
+    }
+
+    const spacingInMm = parseInt(gridSpacing) / scaleFactor;
+    let displayValue: string;
+    
+    switch (scaleUnit) {
+        case 'cm':
+            displayValue = (spacingInMm / 10).toFixed(1);
+            break;
+        case 'm':
+            displayValue = (spacingInMm / 1000).toFixed(2);
+            break;
+        case 'mm':
+        default:
+            displayValue = spacingInMm.toFixed(1);
+            break;
+    }
+
+    return `${gridSpacing}px (${displayValue}${scaleUnit})`;
+}, [gridSpacing, gridGuide, scaleFactor, scaleUnit]);
+
+  const areAnyGuidesActive = useMemo(() => {
+    return activeGuide !== 'none' || isOrthogonalVisible || (gridGuide && gridGuide.type !== 'none');
+  }, [activeGuide, isOrthogonalVisible, gridGuide]);
 
   const toolButtonClasses = (t: Tool) =>
     `p-2 rounded-md transition-colors ${
@@ -137,9 +190,29 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
 
       {/* Transform specific controls */}
       {isTransforming && transformState?.type === 'affine' && (
+        <>
           <button onClick={() => onSetAspectRatioLocked(p => !p)} className={`p-2 rounded-md transition-colors ${ isAspectRatioLocked ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'}`} title={isAspectRatioLocked ? "Desbloquear relación de aspecto" : "Bloquear relación de aspecto"}>
               {isAspectRatioLocked ? <LockIcon className="w-5 h-5" /> : <LockOpenIcon className="w-5 h-5" />}
           </button>
+          <button onClick={onToggleAngleSnap} className={`p-2 rounded-md transition-colors ${ isAngleSnapEnabled ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'}`} title="Activar anclaje de ángulo">
+                <SnapIcon className="w-5 h-5" />
+          </button>
+          {isAngleSnapEnabled && (
+              <>
+                  <div className="w-px h-6 bg-[--bg-hover] mx-1" />
+                  {[1, 5, 10, 15].map(val => (
+                       <button
+                          key={val}
+                          onClick={() => onSetAngleSnapValue(val as 1 | 5 | 10 | 15)}
+                          className={`px-2 py-1 rounded-md text-xs font-semibold transition-colors ${angleSnapValue === val ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'}`}
+                          title={`Anclar a ${val}°`}
+                       >
+                           {val}°
+                       </button>
+                  ))}
+              </>
+          )}
+        </>
       )}
 
       {/* Normal view buttons */}
@@ -172,13 +245,18 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
           <button onClick={onRedo} disabled={!canRedo} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Rehacer">
             <RedoIcon className="w-5 h-5" />
           </button>
+          <button onClick={onPaste} disabled={!hasClipboardContent} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Pegar">
+            <PasteIcon className="w-5 h-5" />
+          </button>
           
           <div className="w-px h-6 bg-[--bg-hover] mx-1" />
 
           {/* Guide Lock */}
-          <button onClick={() => onSetAreGuidesLocked(p => !p)} className={`p-2 rounded-md transition-colors ${areGuidesLocked ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'}`} title={areGuidesLocked ? "Desbloquear Guías" : "Bloquear Guías"}>
-              {areGuidesLocked ? <LockIcon className="w-5 h-5" /> : <LockOpenIcon className="w-5 h-5" />}
-          </button>
+          {areAnyGuidesActive && (
+            <button onClick={() => onSetAreGuidesLocked(p => !p)} className={`p-2 rounded-md transition-colors ${areGuidesLocked ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'}`} title={areGuidesLocked ? "Desbloquear Guías" : "Bloquear Guías"}>
+                {areGuidesLocked ? <LockIcon className="w-5 h-5" /> : <LockOpenIcon className="w-5 h-5" />}
+            </button>
+          )}
 
           {/* Grid Settings */}
           <div className="relative">
@@ -200,20 +278,47 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
 
                     {gridGuide.type !== 'none' && (
                       <>
-                        <div className="border-t border-[--bg-tertiary] my-2" />
-                        <div className="flex items-center justify-between">
-                            <label className="text-xs text-[--text-secondary] flex items-center gap-1"><SnapIcon className="w-4 h-4" />Ajustar a la Retícula</label>
-                            <button
-                                role="switch"
-                                aria-checked={isSnapToGridEnabled}
-                                onClick={onToggleSnapToGrid}
-                                className={`relative inline-flex items-center h-5 rounded-full w-9 transition-colors ${isSnapToGridEnabled ? 'bg-[--accent-primary]' : 'bg-[--bg-tertiary]'}`}
-                            >
-                                <span className={`inline-block w-3 h-3 transform bg-white rounded-full transition-transform ${isSnapToGridEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
-                            </button>
+                        <div>
+                            <label className="text-xs text-[--text-secondary]">Color de Línea Principal</label>
+                            <div className="flex items-center gap-2 mt-1">
+                                {majorLineColors.map(color => (
+                                    <button
+                                        key={color.name}
+                                        title={color.name}
+                                        onClick={() => onSetGridMajorLineColor(color.value)}
+                                        className={`w-6 h-6 rounded-full border-2 transition-all ${
+                                            gridGuide.majorLineColor === color.value
+                                                ? 'border-[--accent-primary] ring-2 ring-offset-2 ring-offset-[--bg-primary] ring-[--accent-primary]'
+                                                : 'border-transparent hover:border-gray-400'
+                                        }`}
+                                        style={{ backgroundColor: color.value.replace(/, 0.6\)$/, ', 1)') }}
+                                    />
+                                ))}
+                            </div>
                         </div>
                         <div>
-                            <label htmlFor="grid-spacing" className="text-xs text-[--text-secondary]">Espaciado: {gridSpacing}px</label>
+                            <label className="text-xs text-[--text-secondary]">Color de Línea Fina</label>
+                            <div className="flex items-center gap-2 mt-1">
+                                {minorLineColors.map(color => (
+                                    <button
+                                        key={color.name}
+                                        title={color.name}
+                                        onClick={() => onSetGridMinorLineColor(color.value)}
+                                        className={`w-6 h-6 rounded-full border-2 transition-all ${
+                                            gridGuide.minorLineColor === color.value
+                                                ? 'border-[--accent-primary] ring-2 ring-offset-2 ring-offset-[--bg-primary] ring-[--accent-primary]'
+                                                : 'border-transparent hover:border-gray-400'
+                                        }`}
+                                        style={{ backgroundColor: color.value.replace(/, 0.3\)$/, ', 1)') }}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                        <div className="border-t border-[--bg-tertiary] my-2" />
+                        <div>
+                            <label htmlFor="grid-spacing" className="text-xs text-[--text-secondary]">
+                              Espaciado: {gridSpacingDisplay}
+                            </label>
                             <input
                                 type="range"
                                 id="grid-spacing"
@@ -242,12 +347,8 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                         </div>
                         {gridGuide.type === 'isometric' && (
                             <div>
-                                <label className="text-xs text-[--text-secondary]">Ángulo</label>
-                                <div className="grid grid-cols-3 gap-2 mt-1">
-                                    <button onClick={() => onSetGridIsoAngle(30)} className={`text-xs p-2 rounded ${gridGuide.isoAngle === 30 ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>30°</button>
-                                    <button onClick={() => onSetGridIsoAngle(45)} className={`text-xs p-2 rounded ${gridGuide.isoAngle === 45 ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>45°</button>
-                                    <button onClick={() => onSetGridIsoAngle(60)} className={`text-xs p-2 rounded ${gridGuide.isoAngle === 60 ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>60°</button>
-                                </div>
+                                <label className="text-xs text-[--text-secondary]">Ángulo: 60°</label>
+                                {/* The angle is now fixed to 60 degrees as requested */}
                             </div>
                         )}
                       </>
@@ -255,13 +356,31 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                 </div>
             )}
           </div>
+          <button
+            onClick={onToggleSnapToGrid}
+            disabled={!gridGuide || gridGuide.type === 'none'}
+            className={`p-2 rounded-md transition-colors ${isSnapToGridEnabled ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'} disabled:opacity-50 disabled:cursor-not-allowed`}
+            title="Ajustar a la Retícula"
+          >
+            <SnapIcon className="w-5 h-5" />
+          </button>
+
+          {activeGuide === 'perspective' && (
+            <>
+                <div className="w-px h-6 bg-[--bg-hover] mx-1" />
+                <button
+                    onClick={() => onSetIsPerspectiveStrokeLockEnabled(p => !p)}
+                    className={`p-2 rounded-md transition-colors ${isPerspectiveStrokeLockEnabled ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'}`}
+                    title={isPerspectiveStrokeLockEnabled ? "Desactivar bloqueo de trazo a perspectiva" : "Activar bloqueo de trazo a perspectiva"}
+                >
+                    <SnapIcon className="w-5 h-5" />
+                </button>
+            </>
+          )}
 
           {/* Other buttons */}
           <button onClick={onClearAll} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Limpiar Lienzo">
             <TrashIcon className="w-5 h-5" />
-          </button>
-          <button onClick={onToggleFullscreen} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title={isFullscreen ? "Salir de Pantalla Completa" : "Entrar en Pantalla Completa"}>
-            {isFullscreen ? <MinimizeIcon className="w-5 h-5" /> : <ExpandIcon className="w-5 h-5" />}
           </button>
         </>
       )}

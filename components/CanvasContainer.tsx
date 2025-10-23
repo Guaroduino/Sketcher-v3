@@ -1,5 +1,7 @@
-import React, { useRef, useEffect, useState, useLayoutEffect } from 'react';
+import React, { useRef, useEffect, useState, useLayoutEffect, useReducer } from 'react';
+// FIX: Corrected relative import paths for modules outside the components directory.
 import type { 
+    CanvasItem,
     SketchObject, 
     Tool, 
     Guide, 
@@ -12,31 +14,43 @@ import type {
     TransformState,
     BrushSettings,
     EraserSettings,
-    MarkerSettings,
+    SolidMarkerSettings,
+    NaturalMarkerSettings,
     AirbrushSettings,
     FXBrushSettings,
     ViewTransform,
     GridGuide,
     StrokeMode,
-    StrokeState
+    StrokeState,
+    StrokeModifier,
+    Selection,
+    MagicWandSettings,
+    TextSettings
 } from '../types';
+// FIX: Corrected relative import paths for hooks.
 import { useCanvasDrawing } from '../hooks/useCanvasDrawing';
 import { useCanvasRendering } from '../hooks/useCanvasRendering';
 import { usePointerEvents } from '../hooks/usePointerEvents';
-import { getCssMatrix3d } from '../utils/canvasUtils';
+// FIX: Corrected relative import path for canvasUtils.
+import { getCssMatrix3d, clearCanvas } from '../utils/canvasUtils';
+// FIX: Corrected relative import path for SelectionToolbar component.
+import { SelectionToolbar } from './SelectionToolbar';
 
 interface CanvasContainerProps {
-  objects: SketchObject[];
+  items: CanvasItem[];
   activeItemId: string | null;
   brushSettings: BrushSettings;
   eraserSettings: EraserSettings;
-  markerSettings: MarkerSettings;
+  solidMarkerSettings: SolidMarkerSettings;
+  naturalMarkerSettings: NaturalMarkerSettings;
   airbrushSettings: AirbrushSettings;
   fxBrushSettings: FXBrushSettings;
+  magicWandSettings: MagicWandSettings;
+  textSettings: TextSettings;
   tool: Tool;
   setTool: (tool: Tool) => void;
   onDrawCommit: (activeItemId: string, beforeCanvas: HTMLCanvasElement) => void;
-  onUpdateItem: (id: string, updates: Partial<SketchObject>) => void;
+  onUpdateItem: (id: string, updates: Partial<CanvasItem>) => void;
   viewTransform: ViewTransform;
   setViewTransform: React.Dispatch<React.SetStateAction<ViewTransform>>;
   activeGuide: Guide;
@@ -48,8 +62,6 @@ interface CanvasContainerProps {
   setMirrorGuides: React.Dispatch<React.SetStateAction<MirrorGuide[]>>;
   perspectiveGuide: PerspectiveGuide | null;
   setPerspectiveGuide: React.Dispatch<React.SetStateAction<PerspectiveGuide | null>>;
-  perspectiveMatchState: { enabled: boolean; points: Point[] } | null;
-  onAddPerspectivePoint: (point: Point) => void;
   orthogonalGuide: OrthogonalGuide;
   gridGuide: GridGuide;
   onSelectItem: (id: string | null) => void;
@@ -61,12 +73,27 @@ interface CanvasContainerProps {
   setTransformState: React.Dispatch<React.SetStateAction<TransformState | null>>;
   transformSourceBbox: CropRect | null;
   isAspectRatioLocked: boolean;
+  isAngleSnapEnabled: boolean;
+  angleSnapValue: 1 | 5 | 10 | 15;
   areGuidesLocked: boolean;
   isPerspectiveStrokeLockEnabled: boolean;
   setIsPerspectiveStrokeLockEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   strokeMode: StrokeMode;
   strokeState: StrokeState | null;
   setStrokeState: React.Dispatch<React.SetStateAction<StrokeState | null>>;
+  strokeModifier: StrokeModifier;
+  selection: Selection | null;
+  setSelection: React.Dispatch<React.SetStateAction<Selection | null>>;
+  onCutSelection: () => void;
+  onCopySelection: () => void;
+  onDeleteSelection: () => void;
+  onDeselect: () => void;
+  getMinZoom: () => number;
+  MAX_ZOOM: number;
+  onAddItem: (type: 'group' | 'object') => string;
+  textEditState: { position: Point; value: string; activeItemId: string; } | null;
+  setTextEditState: React.Dispatch<React.SetStateAction<{ position: Point; value: string; activeItemId: string; } | null>>;
+  onCommitText: (textState: { position: Point; value: string; activeItemId: string; }) => void;
 }
 
 type GuideDragState =
@@ -80,15 +107,29 @@ type GuideDragState =
 
 export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
     const {
-        objects, activeItemId, tool, viewTransform, setViewTransform, 
-        onDrawCommit,
+        items, activeItemId, tool, viewTransform, setViewTransform, 
+        onDrawCommit, onSelectItem, onUpdateItem,
         activeGuide, isOrthogonalVisible, rulerGuides, setRulerGuides, mirrorGuides, setMirrorGuides,
         perspectiveGuide, setPerspectiveGuide, orthogonalGuide, gridGuide, areGuidesLocked,
         isCropping, cropRect, setCropRect, isTransforming, transformState, setTransformState, transformSourceBbox, isAspectRatioLocked,
+        isAngleSnapEnabled, angleSnapValue,
         isPerspectiveStrokeLockEnabled,
         setIsPerspectiveStrokeLockEnabled,
         isSnapToGridEnabled,
         strokeMode, strokeState, setStrokeState,
+        strokeModifier,
+        selection, setSelection,
+        onCutSelection,
+        onCopySelection,
+        onDeleteSelection,
+        onDeselect,
+        getMinZoom,
+        MAX_ZOOM,
+        onAddItem,
+        textSettings,
+        textEditState,
+        setTextEditState,
+        onCommitText,
     } = props;
 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -96,27 +137,33 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
     const previewCanvasRef = useRef<HTMLCanvasElement>(null);
     const previewCursorCanvasRef = useRef<HTMLCanvasElement>(null);
     const uiCanvasRef = useRef<HTMLCanvasElement>(null);
+    const selectionCanvasRef = useRef<HTMLCanvasElement>(null);
     const guideCanvasRef = useRef<HTMLCanvasElement>(null);
+    const textAreaRef = useRef<HTMLTextAreaElement>(null);
     
+    const [renderTrigger, forceRender] = useReducer(c => c + 1, 0);
     const [pointerPosition, setPointerPosition] = useState<Point | null>(null);
     const isDrawingRef = useRef(false);
     const [guideDragState, setGuideDragState] = useState<GuideDragState>(null);
     const [transformPreviewDataUrl, setTransformPreviewDataUrl] = useState<string | null>(null);
     const [livePreviewLayerId, setLivePreviewLayerId] = useState<string | null>(null);
 
-    const activeItem = objects.find(i => i.id === activeItemId);
-    const isDrawingTool = ['brush', 'eraser', 'marker', 'airbrush', 'fx-brush', 'debug-brush'].includes(tool);
+    const activeItem = items.find(i => i.id === activeItemId);
+    const isDrawingTool = ['brush', 'eraser', 'solid-marker', 'natural-marker', 'airbrush', 'fx-brush', 'debug-brush'].includes(tool);
+    const isSelectionTool = ['marquee-rect', 'lasso', 'magic-wand'].includes(tool);
 
     const { drawStrokeWithMirroring } = useCanvasDrawing({
         tool,
         brushSettings: props.brushSettings,
         eraserSettings: props.eraserSettings,
-        markerSettings: props.markerSettings,
+        solidMarkerSettings: props.solidMarkerSettings,
+        naturalMarkerSettings: props.naturalMarkerSettings,
         airbrushSettings: props.airbrushSettings,
         fxBrushSettings: props.fxBrushSettings,
         activeGuide,
         mirrorGuides,
         strokeMode,
+        strokeModifier,
     });
 
     const { 
@@ -125,24 +172,27 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         redrawUI, 
         perspectiveVPs 
     } = useCanvasRendering({
-        mainCanvasRef, guideCanvasRef, uiCanvasRef, objects, viewTransform, isTransforming,
+        mainCanvasRef, guideCanvasRef, uiCanvasRef, items, viewTransform, isTransforming,
         activeItemId, activeGuide, 
         isOrthogonalVisible, 
         rulerGuides, mirrorGuides, perspectiveGuide, orthogonalGuide,
         gridGuide,
         isCropping, cropRect, transformState, transformSourceBbox, 
-        livePreviewLayerId
+        livePreviewLayerId,
     });
 
-    const basePointerHandlers = usePointerEvents({
-        uiCanvasRef, previewCanvasRef, viewTransform, setViewTransform, activeItem, tool, isDrawingTool,
-        onDrawCommit, drawStrokeWithMirroring, areGuidesLocked, activeGuide, 
+    const { dragActionRef, ...basePointerHandlers } = usePointerEvents({
+        items,
+        uiCanvasRef, previewCanvasRef, viewTransform, setViewTransform, activeItem, tool, isDrawingTool, isSelectionTool,
+        onDrawCommit, onSelectItem, onUpdateItem,
+        drawStrokeWithMirroring, areGuidesLocked, activeGuide, 
         isOrthogonalVisible, 
         rulerGuides,
         setRulerGuides, mirrorGuides, setMirrorGuides, perspectiveGuide, setPerspectiveGuide,
         perspectiveVPs, orthogonalGuide, guideDragState, setGuideDragState, cropRect,
         setCropRect, 
         transformState, setTransformState, isAspectRatioLocked,
+        isAngleSnapEnabled, angleSnapValue,
         livePreviewLayerId, setLivePreviewLayerId,
         isPerspectiveStrokeLockEnabled,
         isSnapToGridEnabled,
@@ -152,8 +202,19 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         setStrokeState,
         brushSettings: props.brushSettings,
         eraserSettings: props.eraserSettings,
-        markerSettings: props.markerSettings,
+        solidMarkerSettings: props.solidMarkerSettings,
+        naturalMarkerSettings: props.naturalMarkerSettings,
+        airbrushSettings: props.airbrushSettings,
         fxBrushSettings: props.fxBrushSettings,
+        magicWandSettings: props.magicWandSettings,
+        selection, setSelection,
+        forceRender,
+        getMinZoom,
+        MAX_ZOOM,
+        onAddItem,
+        textEditState,
+        setTextEditState,
+        onCommitText,
     });
     
     const pointerHandlers = {
@@ -175,7 +236,7 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
     };
 
     useEffect(() => {
-        if (isTransforming && activeItem?.canvas && transformSourceBbox) {
+        if (isTransforming && activeItem?.type === 'object' && activeItem?.canvas && transformSourceBbox) {
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = transformSourceBbox.width;
             tempCanvas.height = transformSourceBbox.height;
@@ -228,7 +289,8 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
             switch (tool) {
                 case 'brush': size = props.brushSettings.size; break;
                 case 'eraser': size = props.eraserSettings.size; break;
-                case 'marker': size = props.markerSettings.size; break;
+                case 'solid-marker': size = props.solidMarkerSettings.size; break;
+                case 'natural-marker': size = props.naturalMarkerSettings.size; break;
                 case 'airbrush': size = props.airbrushSettings.size; break;
                 case 'fx-brush': size = props.fxBrushSettings.size; break;
                 case 'debug-brush': size = 2; break;
@@ -261,21 +323,61 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
                     cursorCtx.setLineDash([]);
                 };
 
-                const shapeToDraw = (tool === 'eraser' && props.eraserSettings.tipShape === 'square') ? 'square' : 'circle';
+                const shapeToDraw = (tool === 'eraser' && props.eraserSettings.tipShape === 'square') || (tool === 'solid-marker' && props.solidMarkerSettings.tipShape !== 'line') ? 'square' : 'circle';
                 drawOutline(shapeToDraw);
             }
         }
-    }, [isDrawingTool, tool, pointerPosition, viewTransform.zoom, props.brushSettings, props.eraserSettings, props.markerSettings, props.airbrushSettings, props.fxBrushSettings, isDrawingRef.current]);
+    }, [isDrawingTool, tool, pointerPosition, viewTransform.zoom, props.brushSettings, props.eraserSettings, props.solidMarkerSettings, props.naturalMarkerSettings, props.airbrushSettings, props.fxBrushSettings, isDrawingRef.current]);
+
+    useEffect(() => {
+        const selectionCtx = selectionCanvasRef.current?.getContext('2d');
+        if (!selection || !selectionCtx || selection.sourceItemId !== activeItemId) {
+            if (selectionCtx) clearCanvas(selectionCtx);
+            return;
+        }
+    
+        let animationFrameId: number;
+        let offset = 0;
+        
+        const animate = () => {
+            offset = (offset + 0.5) % 8;
+            
+            clearCanvas(selectionCtx);
+            
+            selectionCtx.save();
+            selectionCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
+            
+            selectionCtx.lineWidth = 1 / viewTransform.zoom;
+            selectionCtx.strokeStyle = 'white';
+            selectionCtx.setLineDash([4 / viewTransform.zoom, 4 / viewTransform.zoom]);
+            selectionCtx.lineDashOffset = -offset;
+            selectionCtx.stroke(selection.path);
+            
+            selectionCtx.strokeStyle = 'black';
+            selectionCtx.lineDashOffset = 4 - offset;
+            selectionCtx.stroke(selection.path);
+            
+            selectionCtx.restore();
+    
+            animationFrameId = requestAnimationFrame(animate);
+        };
+        animate();
+    
+        return () => {
+            cancelAnimationFrame(animationFrameId);
+            if(selectionCtx) clearCanvas(selectionCtx);
+        };
+    }, [selection, viewTransform, activeItemId]);
 
     useLayoutEffect(() => {
         redrawMainCanvas();
         redrawGuides();
         redrawUI();
-    }, [redrawMainCanvas, redrawGuides, redrawUI, isTransforming, transformState, activeItem, transformSourceBbox, viewTransform]);
+    }, [redrawMainCanvas, redrawGuides, redrawUI, isTransforming, transformState, activeItem, transformSourceBbox, viewTransform, renderTrigger]);
     
     useEffect(() => {
         const container = containerRef.current;
-        const canvases = [mainCanvasRef.current, previewCanvasRef.current, previewCursorCanvasRef.current, uiCanvasRef.current, guideCanvasRef.current];
+        const canvases = [mainCanvasRef.current, previewCanvasRef.current, previewCursorCanvasRef.current, uiCanvasRef.current, guideCanvasRef.current, selectionCanvasRef.current];
         if (!container || canvases.some(c => !c)) return;
 
         const resizeObserver = new ResizeObserver(entries => {
@@ -296,6 +398,20 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         return () => resizeObserver.disconnect();
     }, [redrawMainCanvas, redrawGuides, redrawUI]);
     
+    useEffect(() => {
+        if (textEditState && textAreaRef.current) {
+            textAreaRef.current.focus();
+            textAreaRef.current.value = textEditState.value;
+        }
+    }, [textEditState]);
+
+    useEffect(() => {
+        if (textAreaRef.current) {
+            textAreaRef.current.style.height = 'auto';
+            textAreaRef.current.style.height = `${textAreaRef.current.scrollHeight}px`;
+        }
+    }, [textEditState?.value]);
+
     let transformPreviewStyle: React.CSSProperties = { display: 'none' };
     if (isTransforming && transformState && transformSourceBbox && transformPreviewDataUrl) {
         
@@ -353,10 +469,66 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
     }
 
     const getCursorStyle = () => {
+        if (tool === 'text') return 'text';
         if (isDrawingTool) return 'none';
+        if (isSelectionTool) return 'crosshair';
         if (tool === 'pan') return isDrawingRef.current ? 'grabbing' : 'grab';
-        return 'crosshair';
+        return 'default';
     };
+
+    const handleTextCommit = () => {
+        if (textEditState) {
+            onCommitText(textEditState);
+        }
+    };
+
+    const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        if (textEditState) {
+            setTextEditState({ ...textEditState, value: e.target.value });
+        }
+    };
+
+    const handleTextKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === 'Escape') {
+            setTextEditState(null);
+        } else if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleTextCommit();
+        }
+    };
+
+    let textEditorStyle: React.CSSProperties = { display: 'none' };
+    if (textEditState) {
+        const { position } = textEditState;
+        const viewX = position.x * viewTransform.zoom + viewTransform.pan.x;
+        const viewY = position.y * viewTransform.zoom + viewTransform.pan.y;
+
+        textEditorStyle = {
+            position: 'absolute',
+            left: `${viewX}px`,
+            top: `${viewY}px`,
+            transform: textSettings.textAlign === 'center' ? 'translateX(-50%)' : textSettings.textAlign === 'right' ? 'translateX(-100%)' : 'none',
+            display: 'block',
+            background: 'rgba(255, 255, 255, 0.1)',
+            border: '1px dashed rgba(255, 255, 255, 0.8)',
+            borderRadius: '2px',
+            padding: '0',
+            margin: '0',
+            resize: 'none',
+            overflow: 'hidden',
+            outline: 'none',
+            whiteSpace: 'pre-wrap',
+            fontFamily: textSettings.fontFamily,
+            fontSize: `${textSettings.fontSize * viewTransform.zoom}px`,
+            lineHeight: 1.2,
+            color: textSettings.color,
+            textAlign: textSettings.textAlign,
+            fontWeight: textSettings.fontWeight,
+            minWidth: `${10 * viewTransform.zoom}px`,
+            minHeight: `${textSettings.fontSize * 1.2 * viewTransform.zoom}px`,
+            height: 'auto',
+        };
+    }
 
     return (
         <div
@@ -367,7 +539,7 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
             onContextMenu={e => e.preventDefault()}
         >
             <canvas ref={mainCanvasRef} className="absolute inset-0" />
-            
+            <canvas ref={guideCanvasRef} className="absolute inset-0 pointer-events-none" />
             <canvas ref={previewCanvasRef} className="absolute inset-0 pointer-events-none" />
             
             <img
@@ -378,8 +550,31 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
             />
 
             <canvas ref={uiCanvasRef} className="absolute inset-0 pointer-events-none" />
-            <canvas ref={guideCanvasRef} className="absolute inset-0 pointer-events-none" />
+            <canvas ref={selectionCanvasRef} className="absolute inset-0 pointer-events-none" />
             <canvas ref={previewCursorCanvasRef} className="absolute inset-0 pointer-events-none" />
+
+            {textEditState && (
+                <textarea
+                    ref={textAreaRef}
+                    style={textEditorStyle}
+                    defaultValue={textEditState.value}
+                    onChange={handleTextChange}
+                    onBlur={handleTextCommit}
+                    onKeyDown={handleTextKeyDown}
+                    onPointerDown={e => e.stopPropagation()}
+                />
+            )}
+
+            {selection && activeItemId === selection.sourceItemId && (
+                <SelectionToolbar
+                    selection={selection}
+                    viewTransform={viewTransform}
+                    onCut={onCutSelection}
+                    onCopy={onCopySelection}
+                    onDelete={onDeleteSelection}
+                    onDeselect={onDeselect}
+                />
+            )}
         </div>
     );
 };

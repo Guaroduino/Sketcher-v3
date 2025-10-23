@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Tool, BrushPreset, QuickAccessTool } from '../../types';
-import { XIcon, SelectIcon, BrushIcon, EraserIcon, MarkerIcon, AirbrushIcon, FXBrushIcon, TransformIcon, FreeTransformIcon, MagicWandIcon, CropIcon } from '../icons';
+// FIX: Replaced MarkerIcon with SolidMarkerIcon and NaturalMarkerIcon.
+import { XIcon, SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, NaturalMarkerIcon, AirbrushIcon, FXBrushIcon, TransformIcon, FreeTransformIcon, SparklesIcon, CropIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon } from '../icons';
 
 interface ToolSelectorModalProps {
     isOpen: boolean;
@@ -9,16 +10,21 @@ interface ToolSelectorModalProps {
     fxPresets: BrushPreset[];
 }
 
+// FIX: Replaced 'marker' with 'solid-marker' and 'natural-marker'.
 const standardTools: { name: Tool, icon: React.FC<{className?: string}> }[] = [
     { name: 'select', icon: SelectIcon },
+    { name: 'marquee-rect', icon: MarqueeRectIcon },
+    { name: 'lasso', icon: LassoIcon },
+    { name: 'magic-wand', icon: MagicWandIcon },
     { name: 'brush', icon: BrushIcon },
     { name: 'eraser', icon: EraserIcon },
-    { name: 'marker', icon: MarkerIcon },
+    { name: 'solid-marker', icon: SolidMarkerIcon },
+    { name: 'natural-marker', icon: NaturalMarkerIcon },
     { name: 'airbrush', icon: AirbrushIcon },
     { name: 'fx-brush', icon: FXBrushIcon },
     { name: 'transform', icon: TransformIcon },
     { name: 'free-transform', icon: FreeTransformIcon },
-    { name: 'enhance', icon: MagicWandIcon },
+    { name: 'enhance', icon: SparklesIcon },
     { name: 'crop', icon: CropIcon },
 ];
 

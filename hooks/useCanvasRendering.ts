@@ -1,5 +1,6 @@
 import React, { useCallback, useRef } from 'react';
 import type {
+    CanvasItem,
     SketchObject,
     ViewTransform,
     Guide,
@@ -21,7 +22,7 @@ export function useCanvasRendering({
     mainCanvasRef,
     guideCanvasRef,
     uiCanvasRef,
-    objects,
+    items,
     viewTransform,
     activeItemId,
     activeGuide,
@@ -41,7 +42,7 @@ export function useCanvasRendering({
     mainCanvasRef: React.RefObject<HTMLCanvasElement>;
     guideCanvasRef: React.RefObject<HTMLCanvasElement>;
     uiCanvasRef: React.RefObject<HTMLCanvasElement>;
-    objects: SketchObject[];
+    items: CanvasItem[];
     viewTransform: ViewTransform;
     activeItemId: string | null;
     activeGuide: Guide;
@@ -73,8 +74,8 @@ export function useCanvasRendering({
         mainCtx.save();
         mainCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
 
-        const itemMap = new Map<string, SketchObject>(objects.map(i => [i.id, i]));
-        const isEffectivelyVisible = (item: SketchObject): boolean => {
+        const itemMap = new Map<string, CanvasItem>(items.map(i => [i.id, i]));
+        const isEffectivelyVisible = (item: CanvasItem): boolean => {
             if (!item.isVisible) return false;
             if (item.parentId) {
                 const parent = itemMap.get(item.parentId);
@@ -82,19 +83,21 @@ export function useCanvasRendering({
             }
             return true;
         };
+        
+        const drawableItems = items.filter(isEffectivelyVisible);
 
-        objects.forEach(obj => {
-            if ((isTransforming && obj.id === activeItemId) || obj.id === livePreviewLayerId) {
+        // Draw items in order
+        drawableItems.forEach(item => {
+            if ((isTransforming && item.id === activeItemId) || item.id === livePreviewLayerId) {
                 // Hide object being transformed or live-previewed from main canvas
-                // It will be drawn on the preview canvas
-            } else if (obj.type === 'object' && isEffectivelyVisible(obj) && obj.canvas) {
-                mainCtx.globalAlpha = obj.opacity;
-                mainCtx.drawImage(obj.canvas, obj.offsetX || 0, obj.offsetY || 0);
+            } else if (item.type === 'object' && item.canvas) {
+                mainCtx.globalAlpha = item.opacity;
+                mainCtx.drawImage(item.canvas, item.offsetX || 0, item.offsetY || 0);
             }
         });
-
+        
         mainCtx.restore();
-    }, [objects, viewTransform, activeItemId, isTransforming, livePreviewLayerId]);
+    }, [items, viewTransform, activeItemId, isTransforming, livePreviewLayerId]);
 
     const redrawGuides = useCallback(() => {
         const guideCtx = guideCanvasRef.current?.getContext('2d');
@@ -118,6 +121,83 @@ export function useCanvasRendering({
             height: guideCtx.canvas.height / viewTransform.zoom
         };
 
+        // --- Grid Drawing Logic ---
+        if (gridGuide.type !== 'none' && gridGuide.spacing > 0) {
+            const { spacing, majorLineFrequency, type, isoAngle, majorLineColor: majorLineColorFromProp, minorLineColor: minorLineColorFromProp } = gridGuide;
+
+            guideCtx.lineWidth = 0.5 / viewTransform.zoom;
+            const minorLineColor = minorLineColorFromProp;
+            const majorLineColor = majorLineColorFromProp;
+
+            if (type === 'cartesian') {
+                const startX = Math.floor(worldView.x / spacing) * spacing;
+                const endX = worldView.x + worldView.width;
+                const startY = Math.floor(worldView.y / spacing) * spacing;
+                const endY = worldView.y + worldView.height;
+                
+                let i_x = Math.round(startX / spacing);
+                for (let x = startX; x <= endX; x += spacing) {
+                    guideCtx.strokeStyle = (i_x % majorLineFrequency === 0) ? majorLineColor : minorLineColor;
+                    guideCtx.beginPath();
+                    guideCtx.moveTo(x, worldView.y);
+                    guideCtx.lineTo(x, endY);
+                    guideCtx.stroke();
+                    i_x++;
+                }
+
+                let i_y = Math.round(startY / spacing);
+                for (let y = startY; y <= endY; y += spacing) {
+                    guideCtx.strokeStyle = (i_y % majorLineFrequency === 0) ? majorLineColor : minorLineColor;
+                    guideCtx.beginPath();
+                    guideCtx.moveTo(worldView.x, y);
+                    guideCtx.lineTo(endX, y);
+                    guideCtx.stroke();
+                    i_y++;
+                }
+            } else if (type === 'isometric') {
+                const canvasDiagonal = Math.hypot(worldView.width, worldView.height) * 1.2;
+                const center = { x: worldView.x + worldView.width / 2, y: worldView.y + worldView.height / 2 };
+                const lineCount = Math.ceil(canvasDiagonal / spacing);
+                
+                const angles = [
+                    90 * (Math.PI / 180), // Vertical
+                    (90 - isoAngle) * (Math.PI / 180),
+                    (90 + isoAngle) * (Math.PI / 180),
+                ];
+
+                angles.forEach(angle => {
+                    const cos = Math.cos(angle);
+                    const sin = Math.sin(angle);
+                    const perpCos = Math.cos(angle + Math.PI / 2);
+                    const perpSin = Math.sin(angle + Math.PI / 2);
+
+                    const centerProj = center.x * perpCos + center.y * perpSin;
+                    const startI = Math.floor((centerProj - canvasDiagonal / 2) / spacing);
+                    const endI = Math.ceil((centerProj + canvasDiagonal / 2) / spacing);
+
+                    for (let i = startI; i <= endI; i++) {
+                        const offset = i * spacing;
+                        const lineCenter = {
+                            x: offset * perpCos,
+                            y: offset * perpSin
+                        };
+
+                        const start = { x: lineCenter.x - canvasDiagonal * cos, y: lineCenter.y - canvasDiagonal * sin };
+                        const end = { x: lineCenter.x + canvasDiagonal * cos, y: lineCenter.y + canvasDiagonal * sin };
+                        
+                        guideCtx.strokeStyle = (i % majorLineFrequency === 0) ? majorLineColor : minorLineColor;
+                        guideCtx.beginPath();
+                        guideCtx.moveTo(start.x, start.y);
+                        guideCtx.lineTo(end.x, end.y);
+                        guideCtx.stroke();
+                    }
+                });
+            }
+        }
+        
+        // --- Guide Drawing Logic ---
+
+        // Ruler
         if (activeGuide === 'ruler' && rulerGuides) {
             rulerGuides.forEach(guide => {
                 guideCtx.strokeStyle = 'cyan';
@@ -127,24 +207,20 @@ export function useCanvasRendering({
                 guideCtx.lineTo(guide.end.x, guide.end.y);
                 guideCtx.stroke();
                 guideCtx.fillStyle = 'cyan';
-                // End handles
-                guideCtx.beginPath();
-                guideCtx.arc(guide.start.x, guide.start.y, handleSize, 0, 2 * Math.PI);
-                guideCtx.fill();
-                guideCtx.beginPath();
-                guideCtx.arc(guide.end.x, guide.end.y, handleSize, 0, 2 * Math.PI);
-                guideCtx.fill();
-                // Center handle (for moving and copying)
+                // Handles
                 const midPoint = { x: (guide.start.x + guide.end.x) / 2, y: (guide.start.y + guide.end.y) / 2 };
-                guideCtx.beginPath();
-                guideCtx.arc(midPoint.x, midPoint.y, handleSize, 0, 2 * Math.PI);
-                guideCtx.fill();
+                [guide.start, guide.end, midPoint].forEach(p => {
+                    guideCtx.beginPath();
+                    guideCtx.arc(p.x, p.y, handleSize, 0, 2 * Math.PI);
+                    guideCtx.fill();
+                });
             });
         }
-        
+
+        // Mirror
         if (activeGuide === 'mirror' && mirrorGuides) {
             mirrorGuides.forEach(guide => {
-                guideCtx.strokeStyle = 'magenta';
+                guideCtx.strokeStyle = 'rgba(139, 0, 255, 0.8)'; // A violet color
                 guideCtx.lineWidth = 1 / viewTransform.zoom;
                 guideCtx.setLineDash([5 / viewTransform.zoom, 5 / viewTransform.zoom]);
                 guideCtx.beginPath();
@@ -152,417 +228,283 @@ export function useCanvasRendering({
                 guideCtx.lineTo(guide.end.x, guide.end.y);
                 guideCtx.stroke();
                 guideCtx.setLineDash([]);
-                guideCtx.fillStyle = 'magenta';
-                // End handles
-                guideCtx.beginPath();
-                guideCtx.arc(guide.start.x, guide.start.y, handleSize, 0, 2 * Math.PI);
-                guideCtx.fill();
-                guideCtx.beginPath();
-                guideCtx.arc(guide.end.x, guide.end.y, handleSize, 0, 2 * Math.PI);
-                guideCtx.fill();
-                // Center handle
+                
+                guideCtx.fillStyle = 'rgba(139, 0, 255, 0.8)';
+                // Handles
                 const midPoint = { x: (guide.start.x + guide.end.x) / 2, y: (guide.start.y + guide.end.y) / 2 };
-                guideCtx.beginPath();
-                guideCtx.arc(midPoint.x, midPoint.y, handleSize, 0, 2 * Math.PI);
-                guideCtx.fill();
-            });
-        }
-
-        if (activeGuide === 'perspective' && perspectiveGuide) {
-            const { lines, extraGuideLines, guidePoint } = perspectiveGuide;
-            const vpGreen = lines.green.length >= 2 ? getLineIntersection(lines.green[0], lines.green[1]) : null;
-            const vpRed = lines.red.length >= 2 ? getLineIntersection(lines.red[0], lines.red[1]) : null;
-            const vpBlue = lines.blue.length >= 2 ? getLineIntersection(lines.blue[0], lines.blue[1]) : null;
-            perspectiveVPs.current = { vpGreen, vpRed, vpBlue };
-
-            guideCtx.lineWidth = 1 / viewTransform.zoom;
-            guideCtx.globalAlpha = 0.5;
-
-            // Draw Horizon
-            if (vpGreen && vpRed) {
-                guideCtx.strokeStyle = 'yellow';
-                guideCtx.beginPath();
-                const dx = vpRed.x - vpGreen.x;
-                const dy = vpRed.y - vpGreen.y;
-                guideCtx.moveTo(vpGreen.x - dx * 100, vpGreen.y - dy * 100);
-                guideCtx.lineTo(vpRed.x + dx * 100, vpRed.y + dy * 100);
-                guideCtx.stroke();
-            }
-            
-            const drawLineFromVp = (vp: Point | null, point: Point, color: string) => {
-                if (!vp) return;
-                guideCtx.save();
-                guideCtx.strokeStyle = color;
-                guideCtx.setLineDash([5 / viewTransform.zoom, 5 / viewTransform.zoom]);
-                guideCtx.globalAlpha = 0.7;
-                
-                guideCtx.beginPath();
-                const dx = point.x - vp.x;
-                const dy = point.y - vp.y;
-                const len = Math.hypot(dx, dy);
-                if (len === 0) { guideCtx.restore(); return; }
-                
-                const extensionFactor = 10000;
-                guideCtx.moveTo(vp.x - (dx / len) * extensionFactor, vp.y - (dy / len) * extensionFactor);
-                guideCtx.lineTo(vp.x + (dx / len) * extensionFactor, vp.y + (dy / len) * extensionFactor);
-                guideCtx.stroke();
-                guideCtx.restore();
-            };
-
-            // Draw main guide lines (dashed)
-            drawLineFromVp(vpGreen, guidePoint, 'lime');
-            drawLineFromVp(vpRed, guidePoint, 'red');
-            drawLineFromVp(vpBlue, guidePoint, 'cyan');
-
-            // Draw extra guide lines (also dashed)
-            extraGuideLines.green.forEach(p => drawLineFromVp(vpGreen, p.handle, 'lime'));
-            extraGuideLines.red.forEach(p => drawLineFromVp(vpRed, p.handle, 'red'));
-            extraGuideLines.blue.forEach(p => drawLineFromVp(vpBlue, p.handle, 'cyan'));
-            
-            guideCtx.globalAlpha = 1.0;
-            const vpRadius = 6 / viewTransform.zoom;
-
-            // Draw VP points on top
-            if (vpGreen) {
-                guideCtx.fillStyle = 'lime';
-                guideCtx.beginPath();
-                guideCtx.arc(vpGreen.x, vpGreen.y, vpRadius, 0, 2 * Math.PI);
-                guideCtx.fill();
-            }
-            if (vpRed) {
-                guideCtx.fillStyle = 'red';
-                guideCtx.beginPath();
-                guideCtx.arc(vpRed.x, vpRed.y, vpRadius, 0, 2 * Math.PI);
-                guideCtx.fill();
-            }
-            if (vpBlue) {
-                guideCtx.fillStyle = 'cyan';
-                guideCtx.beginPath();
-                guideCtx.arc(vpBlue.x, vpBlue.y, vpRadius, 0, 2 * Math.PI);
-                guideCtx.fill();
-            }
-
-            // Draw handles for defining lines
-            const allDefiningLines: { lines: PerspectiveGuideLine[], color: string }[] = [
-                { lines: lines.green, color: 'lime' },
-                { lines: lines.red, color: 'red' },
-                { lines: lines.blue, color: 'cyan' },
-            ];
-
-            allDefiningLines.forEach(({ lines, color }) => {
-                guideCtx.strokeStyle = color;
-                guideCtx.fillStyle = color;
-                lines.forEach(line => {
+                [guide.start, guide.end, midPoint].forEach(p => {
                     guideCtx.beginPath();
-                    guideCtx.moveTo(line.start.x, line.start.y);
-                    guideCtx.lineTo(line.end.x, line.end.y);
-                    guideCtx.stroke();
-                    guideCtx.beginPath();
-                    guideCtx.arc(line.start.x, line.start.y, handleSize, 0, 2 * Math.PI);
-                    guideCtx.fill();
-                    guideCtx.beginPath();
-                    guideCtx.arc(line.end.x, line.end.y, handleSize, 0, 2 * Math.PI);
+                    guideCtx.arc(p.x, p.y, handleSize, 0, 2 * Math.PI);
                     guideCtx.fill();
                 });
             });
-
-            // Draw handles for extra guide lines
-            guideCtx.fillStyle = 'lime';
-            extraGuideLines.green.forEach(p => {
-                guideCtx.beginPath();
-                guideCtx.arc(p.handle.x, p.handle.y, handleSize, 0, 2 * Math.PI);
-                guideCtx.fill();
-            });
-            guideCtx.fillStyle = 'red';
-            extraGuideLines.red.forEach(p => {
-                guideCtx.beginPath();
-                guideCtx.arc(p.handle.x, p.handle.y, handleSize, 0, 2 * Math.PI);
-                guideCtx.fill();
-            });
-            guideCtx.fillStyle = 'cyan';
-            extraGuideLines.blue.forEach(p => {
-                guideCtx.beginPath();
-                guideCtx.arc(p.handle.x, p.handle.y, handleSize, 0, 2 * Math.PI);
-                guideCtx.fill();
-            });
-
-            // Draw main guide point handle
-            guideCtx.fillStyle = 'yellow';
-            guideCtx.beginPath();
-            guideCtx.arc(perspectiveGuide.guidePoint.x, perspectiveGuide.guidePoint.y, handleSize * 1.5, 0, 2 * Math.PI);
-            guideCtx.fill();
-
-            // Draw "copy" handles on main guide lines
-            guideCtx.strokeStyle = 'yellow';
-            guideCtx.lineWidth = 2 / viewTransform.zoom;
-            const copyHandleRadius = handleSize * 0.8;
-
-            // Draw for Green and Red VPs (midpoint)
-            const drawMidpointCopyHandle = (vp: Point | null, p: Point) => {
-                if (!vp) return;
-                const midX = (vp.x + p.x) / 2;
-                const midY = (vp.y + p.y) / 2;
-                guideCtx.beginPath();
-                guideCtx.arc(midX, midY, copyHandleRadius, 0, 2 * Math.PI);
-                guideCtx.stroke();
-            };
-            drawMidpointCopyHandle(vpGreen, guidePoint);
-            drawMidpointCopyHandle(vpRed, guidePoint);
-
-            // Special handling for Blue VP copy handle (fixed distance from guide point)
-            if (vpBlue) {
-                const vecX = vpBlue.x - guidePoint.x;
-                const vecY = vpBlue.y - guidePoint.y;
-                const len = Math.hypot(vecX, vecY);
-                if (len > 0) {
-                    const distanceFromGuidePoint = 100; // A fixed canvas pixel distance
-                    const blueHandleX = guidePoint.x + (vecX / len) * distanceFromGuidePoint;
-                    const blueHandleY = guidePoint.y + (vecY / len) * distanceFromGuidePoint;
-                    guideCtx.beginPath();
-                    guideCtx.arc(blueHandleX, blueHandleY, copyHandleRadius, 0, 2 * Math.PI);
-                    guideCtx.stroke();
-                }
-            }
         }
 
+        // Orthogonal
         if (isOrthogonalVisible && orthogonalGuide) {
-            guideCtx.strokeStyle = 'rgba(180, 180, 180, 0.4)';
-            guideCtx.lineWidth = 1 / viewTransform.zoom;
-            guideCtx.setLineDash([2 / viewTransform.zoom, 4 / viewTransform.zoom]);
-
-            const angleRad = (orthogonalGuide.angle * Math.PI) / 180;
+            const center = {
+                x: worldView.x + worldView.width / 2,
+                y: worldView.y + worldView.height / 2,
+            };
+            const length = Math.max(worldView.width, worldView.height) * 1.5;
             
-            const canvasWidth = guideCtx.canvas.width;
-            const canvasHeight = guideCtx.canvas.height;
-            
-            // Viewport center in world coordinates
-            const worldCenterX = (canvasWidth / 2 - viewTransform.pan.x) / viewTransform.zoom;
-            const worldCenterY = (canvasHeight / 2 - viewTransform.pan.y) / viewTransform.zoom;
-
             guideCtx.save();
+            guideCtx.translate(center.x, center.y);
+            guideCtx.rotate(orthogonalGuide.angle * Math.PI / 180);
             
-            // Translate to world center and rotate
-            guideCtx.translate(worldCenterX, worldCenterY);
-            guideCtx.rotate(angleRad);
-            
-            const spacing = 50; // Grid spacing in world units
-            
-            const viewportDiagonal = Math.hypot(canvasWidth / viewTransform.zoom, canvasHeight / viewTransform.zoom);
-            const halfSize = viewportDiagonal / 2;
+            guideCtx.strokeStyle = 'rgba(255, 165, 0, 0.7)'; // Orange
+            guideCtx.lineWidth = 1 / viewTransform.zoom;
+            guideCtx.setLineDash([5 / viewTransform.zoom, 5 / viewTransform.zoom]);
 
-            const lineCount = Math.ceil(halfSize / spacing);
-
-            // Draw lines from the center outwards
             guideCtx.beginPath();
-            for (let i = 1; i <= lineCount; i++) {
-                const offset = i * spacing;
-                // horizontal lines
-                guideCtx.moveTo(-halfSize, offset);
-                guideCtx.lineTo(halfSize, offset);
-                guideCtx.moveTo(-halfSize, -offset);
-                guideCtx.lineTo(halfSize, -offset);
-                // vertical lines
-                guideCtx.moveTo(offset, -halfSize);
-                guideCtx.lineTo(offset, halfSize);
-                guideCtx.moveTo(-offset, -halfSize);
-                guideCtx.lineTo(-offset, halfSize);
-            }
-            // Draw center lines
-            guideCtx.moveTo(-halfSize, 0);
-            guideCtx.lineTo(halfSize, 0);
-            guideCtx.moveTo(0, -halfSize);
-            guideCtx.lineTo(0, halfSize);
-
+            guideCtx.moveTo(-length / 2, 0);
+            guideCtx.lineTo(length / 2, 0);
+            guideCtx.moveTo(0, -length / 2);
+            guideCtx.lineTo(0, length / 2);
             guideCtx.stroke();
+
             guideCtx.restore();
             guideCtx.setLineDash([]);
         }
 
-        if (gridGuide.type !== 'none') {
-            const { spacing, majorLineFrequency } = gridGuide;
+        // Perspective
+        if (activeGuide === 'perspective' && perspectiveGuide) {
+            const { lines, guidePoint, extraGuideLines } = perspectiveGuide;
+            const lineLength = Math.hypot(worldView.width, worldView.height) * 10;
 
-            if (gridGuide.type === 'cartesian') {
-                const startX = Math.floor(worldView.x / spacing) * spacing;
-                const startY = Math.floor(worldView.y / spacing) * spacing;
+            const vpGreen = getLineIntersection(lines.green[0], lines.green[1]);
+            const vpRed = getLineIntersection(lines.red[0], lines.red[1]);
+            const vpBlue = getLineIntersection(lines.blue[0], lines.blue[1]);
+            perspectiveVPs.current = { vpGreen, vpRed, vpBlue };
 
-                for (let x = startX; x < worldView.x + worldView.width; x += spacing) {
-                    const index = Math.round(x / spacing);
-                    if (majorLineFrequency > 0 && Math.abs(index % majorLineFrequency) < 0.001) {
-                        guideCtx.strokeStyle = 'rgba(220, 38, 38, 0.4)';
-                        guideCtx.lineWidth = 2 / viewTransform.zoom;
-                    } else {
-                        guideCtx.strokeStyle = 'rgba(0, 150, 255, 0.3)';
-                        guideCtx.lineWidth = 1 / viewTransform.zoom;
-                    }
-                    guideCtx.beginPath();
-                    guideCtx.moveTo(x, worldView.y);
-                    guideCtx.lineTo(x, worldView.y + worldView.height);
-                    guideCtx.stroke();
-                }
-
-                for (let y = startY; y < worldView.y + worldView.height; y += spacing) {
-                    const index = Math.round(y / spacing);
-                    if (majorLineFrequency > 0 && Math.abs(index % majorLineFrequency) < 0.001) {
-                        guideCtx.strokeStyle = 'rgba(220, 38, 38, 0.4)';
-                        guideCtx.lineWidth = 2 / viewTransform.zoom;
-                    } else {
-                        guideCtx.strokeStyle = 'rgba(0, 150, 255, 0.3)';
-                        guideCtx.lineWidth = 1 / viewTransform.zoom;
-                    }
-                    guideCtx.beginPath();
-                    guideCtx.moveTo(worldView.x, y);
-                    guideCtx.lineTo(worldView.x + worldView.width, y);
-                    guideCtx.stroke();
-                }
-            } else if (gridGuide.type === 'isometric') {
-                const drawIsoLines = (angleDeg: number) => {
-                    const angleRad = angleDeg * Math.PI / 180;
-                    const sin = Math.sin(angleRad);
-                    const cos = Math.cos(angleRad);
-
-                    const corners = [
-                        {x: worldView.x, y: worldView.y},
-                        {x: worldView.x + worldView.width, y: worldView.y},
-                        {x: worldView.x + worldView.width, y: worldView.y + worldView.height},
-                        {x: worldView.x, y: worldView.y + worldView.height},
-                    ];
-
-                    const ds = corners.map(p => p.x * sin - p.y * cos);
-                    const min_d = Math.min(...ds);
-                    const max_d = Math.max(...ds);
-                    
-                    const k_start = Math.floor(min_d / spacing);
-                    const k_end = Math.ceil(max_d / spacing);
-
-                    for(let k = k_start; k <= k_end; k++) {
-                        const d = k * spacing;
-                        // Line equation: x * sin - y * cos = d
-                        const isMajor = majorLineFrequency > 0 && Math.abs(k % majorLineFrequency) < 0.001;
-                        guideCtx.strokeStyle = isMajor ? 'rgba(220, 38, 38, 0.4)' : 'rgba(0, 150, 255, 0.3)';
-                        guideCtx.lineWidth = (isMajor ? 2 : 1) / viewTransform.zoom;
-
-                        const intersections = [];
-                        // Top edge (y = worldView.y)
-                        if (Math.abs(sin) > 1e-6) {
-                            const x = (d + worldView.y * cos) / sin;
-                            if (x >= worldView.x && x <= worldView.x + worldView.width) intersections.push({x, y: worldView.y});
-                        }
-                        // Bottom edge (y = worldView.y + worldView.height)
-                         if (Math.abs(sin) > 1e-6) {
-                            const x = (d + (worldView.y + worldView.height) * cos) / sin;
-                            if (x >= worldView.x && x <= worldView.x + worldView.width) intersections.push({x, y: worldView.y + worldView.height});
-                        }
-                        // Left edge (x = worldView.x)
-                        if (Math.abs(cos) > 1e-6) {
-                            const y = (worldView.x * sin - d) / cos;
-                            if (y >= worldView.y && y <= worldView.y + worldView.height) intersections.push({x: worldView.x, y});
-                        }
-                        // Right edge (x = worldView.x + worldView.width)
-                         if (Math.abs(cos) > 1e-6) {
-                            const y = ((worldView.x + worldView.width) * sin - d) / cos;
-                             if (y >= worldView.y && y <= worldView.y + worldView.height) intersections.push({x: worldView.x + worldView.width, y});
-                        }
-                        
-                        if (intersections.length >= 2) {
-                            guideCtx.beginPath();
-                            guideCtx.moveTo(intersections[0].x, intersections[0].y);
-                            guideCtx.lineTo(intersections[1].x, intersections[1].y);
-                            guideCtx.stroke();
-                        }
-                    }
-                };
-                
-                const isoAngle = gridGuide.isoAngle;
-                drawIsoLines(isoAngle);
-                drawIsoLines(180 - isoAngle);
-                drawIsoLines(90);
+            // --- 1. Draw Horizon Line ---
+            if (vpGreen && vpRed) {
+                guideCtx.strokeStyle = 'rgba(255, 255, 0, 0.7)'; // Yellow
+                guideCtx.lineWidth = 1.5 / viewTransform.zoom;
+                guideCtx.setLineDash([8 / viewTransform.zoom, 4 / viewTransform.zoom]);
+                guideCtx.beginPath();
+                const dx = vpRed.x - vpGreen.x;
+                const dy = vpRed.y - vpGreen.y;
+                const len = Math.hypot(dx, dy) || 1;
+                guideCtx.moveTo(vpGreen.x - dx / len * lineLength, vpGreen.y - dy / len * lineLength);
+                guideCtx.lineTo(vpRed.x + dx / len * lineLength, vpRed.y + dy / len * lineLength);
+                guideCtx.stroke();
+                guideCtx.setLineDash([]);
             }
+
+            // --- 2. Helper function to draw a complete guide set for one color ---
+            const drawGuideSet = (color: string, vp: Point | null, mainLines: PerspectiveGuideLine[], extraHandles: Point[]) => {
+                const guideColor = color.replace('0.5', '0.4');
+                const controlColor = color;
+                const handleColor = color;
+
+                // Draw GUIDE lines (from VP to all handles)
+                if (vp) {
+                    guideCtx.strokeStyle = guideColor;
+                    guideCtx.lineWidth = 0.8 / viewTransform.zoom;
+                    guideCtx.setLineDash([4 / viewTransform.zoom, 4 / viewTransform.zoom]);
+                    const allHandles = [...mainLines.flatMap(l => [l.start, l.end]), ...extraHandles, guidePoint];
+                    allHandles.forEach(handle => {
+                        guideCtx.beginPath();
+                        guideCtx.moveTo(vp.x, vp.y);
+                        guideCtx.lineTo(handle.x, handle.y);
+                        guideCtx.stroke();
+                    });
+                    guideCtx.setLineDash([]);
+                }
+
+                // Draw CONTROL lines (between main handles)
+                guideCtx.strokeStyle = controlColor;
+                guideCtx.lineWidth = 1 / viewTransform.zoom;
+                mainLines.forEach(line => {
+                    guideCtx.beginPath();
+                    guideCtx.moveTo(line.start.x, line.start.y);
+                    guideCtx.lineTo(line.end.x, line.end.y);
+                    guideCtx.stroke();
+                });
+
+                // Draw HANDLES
+                guideCtx.fillStyle = handleColor;
+                const handlesToDraw = [...mainLines.flatMap(l => [l.start, l.end]), ...extraHandles];
+                handlesToDraw.forEach(p => {
+                    guideCtx.beginPath();
+                    guideCtx.arc(p.x, p.y, handleSize, 0, 2 * Math.PI);
+                    guideCtx.fill();
+                });
+            };
+            
+            // --- 3. Draw each color set ---
+            drawGuideSet('rgba(0, 255, 0, 0.5)', vpGreen, lines.green, extraGuideLines.green.map(g => g.handle));
+            drawGuideSet('rgba(255, 0, 0, 0.5)', vpRed, lines.red, extraGuideLines.red.map(g => g.handle));
+
+            // Special handling for Blue (may be parallel)
+            if (vpBlue) {
+                drawGuideSet('rgba(0, 0, 255, 0.5)', vpBlue, lines.blue, extraGuideLines.blue.map(g => g.handle));
+            } else {
+                const blueColor = 'rgba(0, 0, 255, 0.5)';
+                const blueGuideColor = 'rgba(0, 0, 255, 0.4)';
+
+                guideCtx.strokeStyle = blueGuideColor;
+                guideCtx.lineWidth = 0.8 / viewTransform.zoom;
+                guideCtx.setLineDash([4 / viewTransform.zoom, 4 / viewTransform.zoom]);
+                if (lines.blue.length > 0) {
+                    const refLine = lines.blue[0];
+                    const angle = Math.atan2(refLine.end.y - refLine.start.y, refLine.end.x - refLine.start.x);
+                    const cos = Math.cos(angle);
+                    const sin = Math.sin(angle);
+                    const allBluePoints = [...lines.blue.flatMap(l => [l.start, l.end]), ...extraGuideLines.blue.map(g => g.handle), guidePoint];
+                    allBluePoints.forEach(p => {
+                        guideCtx.beginPath();
+                        guideCtx.moveTo(p.x - cos * lineLength, p.y - sin * lineLength);
+                        guideCtx.lineTo(p.x + cos * lineLength, p.y + sin * lineLength);
+                        guideCtx.stroke();
+                    });
+                }
+                guideCtx.setLineDash([]);
+                
+                guideCtx.strokeStyle = blueColor;
+                guideCtx.lineWidth = 1 / viewTransform.zoom;
+                lines.blue.forEach(line => {
+                    guideCtx.beginPath();
+                    guideCtx.moveTo(line.start.x, line.start.y);
+                    guideCtx.lineTo(line.end.x, line.end.y);
+                    guideCtx.stroke();
+                });
+                
+                guideCtx.fillStyle = blueColor;
+                const allBlueHandles = [...lines.blue.flatMap(l => [l.start, l.end]), ...extraGuideLines.blue.map(g => g.handle)];
+                allBlueHandles.forEach(p => {
+                    guideCtx.beginPath();
+                    guideCtx.arc(p.x, p.y, handleSize, 0, 2 * Math.PI);
+                    guideCtx.fill();
+                });
+            }
+
+            // --- 4. Draw main guide point handle on top ---
+            guideCtx.fillStyle = 'yellow';
+            guideCtx.strokeStyle = 'black';
+            guideCtx.lineWidth = 0.5 / viewTransform.zoom;
+            guideCtx.beginPath();
+            guideCtx.arc(guidePoint.x, guidePoint.y, handleSize * 1.5, 0, 2 * Math.PI);
+            guideCtx.fill();
+            guideCtx.stroke();
         }
 
         guideCtx.restore();
-    }, [viewTransform, activeGuide, gridGuide, isOrthogonalVisible, perspectiveGuide, rulerGuides, mirrorGuides, orthogonalGuide.angle]);
+    }, [
+        viewTransform,
+        gridGuide,
+        activeGuide,
+        rulerGuides,
+        mirrorGuides,
+        isOrthogonalVisible,
+        orthogonalGuide,
+        perspectiveGuide,
+    ]);
 
     const redrawUI = useCallback(() => {
         const uiCtx = uiCanvasRef.current?.getContext('2d');
         if (!uiCtx) return;
-
+    
         uiCtx.save();
         uiCtx.setTransform(1, 0, 0, 1, 0, 0);
         uiCtx.clearRect(0, 0, uiCtx.canvas.width, uiCtx.canvas.height);
         uiCtx.restore();
-
+    
         uiCtx.save();
-        uiCtx.translate(viewTransform.pan.x, viewTransform.pan.y);
-        uiCtx.scale(viewTransform.zoom, viewTransform.zoom);
-
+        uiCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
+    
         const handleSize = 8 / viewTransform.zoom;
-
+    
         if (isCropping && cropRect) {
-            const { x, y, width, height } = cropRect;
-            uiCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-            uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
             uiCtx.lineWidth = 1 / viewTransform.zoom;
-            
-            uiCtx.beginPath();
-            uiCtx.rect(x, y, width, height);
-            const canvasWidth = uiCtx.canvas.width / viewTransform.zoom;
-            const canvasHeight = uiCtx.canvas.height / viewTransform.zoom;
-            uiCtx.moveTo(0,0); uiCtx.lineTo(canvasWidth, 0); uiCtx.lineTo(canvasWidth, canvasHeight); uiCtx.lineTo(0, canvasHeight); uiCtx.closePath();
-
-            uiCtx.fill('evenodd');
-            uiCtx.strokeRect(x, y, width, height);
-
+            uiCtx.setLineDash([4 / viewTransform.zoom, 2 / viewTransform.zoom]);
+            uiCtx.strokeRect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
+            uiCtx.setLineDash([]);
+    
+            const { x, y, width, height } = cropRect;
             const handles = [
                 { x, y }, { x: x + width, y }, { x, y: y + height }, { x: x + width, y: y + height },
-                { x: x + width / 2, y }, { x, y: y + height / 2 }, { x: x + width, y: y + height / 2 }, { x: x + width / 2, y: y + height }
+                { x: x + width / 2, y }, { x: x + width / 2, y: y + height }, { x, y: y + height / 2 }, { x: x + width, y: y + height / 2 },
             ];
-            uiCtx.fillStyle = '#FFF';
-            handles.forEach(h => uiCtx.fillRect(h.x - handleSize/2, h.y - handleSize/2, handleSize, handleSize));
-        }
-
-        if (isTransforming && transformState) {
-            uiCtx.strokeStyle = 'rgba(0, 150, 255, 0.8)';
+            uiCtx.fillStyle = 'white';
+            uiCtx.strokeStyle = 'black';
             uiCtx.lineWidth = 1 / viewTransform.zoom;
-            uiCtx.fillStyle = '#FFF';
-
-            if (transformState.type === 'affine') {
-                const { x, y, width, height, rotation } = transformState;
-                uiCtx.save();
-                uiCtx.translate(x + width / 2, y + height / 2);
-                uiCtx.rotate(rotation);
-                
-                // Bounding box
-                uiCtx.strokeRect(-width / 2, -height / 2, width, height);
-
-                // Rotation handle
-                const rotationHandleOffset = 25 / viewTransform.zoom;
+            handles.forEach(h => {
                 uiCtx.beginPath();
-                uiCtx.moveTo(0, -height / 2);
-                uiCtx.lineTo(0, -height / 2 - rotationHandleOffset);
-                uiCtx.stroke();
-                
-                uiCtx.strokeStyle = 'rgba(0,0,0,0.8)';
-                uiCtx.beginPath();
-                uiCtx.arc(0, -height / 2 - rotationHandleOffset, handleSize / 1.5, 0, 2 * Math.PI);
+                uiCtx.rect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize);
                 uiCtx.fill();
                 uiCtx.stroke();
-                
-                // Scale handles
-                const handles = [
-                    {x: -width/2, y: -height/2}, {x: 0, y: -height/2}, {x: width/2, y: -height/2},
-                    {x: -width/2, y: 0}, {x: width/2, y: 0},
-                    {x: -width/2, y: height/2}, {x: 0, y: height/2}, {x: width/2, y: height/2},
-                ];
-                handles.forEach(h => {
-                    uiCtx.fillRect(h.x - handleSize/2, h.y - handleSize/2, handleSize, handleSize);
-                    uiCtx.strokeRect(h.x - handleSize/2, h.y - handleSize/2, handleSize, handleSize);
-                });
+            });
+        }
+    
+        if (isTransforming && transformState) {
+            uiCtx.lineWidth = 1 / viewTransform.zoom;
+            uiCtx.strokeStyle = '#00BFFF'; // DeepSkyBlue
+            uiCtx.fillStyle = 'white';
 
+            const drawHandle = (p: Point, isCircle = false) => {
+                uiCtx.strokeStyle = 'black';
+                uiCtx.lineWidth = 0.5 / viewTransform.zoom;
+                uiCtx.beginPath();
+                if (isCircle) {
+                    uiCtx.arc(p.x, p.y, handleSize / 2, 0, 2 * Math.PI);
+                } else {
+                    uiCtx.rect(p.x - handleSize / 2, p.y - handleSize / 2, handleSize, handleSize);
+                }
+                uiCtx.fill();
+                uiCtx.stroke();
+            };
+    
+            if (transformState.type === 'affine') {
+                const { x, y, width, height, rotation } = transformState;
+                const center = { x: x + width / 2, y: y + height / 2 };
+
+                uiCtx.save();
+                uiCtx.translate(center.x, center.y);
+                uiCtx.rotate(rotation);
+                uiCtx.strokeStyle = '#00BFFF';
+                uiCtx.lineWidth = 1 / viewTransform.zoom;
+                uiCtx.strokeRect(-width / 2, -height / 2, width, height);
                 uiCtx.restore();
+
+                const cos = Math.cos(rotation);
+                const sin = Math.sin(rotation);
+                const rotate = (p: Point) => ({
+                    x: center.x + (p.x - center.x) * cos - (p.y - center.y) * sin,
+                    y: center.y + (p.x - center.x) * sin + (p.y - center.y) * cos,
+                });
+                
+                const handles = {
+                    tl: rotate({ x, y }), 
+                    tr: rotate({ x: x + width, y }),
+                    bl: rotate({ x, y: y + height }), 
+                    br: rotate({ x: x + width, y: y + height }),
+                    t: rotate({ x: x + width / 2, y }), 
+                    b: rotate({ x: x + width / 2, y: y + height }),
+                    l: rotate({ x, y: y + height / 2 }), 
+                    r: rotate({ x: x + width, y: y + height / 2 }),
+                };
+                Object.values(handles).forEach(p => drawHandle(p));
+                
+                const rotationHandleBase = rotate({ x: x + width/2, y: y - 25 / viewTransform.zoom });
+                const rotationHandleMid = rotate({ x: x + width / 2, y });
+                
+                uiCtx.strokeStyle = '#00BFFF';
+                uiCtx.lineWidth = 1 / viewTransform.zoom;
+                uiCtx.beginPath();
+                uiCtx.moveTo(rotationHandleBase.x, rotationHandleBase.y);
+                uiCtx.lineTo(rotationHandleMid.x, rotationHandleMid.y);
+                uiCtx.stroke();
+                
+                drawHandle(rotationHandleBase, true);
 
             } else if (transformState.type === 'free') {
                 const { tl, tr, br, bl } = transformState.corners;
-                // Bounding box
+                
+                uiCtx.strokeStyle = '#00BFFF';
+                uiCtx.lineWidth = 1 / viewTransform.zoom;
                 uiCtx.beginPath();
                 uiCtx.moveTo(tl.x, tl.y);
                 uiCtx.lineTo(tr.x, tr.y);
@@ -570,26 +512,13 @@ export function useCanvasRendering({
                 uiCtx.lineTo(bl.x, bl.y);
                 uiCtx.closePath();
                 uiCtx.stroke();
-                
-                // Corner handles (circles)
-                const corners = [tl, tr, br, bl];
-                uiCtx.strokeStyle = 'rgba(0,0,0,0.8)';
-                corners.forEach(c => {
-                    uiCtx.beginPath();
-                    uiCtx.arc(c.x, c.y, handleSize / 1.5, 0, 2 * Math.PI);
-                    uiCtx.fill();
-                    uiCtx.stroke();
-                });
+
+                [tl, tr, br, bl].forEach(p => drawHandle(p));
             }
         }
-
+    
         uiCtx.restore();
-    }, [isCropping, cropRect, viewTransform, isTransforming, transformState]);
-
-    return {
-        redrawMainCanvas,
-        redrawGuides,
-        redrawUI,
-        perspectiveVPs
-    }
+    }, [viewTransform, isCropping, cropRect, isTransforming, transformState]);
+    
+    return { redrawMainCanvas, redrawGuides, redrawUI, perspectiveVPs };
 }

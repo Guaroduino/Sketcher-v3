@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { LibraryItem, RgbColor } from '../types';
+import type { LibraryItem, RgbColor, LibraryFolder, LibraryImage, ScaleUnit } from '../types';
 import { User } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
 import { db, storage } from '../firebaseConfig';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy, serverTimestamp, where, getDocs } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
 
 
@@ -28,8 +28,8 @@ const dataURLtoBlob = (dataurl: string): Blob | null => {
 
 export function useLibrary(user: User | null) {
     const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
-    const [imageToEdit, setImageToEdit] = useState<(LibraryItem & { originalDataUrl: string }) | null>(null);
-    const [deletingLibraryItemId, setDeletingLibraryItemId] = useState<string | null>(null);
+    const [imageToEdit, setImageToEdit] = useState<(LibraryImage & { originalDataUrl: string }) | null>(null);
+    const [deletingLibraryItem, setDeletingLibraryItem] = useState<LibraryItem | null>(null);
 
     useEffect(() => {
         if (user) {
@@ -37,6 +37,17 @@ export function useLibrary(user: User | null) {
             const unsubscribe = onSnapshot(q, async (querySnapshot) => {
                 const itemPromises = querySnapshot.docs.map(async (doc) => {
                     const data = doc.data();
+                    if (data.type === 'folder') {
+                        return {
+                            id: doc.id,
+                            name: data.name,
+                            type: 'folder' as const,
+                            parentId: data.parentId || null,
+                        };
+                    }
+
+                    // It's an image
+                    if (!data.storagePath) return null;
                     const downloadURL = await getDownloadURL(ref(storage, data.storagePath));
                     return {
                         id: doc.id,
@@ -44,10 +55,14 @@ export function useLibrary(user: User | null) {
                         type: 'image' as const,
                         storagePath: data.storagePath,
                         transparentColors: data.transparentColors || [],
+                        scaleFactor: data.scaleFactor || 5,
+                        tolerance: data.tolerance,
                         dataUrl: downloadURL,
+                        parentId: data.parentId || null,
+                        scaleUnit: data.scaleUnit || 'mm',
                     };
                 });
-                const items = await Promise.all(itemPromises);
+                const items = (await Promise.all(itemPromises)).filter(Boolean) as LibraryItem[];
                 setLibraryItems(items);
             }, (error) => {
                 console.error("Error fetching library items:", error);
@@ -58,7 +73,7 @@ export function useLibrary(user: User | null) {
         }
     }, [user]);
 
-    const handleImportToLibrary = useCallback(async (file: File) => {
+    const handleImportToLibrary = useCallback(async (file: File, parentId: string | null) => {
         if (!user) {
             alert("Please log in to save items to your library.");
             return;
@@ -72,6 +87,8 @@ export function useLibrary(user: User | null) {
                 name: file.name.split('.').slice(0, -1).join('.') || 'Image',
                 storagePath: storagePath,
                 createdAt: serverTimestamp(),
+                type: 'image',
+                parentId,
             });
         } catch (error) {
             console.error("Error uploading file to library:", error);
@@ -79,9 +96,65 @@ export function useLibrary(user: User | null) {
         }
     }, [user]);
     
+    const handleCreateFolder = useCallback(async (name: string, parentId: string | null) => {
+        if (!user) {
+            alert("Please log in to create folders.");
+            return;
+        }
+        try {
+            await addDoc(collection(db, `users/${user.uid}/libraryItems`), {
+                name,
+                parentId,
+                type: 'folder',
+                createdAt: serverTimestamp(),
+            });
+        } catch (error) {
+            console.error("Error creating folder:", error);
+        }
+    }, [user]);
+
+    const handleMoveItems = useCallback(async (itemIds: string[], targetParentId: string | null) => {
+        if (!user) {
+            alert("Please log in to manage library items.");
+            return;
+        }
+
+        const collectionRef = collection(db, `users/${user.uid}/libraryItems`);
+
+        const movePromises = itemIds.map(itemId => {
+            // Prevent moving a folder into itself or its own children
+            const isDescendant = (potentialParentId: string, potentialChildId: string): boolean => {
+                const child = libraryItems.find(item => item.id === potentialChildId);
+                if (!child || !child.parentId) return false;
+                if (child.parentId === potentialParentId) return true;
+                return isDescendant(potentialParentId, child.parentId);
+            };
+
+            const itemToMove = libraryItems.find(i => i.id === itemId);
+            if (itemToMove?.type === 'folder') {
+                if (itemId === targetParentId || (targetParentId && isDescendant(itemId, targetParentId))) {
+                    console.warn(`Cannot move folder "${itemToMove.name}" into itself or a child folder.`);
+                    return Promise.resolve(); // Skip this move
+                }
+            }
+
+            const docRef = doc(collectionRef, itemId);
+            return updateDoc(docRef, {
+                parentId: targetParentId,
+            });
+        });
+
+        try {
+            await Promise.all(movePromises);
+        } catch (error) {
+            console.error("Error moving items:", error);
+            alert("Failed to move items.");
+        }
+    }, [user, libraryItems]);
+
     const prepareItemForEditing = useCallback(async (id: string) => {
         const item = libraryItems.find(i => i.id === id);
-        if (!item || !item.dataUrl) return;
+        if (!item || item.type !== 'image' || !item.dataUrl) return;
 
         try {
             const response = await fetch(item.dataUrl);
@@ -98,7 +171,7 @@ export function useLibrary(user: User | null) {
         }
     }, [libraryItems]);
 
-    const handleApplyTransparency = useCallback(async (newImageDataUrl: string, colors: RgbColor[]) => {
+    const handleApplyTransparency = useCallback(async (newImageDataUrl: string, colors: RgbColor[], newScaleFactor: number, tolerance: number, newScaleUnit: ScaleUnit) => {
         if (!imageToEdit || !user) return;
 
         const blob = dataURLtoBlob(newImageDataUrl);
@@ -113,10 +186,10 @@ export function useLibrary(user: User | null) {
         try {
             await uploadBytes(storageRef, blob);
             const newDownloadURL = await getDownloadURL(storageRef);
-            await updateDoc(docRef, { transparentColors: colors });
+            await updateDoc(docRef, { transparentColors: colors, scaleFactor: newScaleFactor, tolerance: tolerance, scaleUnit: newScaleUnit });
 
             setLibraryItems(prev => prev.map(item =>
-                item.id === imageToEdit.id ? { ...item, dataUrl: newDownloadURL, transparentColors: colors } : item
+                (item.id === imageToEdit.id && item.type === 'image') ? { ...item, dataUrl: newDownloadURL, transparentColors: colors, scaleFactor: newScaleFactor, tolerance: tolerance, scaleUnit: newScaleUnit } : item
             ));
             setImageToEdit(null);
         } catch (error) {
@@ -125,40 +198,56 @@ export function useLibrary(user: User | null) {
         }
     }, [user, imageToEdit]);
 
-    const handleDeleteLibraryItem = (id: string) => setDeletingLibraryItemId(id);
+    const handleDeleteLibraryItem = (item: LibraryItem) => setDeletingLibraryItem(item);
 
     const handleConfirmDeleteLibraryItem = useCallback(async () => {
-        if (!deletingLibraryItemId || !user) return;
-        
-        const itemToDelete = libraryItems.find(i => i.id === deletingLibraryItemId);
-        if (!itemToDelete) return;
+        if (!deletingLibraryItem || !user) return;
 
-        const storageRef = ref(storage, itemToDelete.storagePath);
-        const docRef = doc(db, `users/${user.uid}/libraryItems`, deletingLibraryItemId);
+        const collectionRef = collection(db, `users/${user.uid}/libraryItems`);
+
+        const recursiveDelete = async (itemId: string) => {
+            // Find the item to determine if it's a folder or image
+            const itemToDelete = libraryItems.find(i => i.id === itemId);
+            if (!itemToDelete) return; // Already deleted or not found
+
+            if (itemToDelete.type === 'image') {
+                // Delete storage file
+                await deleteObject(ref(storage, itemToDelete.storagePath));
+            } else if (itemToDelete.type === 'folder') {
+                // Find and delete children
+                const childrenQuery = query(collectionRef, where("parentId", "==", itemId));
+                const childrenSnapshot = await getDocs(childrenQuery);
+                const deleteChildrenPromises = childrenSnapshot.docs.map(childDoc => recursiveDelete(childDoc.id));
+                await Promise.all(deleteChildrenPromises);
+            }
+            // Delete Firestore document
+            await deleteDoc(doc(collectionRef, itemId));
+        };
         
         try {
-            await deleteObject(storageRef);
-            await deleteDoc(docRef);
-            setDeletingLibraryItemId(null);
+            await recursiveDelete(deletingLibraryItem.id);
         } catch(error) {
             console.error("Error deleting item:", error);
             alert("Failed to delete item.");
-            setDeletingLibraryItemId(null);
+        } finally {
+            setDeletingLibraryItem(null);
         }
-    }, [deletingLibraryItemId, user, libraryItems]);
+    }, [deletingLibraryItem, user, libraryItems]);
 
-    const handleCancelDeleteLibraryItem = () => setDeletingLibraryItemId(null);
+    const handleCancelDeleteLibraryItem = () => setDeletingLibraryItem(null);
     
     return {
         libraryItems,
         imageToEdit,
-        deletingLibraryItemId,
+        deletingLibraryItem,
         onImportToLibrary: handleImportToLibrary,
+        onCreateFolder: handleCreateFolder,
         onEditTransparency: prepareItemForEditing,
         onApplyTransparency: handleApplyTransparency,
         onDeleteLibraryItem: handleDeleteLibraryItem,
         onConfirmDeleteLibraryItem: handleConfirmDeleteLibraryItem,
         onCancelDeleteLibraryItem: handleCancelDeleteLibraryItem,
         onCancelEditTransparency: () => setImageToEdit(null),
+        onMoveItems: handleMoveItems,
     };
 }

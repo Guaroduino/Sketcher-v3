@@ -1,7 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 // FIX: Add TransformIcon and re-enable transform tool.
-import { SelectIcon, BrushIcon, EraserIcon, MarkerIcon, AirbrushIcon, FXBrushIcon, TransformIcon, ChevronDownIcon, TrashIcon, ExportIcon, CropIcon, RulerIcon, PerspectiveIcon, OrthogonalIcon, MirrorIcon, FreeTransformIcon, MagicWandIcon, XIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon } from './icons';
-import type { Tool, BrushSettings, EraserSettings, MarkerSettings, AirbrushSettings, FXBrushSettings, BrushPreset, Guide, CropRect, BlendMode, SketchObject, LibraryItem, StrokeMode } from '../types';
+// FIX: Corrected import path for MagicWandIcon.
+// FIX: Replaced MarkerIcon with SolidMarkerIcon and NaturalMarkerIcon
+import { SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, NaturalMarkerIcon, AirbrushIcon, FXBrushIcon, TransformIcon, ChevronDownIcon, TrashIcon, ExportIcon, CropIcon, RulerIcon, PerspectiveIcon, OrthogonalIcon, MirrorIcon, FreeTransformIcon, SparklesIcon, XIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon, UploadIcon, MoreVerticalIcon, TextIcon } from './icons';
+// FIX: Replaced MarkerSettings with SolidMarkerSettings and NaturalMarkerSettings
+import type { Tool, BrushSettings, EraserSettings, SolidMarkerSettings, NaturalMarkerSettings, AirbrushSettings, FXBrushSettings, BrushPreset, Guide, CropRect, BlendMode, CanvasItem, LibraryItem, StrokeMode, StrokeModifier, StrokeStyle, MagicWandSettings, TextSettings } from '../types';
 
 interface ToolbarProps {
   tool: Tool;
@@ -10,12 +13,19 @@ interface ToolbarProps {
   setBrushSettings: React.Dispatch<React.SetStateAction<BrushSettings>>;
   eraserSettings: EraserSettings;
   setEraserSettings: React.Dispatch<React.SetStateAction<EraserSettings>>;
-  markerSettings: MarkerSettings;
-  setMarkerSettings: React.Dispatch<React.SetStateAction<MarkerSettings>>;
+  // FIX: Replaced markerSettings with specific solid and natural marker settings
+  solidMarkerSettings: SolidMarkerSettings;
+  setSolidMarkerSettings: React.Dispatch<React.SetStateAction<SolidMarkerSettings>>;
+  naturalMarkerSettings: NaturalMarkerSettings;
+  setNaturalMarkerSettings: React.Dispatch<React.SetStateAction<NaturalMarkerSettings>>;
   airbrushSettings: AirbrushSettings;
   setAirbrushSettings: React.Dispatch<React.SetStateAction<AirbrushSettings>>;
   fxBrushSettings: FXBrushSettings;
   setFxBrushSettings: React.Dispatch<React.SetStateAction<FXBrushSettings>>;
+  magicWandSettings: MagicWandSettings;
+  setMagicWandSettings: React.Dispatch<React.SetStateAction<MagicWandSettings>>;
+  textSettings: TextSettings;
+  setTextSettings: React.Dispatch<React.SetStateAction<TextSettings>>;
   brushPresets: BrushPreset[];
   onSavePreset: (name: string, settings: FXBrushSettings) => string;
   onUpdatePreset: (id: string, updates: Partial<Omit<BrushPreset, 'id'>>) => void;
@@ -30,12 +40,14 @@ interface ToolbarProps {
   isEnhancing: boolean;
   enhancementPreview: { fullDataUrl: string; croppedDataUrl: string | null; bbox: CropRect | null } | null;
   onGenerateEnhancementPreview: () => void;
-  objects: SketchObject[];
+  objects: CanvasItem[];
   libraryItems: LibraryItem[];
   backgroundDataUrl: string | null;
   debugInfo: { prompt: string; images: { name: string; url: string }[] } | null;
   strokeMode: StrokeMode;
   setStrokeMode: (mode: StrokeMode) => void;
+  strokeModifier: StrokeModifier;
+  setStrokeModifier: React.Dispatch<React.SetStateAction<StrokeModifier>>;
 }
 
 type SavedPrompts = {
@@ -77,6 +89,45 @@ const BlendModes: { name: string; value: BlendMode }[] = [
     { name: 'Luminosity', value: 'luminosity' },
 ];
 
+const FontFamilies = ['Arial', 'Verdana', 'Georgia', 'Courier New', 'Lucida Console', 'Impact', 'Comic Sans MS'];
+
+const selectionToolsGroup: { tool: Tool; name: string; icon: React.FC<{className?: string}> }[] = [
+    { tool: 'marquee-rect', name: 'Marco Rectangular', icon: MarqueeRectIcon },
+    { tool: 'lasso', name: 'Lazo', icon: LassoIcon },
+    { tool: 'magic-wand', name: 'Varita Mágica', icon: MagicWandIcon },
+];
+
+const solidToolsGroup: { tool: Tool; name: string; icon: React.FC<{className?: string}> }[] = [
+    { tool: 'brush', name: 'Rapidograph Solido', icon: BrushIcon },
+    { tool: 'solid-marker', name: 'Marcador Sólido', icon: SolidMarkerIcon },
+];
+
+const artisticToolsGroup: { tool: Tool; name: string; icon: React.FC<{className?: string}> }[] = [
+    { tool: 'natural-marker', name: 'Marcador Natural', icon: NaturalMarkerIcon },
+    { tool: 'airbrush', name: 'Aerógrafo', icon: AirbrushIcon },
+    { tool: 'fx-brush', name: 'Pincel FX', icon: FXBrushIcon },
+];
+
+const toolIconMap: Record<Tool, React.FC<{ className?: string }>> = {
+    'select': SelectIcon,
+    'marquee-rect': MarqueeRectIcon,
+    'lasso': LassoIcon,
+    'magic-wand': MagicWandIcon,
+    'brush': BrushIcon,
+    'eraser': EraserIcon,
+    'solid-marker': SolidMarkerIcon,
+    'natural-marker': NaturalMarkerIcon,
+    'airbrush': AirbrushIcon,
+    'fx-brush': FXBrushIcon,
+    'transform': TransformIcon,
+    'free-transform': FreeTransformIcon,
+    'enhance': SparklesIcon,
+    'crop': CropIcon,
+    'pan': () => null,
+    'debug-brush': BrushIcon,
+    'text': TextIcon,
+};
+
 
 export const Toolbar: React.FC<ToolbarProps> = ({
   tool,
@@ -85,12 +136,19 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   setBrushSettings,
   eraserSettings,
   setEraserSettings,
-  markerSettings,
-  setMarkerSettings,
+  // FIX: Destructure solid and natural marker settings
+  solidMarkerSettings,
+  setSolidMarkerSettings,
+  naturalMarkerSettings,
+  setNaturalMarkerSettings,
   airbrushSettings,
   setAirbrushSettings,
   fxBrushSettings,
   setFxBrushSettings,
+  magicWandSettings,
+  setMagicWandSettings,
+  textSettings,
+  setTextSettings,
   brushPresets,
   onSavePreset,
   onUpdatePreset,
@@ -111,14 +169,33 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   debugInfo,
   strokeMode,
   setStrokeMode,
+  strokeModifier,
+  setStrokeModifier,
 }) => {
   const [openSettings, setOpenSettings] = useState<Tool | null>(null);
+  const [settingsPanelAnchor, setSettingsPanelAnchor] = useState<HTMLElement | null>(null);
+  const [settingsPanelPosition, setSettingsPanelPosition] = useState<{ top: number; left: number } | null>(null);
+  const settingsPanelRef = useRef<HTMLDivElement>(null);
+  const toolbarWrapperRef = useRef<HTMLDivElement>(null);
   const [selectedPresetId, setSelectedPresetId] = useState<string>('custom');
   const [presetName, setPresetName] = useState('');
   const [isChromaKeyEnabled, setIsChromaKeyEnabled] = useState(false);
   const textureInputRef = useRef<HTMLInputElement>(null);
   const [isStrokeModeMenuOpen, setIsStrokeModeMenuOpen] = useState(false);
   const strokeModeMenuRef = useRef<HTMLDivElement>(null);
+  const [isStrokeModifierMenuOpen, setIsStrokeModifierMenuOpen] = useState(false);
+  const strokeModifierMenuRef = useRef<HTMLDivElement>(null);
+
+  // Tool Group States
+  const [isSelectionToolsMenuOpen, setIsSelectionToolsMenuOpen] = useState(false);
+  const selectionToolsMenuRef = useRef<HTMLDivElement>(null);
+  const [isSolidToolsMenuOpen, setIsSolidToolsMenuOpen] = useState(false);
+  const solidToolsMenuRef = useRef<HTMLDivElement>(null);
+  const [isArtisticToolsMenuOpen, setIsArtisticToolsMenuOpen] = useState(false);
+  const artisticToolsMenuRef = useRef<HTMLDivElement>(null);
+  const [lastActiveSelectionTool, setLastActiveSelectionTool] = useState<Tool>('marquee-rect');
+  const [lastActiveSolidTool, setLastActiveSolidTool] = useState<Tool>('brush');
+  const [lastActiveArtisticTool, setLastActiveArtisticTool] = useState<Tool>('natural-marker');
 
   // AI Panel State
   const [activeAiTab, setActiveAiTab] = useState<'object' | 'composition' | 'free'>('object');
@@ -138,11 +215,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   const [freeFormPrompt, setFreeFormPrompt] = useState('');
   const [addEnhancedImageToLibrary, setAddEnhancedImageToLibrary] = useState(true);
   const [freeFormSlots, setFreeFormSlots] = useState<{
-      main: { id: string, type: 'outliner' | 'library', url: string, name: string } | null,
-      a: { id: string, type: 'outliner' | 'library', url: string, name: string } | null,
-      b: { id: string, type: 'outliner' | 'library', url: string, name: string } | null,
-      c: { id: string, type: 'outliner' | 'library', url: string, name: string } | null
+      main: { id: string, type: 'outliner' | 'library' | 'file', url: string, name: string } | null,
+      a: { id: string, type: 'outliner' | 'library' | 'file', url: string, name: string } | null,
+      b: { id: string, type: 'outliner' | 'library' | 'file', url: string, name: string } | null,
+      c: { id: string, type: 'outliner' | 'library' | 'file', url: string, name: string } | null
   }>({ main: null, a: null, b: null, c: null });
+  const slotFileInputRef = useRef<HTMLInputElement>(null);
+  const currentlyEditingSlot = useRef<'main' | 'a' | 'b' | 'c' | null>(null);
+
 
   // Saved Prompts State
   const [savedPrompts, setSavedPrompts] = useState<SavedPrompts>({ description: [], style: [], negative: [] });
@@ -170,10 +250,33 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       if (strokeModeMenuRef.current && !strokeModeMenuRef.current.contains(event.target as Node)) {
         setIsStrokeModeMenuOpen(false);
       }
+      if (strokeModifierMenuRef.current && !strokeModifierMenuRef.current.contains(event.target as Node)) {
+        setIsStrokeModifierMenuOpen(false);
+      }
+      if (selectionToolsMenuRef.current && !selectionToolsMenuRef.current.contains(event.target as Node)) {
+        setIsSelectionToolsMenuOpen(false);
+      }
+      if (solidToolsMenuRef.current && !solidToolsMenuRef.current.contains(event.target as Node)) {
+        setIsSolidToolsMenuOpen(false);
+      }
+      if (artisticToolsMenuRef.current && !artisticToolsMenuRef.current.contains(event.target as Node)) {
+        setIsArtisticToolsMenuOpen(false);
+      }
+      if (
+          openSettings !== 'enhance' && // This effect is only for popovers now
+          settingsPanelRef.current &&
+          !settingsPanelRef.current.contains(event.target as Node) &&
+          settingsPanelAnchor &&
+          !settingsPanelAnchor.contains(event.target as Node)
+      ) {
+          setOpenSettings(null);
+          setSettingsPanelAnchor(null);
+          setSettingsPanelPosition(null);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [settingsPanelAnchor, openSettings]);
 
   // Effect to detect when settings are modified from a loaded preset
   useEffect(() => {
@@ -195,21 +298,74 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       setEnhancementChromaKey('none');
     }
   }, [isChromaKeyEnabled, setEnhancementChromaKey]);
+  
+  // Track last active tool in each group
+  useEffect(() => {
+      if (selectionToolsGroup.some(t => t.tool === tool)) {
+          setLastActiveSelectionTool(tool);
+      } else if (solidToolsGroup.some(t => t.tool === tool)) {
+          setLastActiveSolidTool(tool);
+      } else if (artisticToolsGroup.some(t => t.tool === tool)) {
+          setLastActiveArtisticTool(tool);
+      }
+  }, [tool]);
 
 
   const handleToolClick = (t: Tool) => {
     if (tool !== t) {
       setOpenSettings(null);
+      setSettingsPanelAnchor(null);
+      setSettingsPanelPosition(null);
     }
     setTool(t);
   };
 
-  const handleToolDoubleClick = (t: Tool) => {
+  const handleToolDoubleClick = (t: Tool, e: React.MouseEvent) => {
     if (t === 'enhance' && openSettings !== 'enhance') {
       onGenerateEnhancementPreview();
     }
-    setOpenSettings(prev => (prev === t ? null : t));
+    setOpenSettings(prev => {
+        const currentTarget = e.currentTarget as HTMLElement;
+        if (prev === t && settingsPanelAnchor === currentTarget) {
+            setSettingsPanelAnchor(null);
+            setSettingsPanelPosition(null);
+            return null;
+        } else {
+            setSettingsPanelAnchor(currentTarget);
+            setSettingsPanelPosition(null);
+            setIsStrokeModeMenuOpen(false);
+            setIsStrokeModifierMenuOpen(false);
+            setIsSelectionToolsMenuOpen(false);
+            setIsSolidToolsMenuOpen(false);
+            setIsArtisticToolsMenuOpen(false);
+            return t;
+        }
+    });
   };
+
+  const handleSettingsClick = (e: React.MouseEvent, t: Tool) => {
+    e.stopPropagation();
+
+    const currentTarget = e.currentTarget as HTMLElement;
+    const anchorRect = currentTarget.getBoundingClientRect();
+    const wrapperRect = toolbarWrapperRef.current!.getBoundingClientRect();
+    
+    // Close all dropdowns
+    setIsSelectionToolsMenuOpen(false);
+    setIsSolidToolsMenuOpen(false);
+    setIsArtisticToolsMenuOpen(false);
+    setIsStrokeModeMenuOpen(false);
+    setIsStrokeModifierMenuOpen(false);
+    
+    // Open settings panel, but first save its target position
+    setSettingsPanelPosition({
+        left: anchorRect.right - wrapperRect.left + 8,
+        top: anchorRect.top - wrapperRect.top,
+    });
+    setSettingsPanelAnchor(currentTarget); // Still set anchor for identity/outside click
+    setOpenSettings(t);
+  };
+
 
   const toolButtonClasses = (t: Tool) =>
     `p-3 rounded-lg transition-colors ${
@@ -229,7 +385,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   }
   
   const handleDeletePreset = () => {
-      if (selectedPresetId !== 'custom' && confirm("¿Estás seguro de que quieres eliminar este ajuste preestablecido?")) {
+      if (selectedPresetId !== 'custom' && confirm("Are you sure you want to delete this preset?")) {
           onDeletePreset(selectedPresetId);
           setSelectedPresetId('custom');
           setPresetName('');
@@ -282,28 +438,57 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       e.preventDefault();
       e.stopPropagation();
       
-      try {
-          const libData = JSON.parse(e.dataTransfer.getData('application/json'));
-          if (libData.type === 'library-item') {
-              const item = libraryItems.find(i => i.id === libData.id);
-              if (item && item.dataUrl) {
-                  setFreeFormSlots(prev => ({ ...prev, [slot]: { id: item.id, type: 'library', url: item.dataUrl, name: item.name } }));
-                  return;
-              }
+      // Case 1: Dropping a file from the user's desktop
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          const file = e.dataTransfer.files[0];
+          if (file.type.startsWith('image/')) {
+              const reader = new FileReader();
+              reader.onload = (event) => {
+                  const url = event.target?.result as string;
+                  setFreeFormSlots(prev => ({ ...prev, [slot]: { id: `file-${Date.now()}`, type: 'file', url, name: file.name } }));
+              };
+              reader.readAsDataURL(file);
           }
-      } catch (error) { /* not a library item */ }
+          return;
+      }
 
+      // Case 2: Dropping from Outliner or Library
       try {
-          const outlinerId = e.dataTransfer.getData('text/plain');
-          if (outlinerId) {
-              const item = objects.find(o => o.id === outlinerId);
-              if (item && item.canvas && item.type === 'object') {
+          const jsonData = e.dataTransfer.getData('application/json');
+          if (!jsonData) return;
+          const data = JSON.parse(jsonData);
+
+          if (data.type === 'outliner-item') {
+              const item = objects.find(o => o.id === data.id);
+              if (item && item.type === 'object' && item.canvas) {
                   const dataUrl = item.canvas.toDataURL();
                   setFreeFormSlots(prev => ({ ...prev, [slot]: { id: item.id, type: 'outliner', url: dataUrl, name: item.name } }));
-                  return;
+              }
+          } else if (data.type === 'library-item') {
+              const item = libraryItems.find(i => i.id === data.id);
+              if (item && item.type === 'image' && item.dataUrl) {
+                  setFreeFormSlots(prev => ({ ...prev, [slot]: { id: item.id, type: 'library', url: item.dataUrl, name: item.name } }));
               }
           }
-      } catch (error) { /* not an outliner item */ }
+      } catch (error) {
+          console.error("Error handling drop:", error);
+      }
+  };
+
+  const handleSlotFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0] && currentlyEditingSlot.current) {
+        const file = e.target.files[0];
+        const slot = currentlyEditingSlot.current;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const url = event.target?.result as string;
+            setFreeFormSlots(prev => ({ ...prev, [slot]: { id: `file-${Date.now()}`, type: 'file', url, name: file.name } }));
+        };
+        reader.readAsDataURL(file);
+    }
+    // Reset file input to allow uploading the same file again
+    if (e.target) e.target.value = '';
+    currentlyEditingSlot.current = null;
   };
   
   // --- Prompt Save/Load Logic ---
@@ -344,13 +529,40 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       slotData: { url: string, name: string } | null;
       onDrop: (e: React.DragEvent<HTMLDivElement>) => void;
       onClear: () => void;
+      onFileSelect: () => void;
       placeholder: string;
       className?: string;
-  }> = ({ slotData, onDrop, onClear, placeholder, className = '' }) => (
+  }> = ({ slotData, onDrop, onClear, onFileSelect, placeholder, className = '' }) => {
+    const [isDragOver, setIsDragOver] = useState(false);
+
+    const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'copy';
+        setIsDragOver(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(false);
+    };
+
+    const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+        handleDragLeave(e);
+        onDrop(e);
+    };
+
+    return (
       <div
-          onDrop={onDrop}
-          onDragOver={(e) => e.preventDefault()}
-          className={`relative bg-[--bg-tertiary] rounded-md flex items-center justify-center text-center text-xs text-[--text-secondary] p-2 ${className}`}
+          onClick={!slotData ? onFileSelect : undefined}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDragEnd={handleDragLeave}
+          className={`relative bg-[--bg-tertiary] rounded-md flex items-center justify-center text-center text-xs text-[--text-secondary] p-2 transition-all ${
+              isDragOver ? 'border-2 border-dashed border-[--accent-primary]' : 'border-2 border-dashed border-transparent'
+          } ${!slotData ? 'cursor-pointer' : ''} ${className}`}
       >
           {slotData ? (
               <>
@@ -360,22 +572,114 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                   </button>
               </>
           ) : (
-              <span>{placeholder}</span>
+                <div className="flex flex-col items-center gap-1 pointer-events-none">
+                    <UploadIcon className="w-5 h-5"/>
+                    <span>{placeholder}</span>
+                    <span className="text-[10px]">(Arrastra o haz clic para cargar)</span>
+                </div>
           )}
       </div>
+    );
+  };
+
+  const BlendModeSelector: React.FC<{
+      value: BlendMode;
+      onChange: (value: BlendMode) => void;
+  }> = ({ value, onChange }) => (
+      <div>
+          <label className="text-xs text-[--text-secondary] block mb-1">Modo de Fusión</label>
+          <select
+              value={value}
+              onChange={(e) => onChange(e.target.value as BlendMode)}
+              className="w-full bg-[--bg-tertiary] text-[--text-primary] text-xs rounded-md p-2"
+          >
+              {BlendModes.map(mode => <option key={mode.value} value={mode.value}>{mode.name}</option>)}
+          </select>
+      </div>
   );
+
 
   const renderSettings = (toolToShow: Tool) => {
     switch (toolToShow) {
       case 'select':
       case 'transform':
       case 'free-transform':
+      case 'marquee-rect':
+      case 'lasso':
         return null;
-      case 'enhance':
+      case 'text':
+        return (
+          <div className="p-4 space-y-4">
+            <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Herramienta de Texto</h4>
+            <div>
+              <label className="text-xs text-[--text-secondary] block mb-1">Fuente</label>
+              <select
+                value={textSettings.fontFamily}
+                onChange={(e) => setTextSettings(s => ({ ...s, fontFamily: e.target.value }))}
+                className="w-full bg-[--bg-tertiary] text-[--text-primary] text-xs rounded-md p-2"
+              >
+                {FontFamilies.map(font => <option key={font} value={font}>{font}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {textSettings.fontSize}px</label>
+              <input type="range" min="8" max="256" value={textSettings.fontSize} onChange={(e) => setTextSettings(s => ({ ...s, fontSize: parseInt(e.target.value) }))} className="w-full" />
+            </div>
+            <div>
+              <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
+              <input type="color" value={textSettings.color} onChange={(e) => setTextSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+            </div>
+            <div>
+              <label className="text-xs text-[--text-secondary] block mb-1">Alineación</label>
+              <div className="grid grid-cols-3 gap-2">
+                  <button onClick={() => setTextSettings(s => ({ ...s, textAlign: 'left' }))} className={`text-xs p-2 rounded ${textSettings.textAlign === 'left' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Izquierda</button>
+                  <button onClick={() => setTextSettings(s => ({ ...s, textAlign: 'center' }))} className={`text-xs p-2 rounded ${textSettings.textAlign === 'center' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Centro</button>
+                  <button onClick={() => setTextSettings(s => ({ ...s, textAlign: 'right' }))} className={`text-xs p-2 rounded ${textSettings.textAlign === 'right' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Derecha</button>
+              </div>
+            </div>
+             <div>
+              <label className="text-xs text-[--text-secondary] block mb-1">Estilo</label>
+              <div className="grid grid-cols-3 gap-2">
+                  <button onClick={() => setTextSettings(s => ({ ...s, fontWeight: 'normal' }))} className={`text-xs p-2 rounded ${textSettings.fontWeight === 'normal' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Normal</button>
+                  <button onClick={() => setTextSettings(s => ({ ...s, fontWeight: 'bold' }))} className={`text-xs p-2 rounded ${textSettings.fontWeight === 'bold' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Negrita</button>
+                  <button onClick={() => setTextSettings(s => ({ ...s, fontWeight: 'italic' }))} className={`text-xs p-2 rounded ${textSettings.fontWeight === 'italic' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Cursiva</button>
+              </div>
+            </div>
+          </div>
+        );
+      case 'magic-wand':
         return (
             <div className="p-4 space-y-4">
-                <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Mejora con IA</h4>
-                
+                <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Varita Mágica</h4>
+                <div>
+                    <label className="text-xs text-[--text-secondary] block mb-1">Tolerancia: {magicWandSettings.tolerance}</label>
+                    <input type="range" min="0" max="100" value={magicWandSettings.tolerance} onChange={(e) => setMagicWandSettings(s => ({ ...s, tolerance: parseInt(e.target.value) }))} className="w-full" />
+                </div>
+                <div className="flex items-center justify-between py-1">
+                    <label htmlFor="contiguous-toggle" className="text-xs text-[--text-secondary]">
+                        Contiguo (solo píxeles adyacentes)
+                    </label>
+                    <button
+                        id="contiguous-toggle"
+                        role="switch"
+                        aria-checked={magicWandSettings.contiguous}
+                        onClick={() => setMagicWandSettings(s => ({...s, contiguous: !s.contiguous}))}
+                        className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[--accent-primary] focus:ring-offset-[--bg-primary] ${
+                            magicWandSettings.contiguous ? 'bg-[--accent-primary]' : 'bg-[--bg-tertiary]'
+                        }`}
+                    >
+                        <span
+                            className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
+                                magicWandSettings.contiguous ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                        />
+                    </button>
+                </div>
+            </div>
+        );
+      case 'enhance':
+        return (
+            <div className="space-y-4">
                 {/* Tabs */}
                 <div className="flex border-b border-[--bg-tertiary]">
                     <button onClick={() => setActiveAiTab('object')} className={`flex-1 p-2 text-sm font-semibold transition-colors ${activeAiTab === 'object' ? 'text-[--accent-primary] border-b-2 border-[--accent-primary]' : 'text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}>
@@ -635,13 +939,15 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                   <div className="space-y-4">
                     <h5 className="font-bold text-md">Creación Libre</h5>
                     <p className="text-xs text-[--text-secondary]">
-                        Arrastra objetos desde el Outliner o la Librería a las ranuras. Luego, describe cómo combinarlos.
+                        Arrastra objetos desde el Outliner/Librería o haz clic para cargar imágenes en las ranuras. Luego, describe cómo combinarlos.
                     </p>
+                    <input type="file" accept="image/*" className="hidden" ref={slotFileInputRef} onChange={handleSlotFileChange} />
                     <div className="space-y-2">
                       <FreeFormSlot
                         slotData={freeFormSlots.main}
                         onDrop={(e) => handleFreeFormSlotDrop(e, 'main')}
                         onClear={() => setFreeFormSlots(p => ({...p, main: null}))}
+                        onFileSelect={() => { currentlyEditingSlot.current = 'main'; slotFileInputRef.current?.click(); }}
                         placeholder="[Objeto 1] Principal"
                         className="h-28"
                       />
@@ -650,6 +956,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                           slotData={freeFormSlots.a}
                           onDrop={(e) => handleFreeFormSlotDrop(e, 'a')}
                           onClear={() => setFreeFormSlots(p => ({...p, a: null}))}
+                          onFileSelect={() => { currentlyEditingSlot.current = 'a'; slotFileInputRef.current?.click(); }}
                           placeholder="[Añadido A]"
                           className="h-20"
                         />
@@ -657,6 +964,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                           slotData={freeFormSlots.b}
                           onDrop={(e) => handleFreeFormSlotDrop(e, 'b')}
                           onClear={() => setFreeFormSlots(p => ({...p, b: null}))}
+                          onFileSelect={() => { currentlyEditingSlot.current = 'b'; slotFileInputRef.current?.click(); }}
                           placeholder="[Añadido B]"
                           className="h-20"
                         />
@@ -664,6 +972,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                           slotData={freeFormSlots.c}
                           onDrop={(e) => handleFreeFormSlotDrop(e, 'c')}
                           onClear={() => setFreeFormSlots(p => ({...p, c: null}))}
+                          onFileSelect={() => { currentlyEditingSlot.current = 'c'; slotFileInputRef.current?.click(); }}
                           placeholder="[Añadido C]"
                           className="h-20"
                         />
@@ -797,47 +1106,103 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             </Accordion>
           </div>
         );
-      case 'marker':
+      // FIX: Changed 'marker' to 'solid-marker' and updated to use solidMarkerSettings
+      case 'solid-marker':
          return (
           <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
              <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
-                <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Marcador</h4>
+                <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Marcador Sólido</h4>
              </div>
             <Accordion title="General" defaultOpen>
                 <div>
-                  <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {markerSettings.size}px</label>
-                  <input type="range" min="1" max="200" value={markerSettings.size} onChange={(e) => setMarkerSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
+                  <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {solidMarkerSettings.size}px</label>
+                  <input type="range" min="1" max="200" value={solidMarkerSettings.size} onChange={(e) => setSolidMarkerSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
                 </div>
                 <div>
-                  <label className="text-xs text-[--text-secondary] block mb-1">Flujo: {Math.round(markerSettings.opacity * 100)}%</label>
-                  <input type="range" min="1" max="100" value={markerSettings.opacity * 100} onChange={(e) => setMarkerSettings(s => ({ ...s, opacity: parseInt(e.target.value) / 100 }))} className="w-full" />
+                  <label className="text-xs text-[--text-secondary] block mb-1">Opacidad: {Math.round(solidMarkerSettings.opacity * 100)}%</label>
+                  <input type="range" min="1" max="100" value={solidMarkerSettings.opacity * 100} onChange={(e) => setSolidMarkerSettings(s => ({ ...s, opacity: parseInt(e.target.value) / 100 }))} className="w-full" />
                 </div>
                  <div>
                   <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
-                  <input type="color" value={markerSettings.color} onChange={(e) => setMarkerSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                  <input type="color" value={solidMarkerSettings.color} onChange={(e) => setSolidMarkerSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
                 </div>
+                <BlendModeSelector
+                    value={solidMarkerSettings.blendMode}
+                    onChange={(value) => setSolidMarkerSettings(s => ({ ...s, blendMode: value }))}
+                />
             </Accordion>
             <Accordion title="Punta">
                  <div>
                     <label className="text-xs text-[--text-secondary] block mb-1">Forma de la punta</label>
                     <div className="flex gap-2">
-                        <button onClick={() => setMarkerSettings(s => ({ ...s, tipShape: 'square' }))} className={`flex-1 text-xs p-2 rounded ${markerSettings.tipShape === 'square' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Cuadrada</button>
-                        <button onClick={() => setMarkerSettings(s => ({ ...s, tipShape: 'line' }))} className={`flex-1 text-xs p-2 rounded ${markerSettings.tipShape === 'line' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Línea</button>
+                        <button onClick={() => setSolidMarkerSettings(s => ({ ...s, tipShape: 'square' }))} className={`flex-1 text-xs p-2 rounded ${solidMarkerSettings.tipShape === 'square' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Cuadrada</button>
+                        <button onClick={() => setSolidMarkerSettings(s => ({ ...s, tipShape: 'line' }))} className={`flex-1 text-xs p-2 rounded ${solidMarkerSettings.tipShape === 'line' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Línea</button>
                     </div>
-                </div>
-                <div>
-                  <label className="text-xs text-[--text-secondary] block mb-1">Suavidad: {markerSettings.smoothness}%</label>
-                  <input type="range" min="0" max="99" value={markerSettings.smoothness} onChange={(e) => setMarkerSettings(s => ({ ...s, smoothness: parseInt(e.target.value) }))} className="w-full" />
                 </div>
             </Accordion>
             <Accordion title="Dinámica de Presión">
                 <div className="flex items-center justify-between py-1">
                     <label htmlFor="pressure-opacity-marker" className="text-xs text-[--text-secondary]">Controlar Opacidad</label>
-                    <input id="pressure-opacity-marker" type="checkbox" checked={markerSettings.pressureControl.opacity} onChange={(e) => setMarkerSettings(s => ({ ...s, pressureControl: {...s.pressureControl, opacity: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+                    <input id="pressure-opacity-marker" type="checkbox" checked={solidMarkerSettings.pressureControl.opacity} onChange={(e) => setSolidMarkerSettings(s => ({ ...s, pressureControl: {...s.pressureControl, opacity: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
                 </div>
             </Accordion>
           </div>
         );
+      // FIX: Add settings panel for 'natural-marker'
+      case 'natural-marker':
+        return (
+         <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
+            <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
+               <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Marcador Natural</h4>
+            </div>
+           <Accordion title="General" defaultOpen>
+               <div>
+                 <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {naturalMarkerSettings.size}px</label>
+                 <input type="range" min="1" max="200" value={naturalMarkerSettings.size} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
+               </div>
+               <div>
+                 <label className="text-xs text-[--text-secondary] block mb-1">Flujo: {Math.round(naturalMarkerSettings.flow * 100)}%</label>
+                 <input type="range" min="1" max="100" value={naturalMarkerSettings.flow * 100} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, flow: parseInt(e.target.value) / 100 }))} className="w-full" />
+               </div>
+                <div>
+                 <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
+                 <input type="color" value={naturalMarkerSettings.color} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+               </div>
+                <BlendModeSelector
+                    value={naturalMarkerSettings.blendMode}
+                    onChange={(value) => setNaturalMarkerSettings(s => ({ ...s, blendMode: value }))}
+                />
+           </Accordion>
+           <Accordion title="Punta">
+                <div>
+                 <label className="text-xs text-[--text-secondary] block mb-1">Dureza: {naturalMarkerSettings.hardness}%</label>
+                 <input type="range" min="0" max="100" value={naturalMarkerSettings.hardness} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, hardness: parseInt(e.target.value) }))} className="w-full" />
+               </div>
+               <div>
+                 <label className="text-xs text-[--text-secondary] block mb-1">Espaciado: {naturalMarkerSettings.spacing}%</label>
+                 <input type="range" min="1" max="100" value={naturalMarkerSettings.spacing} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, spacing: parseInt(e.target.value) }))} className="w-full" />
+               </div>
+               <div>
+                    <label className="text-xs text-[--text-secondary] block mb-1">Forma de la punta</label>
+                    <div className="grid grid-cols-3 gap-2">
+                        <button onClick={() => setNaturalMarkerSettings(s => ({ ...s, tipShape: 'round' }))} className={`text-xs p-2 rounded ${naturalMarkerSettings.tipShape === 'round' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Redonda</button>
+                        <button onClick={() => setNaturalMarkerSettings(s => ({ ...s, tipShape: 'square' }))} className={`text-xs p-2 rounded ${naturalMarkerSettings.tipShape === 'square' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Cuadrada</button>
+                        <button onClick={() => setNaturalMarkerSettings(s => ({ ...s, tipShape: 'line' }))} className={`text-xs p-2 rounded ${naturalMarkerSettings.tipShape === 'line' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Línea</button>
+                    </div>
+                </div>
+           </Accordion>
+           <Accordion title="Dinámica de Presión">
+               <div className="flex items-center justify-between py-1">
+                   <label htmlFor="pressure-size-natural-marker" className="text-xs text-[--text-secondary]">Controlar Tamaño</label>
+                   <input id="pressure-size-natural-marker" type="checkbox" checked={naturalMarkerSettings.pressureControl.size} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, pressureControl: {...s.pressureControl, size: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+               </div>
+                <div className="flex items-center justify-between py-1">
+                   <label htmlFor="pressure-flow-natural-marker" className="text-xs text-[--text-secondary]">Controlar Flujo</label>
+                   <input id="pressure-flow-natural-marker" type="checkbox" checked={naturalMarkerSettings.pressureControl.flow} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, pressureControl: {...s.pressureControl, flow: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+               </div>
+           </Accordion>
+         </div>
+       );
       case 'eraser':
         return (
             <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
@@ -889,6 +1254,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
               <input type="color" value={airbrushSettings.color} onChange={(e) => setAirbrushSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
             </div>
+            <BlendModeSelector
+                value={airbrushSettings.blendMode}
+                onChange={(value) => setAirbrushSettings(s => ({ ...s, blendMode: value }))}
+            />
           </div>
         );
       case 'fx-brush':
@@ -950,16 +1319,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                   <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
                   <input type="color" value={fxBrushSettings.color} onChange={(e) => setFxBrushSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
               </div>
-               <div>
-                  <label className="text-xs text-[--text-secondary] block mb-1">Modo de Fusión</label>
-                  <select
+               <BlendModeSelector
                     value={fxBrushSettings.blendMode}
-                    onChange={(e) => setFxBrushSettings(s => ({ ...s, blendMode: e.target.value as BlendMode }))}
-                    className="w-full bg-[--bg-tertiary] text-[--text-primary] text-xs rounded-md p-2"
-                  >
-                      {BlendModes.map(mode => <option key={mode.value} value={mode.value}>{mode.name}</option>)}
-                  </select>
-              </div>
+                    onChange={(value) => setFxBrushSettings(s => ({ ...s, blendMode: value }))}
+                />
             </Accordion>
              <Accordion title="Forma de la Punta">
                 <div>
@@ -969,10 +1332,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 <div>
                   <label className="text-xs text-[--text-secondary] block mb-1">Espaciado: {fxBrushSettings.spacing}%</label>
                   <input type="range" min="1" max="500" value={fxBrushSettings.spacing} onChange={(e) => setFxBrushSettings(s => ({ ...s, spacing: parseInt(e.target.value) }))} className="w-full" />
-                </div>
-                <div>
-                  <label className="text-xs text-[--text-secondary] block mb-1">Suavidad: {fxBrushSettings.smoothness}%</label>
-                  <input type="range" min="0" max="99" value={fxBrushSettings.smoothness} onChange={(e) => setFxBrushSettings(s => ({ ...s, smoothness: parseInt(e.target.value) }))} className="w-full" />
                 </div>
                  <div>
                   <label className="text-xs text-[--text-secondary] block mb-1">Ángulo: {fxBrushSettings.angle}°</label>
@@ -1080,11 +1439,67 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       { mode: 'arc', label: 'Arco (Centro)', icon: ArcIcon },
   ];
   
-  const isPaintTool = ['brush', 'marker', 'airbrush', 'fx-brush', 'eraser'].includes(tool);
+  const ActiveStrokeStyleIcon = {
+      solid: SolidLineIcon,
+      dashed: DashedLineIcon,
+      dotted: DottedLineIcon,
+      'dash-dot': DashDotLineIcon,
+  }[strokeModifier.style];
+
+  const strokeModifierList: { style: StrokeStyle; label: string; icon: React.FC<{className?: string}> }[] = [
+      { style: 'solid', label: 'Sólido', icon: SolidLineIcon },
+      { style: 'dashed', label: 'Segmentado', icon: DashedLineIcon },
+      { style: 'dotted', label: 'Punteado', icon: DottedLineIcon },
+      { style: 'dash-dot', label: 'Línea y punto', icon: DashDotLineIcon },
+  ];
+
+  const isPaintTool = ['brush', 'solid-marker', 'natural-marker', 'airbrush', 'fx-brush', 'eraser'].includes(tool);
   const strokeModeButtonClasses = `p-3 rounded-lg transition-colors ${isPaintTool ? 'bg-[--accent-primary] text-white hover:bg-[--accent-hover]' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`;
+  const isStrokeModifierActive = strokeModifier.style !== 'solid';
+  const strokeModifierButtonClasses = `p-3 rounded-lg transition-colors ${isStrokeModifierActive ? 'bg-[--accent-primary] text-white hover:bg-[--accent-hover]' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`;
+
+  // Grouped Tools Logic
+  const selectionToolTools: Tool[] = ['marquee-rect', 'lasso', 'magic-wand'];
+  const solidToolTools: Tool[] = ['brush', 'solid-marker'];
+  const artisticToolTools: Tool[] = ['natural-marker', 'airbrush', 'fx-brush'];
+  const isSelectionGroupActive = selectionToolTools.includes(tool);
+  const isSolidGroupActive = solidToolTools.includes(tool);
+  const isArtisticGroupActive = artisticToolTools.includes(tool);
+  const ActiveSelectionIcon = toolIconMap[isSelectionGroupActive ? tool : lastActiveSelectionTool];
+  const ActiveSolidIcon = toolIconMap[isSolidGroupActive ? tool : lastActiveSolidTool];
+  const ActiveArtisticIcon = toolIconMap[isArtisticGroupActive ? tool : lastActiveArtisticTool];
+
+  const getSettingsPanelStyle = (): React.CSSProperties => {
+    if (!openSettings) {
+        return { display: 'none' };
+    }
+
+    if (settingsPanelPosition) {
+        return {
+            position: 'absolute',
+            left: `${settingsPanelPosition.left}px`,
+            top: `${settingsPanelPosition.top}px`,
+            maxHeight: `calc(100vh - ${settingsPanelPosition.top + 16}px)`,
+        };
+    }
+
+    if (!settingsPanelAnchor || !toolbarWrapperRef.current) {
+        return { display: 'none' };
+    }
+    const anchorRect = settingsPanelAnchor.getBoundingClientRect();
+    const wrapperRect = toolbarWrapperRef.current.getBoundingClientRect();
+
+    return {
+        position: 'absolute',
+        left: `${anchorRect.right - wrapperRect.left + 8}px`,
+        top: `${anchorRect.top - wrapperRect.top}px`,
+        maxHeight: `calc(100vh - ${anchorRect.top - wrapperRect.top + 16}px)`,
+    };
+  };
+
 
   return (
-    <div className="relative flex-shrink-0">
+    <div ref={toolbarWrapperRef} className="relative flex-shrink-0">
       <div className="bg-[--bg-primary] text-[--text-primary] h-full flex flex-col p-2">
           {/* Main Tools */}
           <div className="flex flex-col items-center space-y-2">
@@ -1092,9 +1507,50 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                   <SelectIcon className="w-6 h-6" />
               </button>
 
+              <div className="w-10/12 h-px bg-[--bg-tertiary] my-2 self-center" />
+
+              {/* Selection Tools Group */}
+                <div className="relative" ref={selectionToolsMenuRef}>
+                    <button
+                        onClick={() => {
+                            setIsSolidToolsMenuOpen(false);
+                            setIsArtisticToolsMenuOpen(false);
+                            setIsStrokeModeMenuOpen(false);
+                            setIsStrokeModifierMenuOpen(false);
+                            setIsSelectionToolsMenuOpen(prev => !prev);
+                        }}
+                        onDoubleClick={(e) => handleToolDoubleClick(isSelectionGroupActive ? tool : lastActiveSelectionTool, e)}
+                        className={`p-3 rounded-lg transition-colors ${isSelectionGroupActive ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}
+                        title="Herramientas de Selección (doble clic para opciones)"
+                    >
+                        <ActiveSelectionIcon className="w-6 h-6" />
+                    </button>
+                    {isSelectionToolsMenuOpen && (
+                        <div className="absolute left-full top-0 ml-2 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-60 z-20 p-2 space-y-1">
+                            {selectionToolsGroup.map(({ tool: t, name, icon: Icon }) => (
+                                <div key={t} className={`flex items-center justify-between rounded-md text-sm ${tool === t ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}>
+                                    <button onClick={() => { handleToolClick(t); setIsSelectionToolsMenuOpen(false); }} className="flex items-center gap-3 p-2 flex-grow text-left">
+                                        <Icon className="w-5 h-5" />
+                                        <span>{name}</span>
+                                    </button>
+                                    <button onClick={(e) => { handleSettingsClick(e, t); }} className="p-2 mr-1 rounded-full hover:bg-black/10 flex-shrink-0" title="Configuración de la herramienta">
+                                        <MoreVerticalIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
               <div className="relative" ref={strokeModeMenuRef}>
                 <button
-                    onClick={() => setIsStrokeModeMenuOpen(prev => !prev)}
+                    onClick={() => {
+                        setIsStrokeModifierMenuOpen(false);
+                        setIsSelectionToolsMenuOpen(false);
+                        setIsSolidToolsMenuOpen(false);
+                        setIsArtisticToolsMenuOpen(false);
+                        setIsStrokeModeMenuOpen(prev => !prev);
+                    }}
                     className={strokeModeButtonClasses}
                     title={`Modo de Trazo: ${strokeMode} (clic para cambiar)`}
                 >
@@ -1121,27 +1577,138 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 )}
               </div>
               
-              <div className="w-10/12 h-px bg-[--bg-tertiary] my-2 self-center" />
+              <div className="relative" ref={strokeModifierMenuRef}>
+                <button
+                    onClick={() => {
+                        setIsStrokeModeMenuOpen(false);
+                        setIsSelectionToolsMenuOpen(false);
+                        setIsSolidToolsMenuOpen(false);
+                        setIsArtisticToolsMenuOpen(false);
+                        setIsStrokeModifierMenuOpen(prev => !prev);
+                    }}
+                    className={strokeModifierButtonClasses}
+                    title={`Estilo de Trazo: ${strokeModifier.style} (clic para cambiar)`}
+                >
+                    <ActiveStrokeStyleIcon className="w-6 h-6" />
+                </button>
 
-              <button onClick={() => handleToolClick('brush')} onDoubleClick={() => handleToolDoubleClick('brush')} className={toolButtonClasses('brush')} title="Rapidograph Solido (doble clic para opciones)">
-                  <BrushIcon className="w-6 h-6" />
-              </button>
-              <button onClick={() => handleToolClick('marker')} onDoubleClick={() => handleToolDoubleClick('marker')} className={toolButtonClasses('marker')} title="Marcador (doble clic para opciones)">
-                  <MarkerIcon className="w-6 h-6" />
-              </button>
-              <button onClick={() => handleToolClick('airbrush')} onDoubleClick={() => handleToolDoubleClick('airbrush')} className={toolButtonClasses('airbrush')} title="Aerógrafo (doble clic para opciones)">
-                  <AirbrushIcon className="w-6 h-6" />
-              </button>
-              <button onClick={() => handleToolClick('fx-brush')} onDoubleClick={() => handleToolDoubleClick('fx-brush')} className={toolButtonClasses('fx-brush')} title="Pincel FX (doble clic para opciones)">
-                  <FXBrushIcon className="w-6 h-6" />
-              </button>
-              <button onClick={() => handleToolClick('eraser')} onDoubleClick={() => handleToolDoubleClick('eraser')} className={toolButtonClasses('eraser')} title="Goma de Borrar (doble clic para opciones)">
+                {isStrokeModifierMenuOpen && (
+                    <div className="absolute left-full top-0 ml-2 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-60 z-20 p-2 space-y-2">
+                        <h4 className="px-2 pb-1 text-sm font-bold uppercase text-[--text-secondary]">Estilo de Trazo</h4>
+                        <div className="space-y-1">
+                            {strokeModifierList.map(({ style, label, icon: Icon }) => (
+                                <button
+                                    key={style}
+                                    onClick={() => {
+                                        setStrokeModifier(s => ({...s, style}));
+                                    }}
+                                    className={`w-full flex items-center gap-3 p-2 rounded-md text-sm ${strokeModifier.style === style ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}
+                                >
+                                    <Icon className="w-5 h-5" />
+                                    <span>{label}</span>
+                                </button>
+                            ))}
+                        </div>
+                        <div className="border-t border-[--bg-tertiary] pt-2 mt-2">
+                            <label className="px-2 text-xs font-bold text-[--text-secondary]">Escala del Patrón: {strokeModifier.scale.toFixed(1)}</label>
+                             <input 
+                                type="range" 
+                                min="0.5" 
+                                max="10" 
+                                step="0.5" 
+                                value={strokeModifier.scale}
+                                onChange={(e) => setStrokeModifier(s => ({ ...s, scale: parseFloat(e.target.value) }))}
+                                className="w-full mt-1"
+                                disabled={strokeModifier.style === 'solid'}
+                             />
+                        </div>
+                    </div>
+                )}
+              </div>
+
+              <div className="w-10/12 h-px bg-[--bg-tertiary] my-2 self-center" />
+              
+              {/* Solid Tools Group */}
+              <div className="relative" ref={solidToolsMenuRef}>
+                <button
+                    onClick={() => {
+                        setIsSelectionToolsMenuOpen(false);
+                        setIsArtisticToolsMenuOpen(false);
+                        setIsStrokeModeMenuOpen(false);
+                        setIsStrokeModifierMenuOpen(false);
+                        setIsSolidToolsMenuOpen(prev => !prev);
+                    }}
+                    onDoubleClick={(e) => handleToolDoubleClick(isSolidGroupActive ? tool : lastActiveSolidTool, e)}
+                    className={`p-3 rounded-lg transition-colors ${isSolidGroupActive ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}
+                    title="Herramientas de Tinta Sólida (doble clic para opciones)"
+                >
+                    <ActiveSolidIcon className="w-6 h-6" />
+                </button>
+                 {isSolidToolsMenuOpen && (
+                    <div className="absolute left-full top-0 ml-2 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-60 z-20 p-2 space-y-1">
+                        {solidToolsGroup.map(({ tool: t, name, icon: Icon }) => (
+                            <div key={t} className={`flex items-center justify-between rounded-md text-sm ${tool === t ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}>
+                                <button onClick={() => { handleToolClick(t); setIsSolidToolsMenuOpen(false); }} className="flex items-center gap-3 p-2 flex-grow text-left">
+                                    <Icon className="w-5 h-5" />
+                                    <span>{name}</span>
+                                </button>
+                                <button onClick={(e) => { handleSettingsClick(e, t); }} className="p-2 mr-1 rounded-full hover:bg-black/10 flex-shrink-0" title="Configuración de la herramienta">
+                                    <MoreVerticalIcon className="w-4 h-4" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+              </div>
+
+              {/* Artistic Tools Group */}
+               <div className="relative" ref={artisticToolsMenuRef}>
+                <button
+                    onClick={() => {
+                        setIsStrokeModeMenuOpen(false);
+                        setIsStrokeModifierMenuOpen(false);
+                        setIsSelectionToolsMenuOpen(false);
+                        setIsSolidToolsMenuOpen(false);
+                        setIsArtisticToolsMenuOpen(prev => !prev);
+                    }}
+                    onDoubleClick={(e) => handleToolDoubleClick(isArtisticGroupActive ? tool : lastActiveArtisticTool, e)}
+                    className={`p-3 rounded-lg transition-colors ${isArtisticGroupActive ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}
+                    title="Herramientas Artísticas (doble clic para opciones)"
+                >
+                    <ActiveArtisticIcon className="w-6 h-6" />
+                </button>
+                 {isArtisticToolsMenuOpen && (
+                    <div className="absolute left-full top-0 ml-2 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-60 z-20 p-2 space-y-1">
+                        {artisticToolsGroup.map(({ tool: t, name, icon: Icon }) => (
+                            <div key={t} className={`flex items-center justify-between rounded-md text-sm ${tool === t ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}>
+                                <button onClick={() => { handleToolClick(t); setIsArtisticToolsMenuOpen(false); }} className="flex items-center gap-3 p-2 flex-grow text-left">
+                                    <Icon className="w-5 h-5" />
+                                    <span>{name}</span>
+                                </button>
+                                <button onClick={(e) => { handleSettingsClick(e, t); }} className="p-2 mr-1 rounded-full hover:bg-black/10 flex-shrink-0" title="Configuración de la herramienta">
+                                    <MoreVerticalIcon className="w-4 h-4" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+              </div>
+
+              <button onClick={() => handleToolClick('eraser')} onDoubleClick={(e) => handleToolDoubleClick('eraser', e)} className={toolButtonClasses('eraser')} title="Goma de Borrar (doble clic para opciones)">
                   <EraserIcon className="w-6 h-6" />
               </button>
+
+              <div className="w-10/12 h-px bg-[--bg-tertiary] my-2 self-center" />
+
+              <button onClick={() => handleToolClick('text')} onDoubleClick={(e) => handleToolDoubleClick('text', e)} className={toolButtonClasses('text')} title="Texto (doble clic para opciones)">
+                <TextIcon className="w-6 h-6" />
+              </button>
+
           </div>
           
-          {/* Guide Tools */}
           <div className="w-10/12 h-px bg-[--bg-tertiary] my-2 self-center" />
+
+          {/* Guide Tools */}
           <div className="flex flex-col items-center space-y-2">
             <button onClick={() => setActiveGuide('ruler')} className={`p-3 rounded-lg transition-colors ${ activeGuide === 'ruler' ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`} title="Guía de Regla">
                 <RulerIcon className="w-6 h-6" />
@@ -1171,8 +1738,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           {/* AI Tools */}
           <div className="w-10/12 h-px bg-[--bg-tertiary] my-2 self-center" />
            <div className="flex flex-col items-center space-y-2">
-              <button onClick={() => handleToolClick('enhance')} onDoubleClick={() => handleToolDoubleClick('enhance')} className={toolButtonClasses('enhance')} title="Mejora con IA (doble clic para opciones)">
-                  <MagicWandIcon className="w-6 h-6" />
+              <button onClick={() => handleToolClick('enhance')} onDoubleClick={(e) => handleToolDoubleClick('enhance', e)} className={toolButtonClasses('enhance')} title="Mejora con IA (doble clic para opciones)">
+                  <SparklesIcon className="w-6 h-6" />
               </button>
           </div>
 
@@ -1187,11 +1754,47 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             </button>
           </div>
       </div>
-      {openSettings && (
-        <div className="absolute left-full top-2 ml-2 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-80 z-20 max-h-[calc(100vh-2rem)] overflow-y-auto">
+
+      {/* Popovers for non-AI tools */}
+      {openSettings && openSettings !== 'enhance' && (
+        <div
+            ref={settingsPanelRef}
+            className="bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-80 z-20 overflow-y-auto"
+            style={getSettingsPanelStyle()}
+        >
             {renderSettings(openSettings)}
         </div>
       )}
+
+      {/* Modal for AI tool */}
+      {openSettings === 'enhance' && (
+        <>
+          <div 
+              className="fixed inset-0 bg-black/50 z-40"
+              onClick={() => {
+                  setOpenSettings(null);
+                  setSettingsPanelAnchor(null);
+              }}
+          />
+          <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
+            <div 
+                ref={settingsPanelRef}
+                className="bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-[500px] max-h-[90vh] flex flex-col pointer-events-auto"
+            >
+                <div className="flex-shrink-0 p-4 border-b border-[--bg-tertiary] flex justify-between items-center">
+                    <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Mejora con IA</h4>
+                    <button onClick={() => { setOpenSettings(null); setSettingsPanelAnchor(null); }} className="p-1 rounded-full hover:bg-[--bg-hover]">
+                        <XIcon className="w-5 h-5" />
+                    </button>
+                </div>
+                <div className="flex-grow overflow-y-auto p-4">
+                    {renderSettings(openSettings)}
+                </div>
+            </div>
+          </div>
+        </>
+      )}
+      
       {promptLoader.openFor && promptLoader.anchorEl && (
         <div 
           ref={promptLoaderRef}

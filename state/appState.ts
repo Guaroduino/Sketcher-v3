@@ -1,4 +1,4 @@
-import type { AppState, SketchObject, ItemType, CropRect, TransformState, Point, WorkspaceTemplate, QuickAccessSettings } from '../types';
+import type { AppState, SketchObject, ItemType, CropRect, TransformState, Point, WorkspaceTemplate, QuickAccessSettings, CanvasItem, ScaleUnit, ClipboardData } from '../types';
 import { getHomographyMatrix, createNewCanvas } from '../utils/canvasUtils';
 import { cloneCanvas } from '../utils/canvasUtils';
 
@@ -100,10 +100,10 @@ export const initialState: AppState = {
             opacity: 1,
             parentId: null,
             isBackground: true,
-            color: '#FFFFFF'
+            color: '#F0F0F0'
         },
         {
-            id: `object-${Date.now()}`,
+            id: 'object-1',
             name: 'Objeto 1',
             type: 'object',
             isVisible: true,
@@ -112,6 +112,8 @@ export const initialState: AppState = {
         }
     ],
     canvasSize: { width: 0, height: 0 },
+    scaleFactor: 0.1,
+    scaleUnit: 'cm',
 };
 
 export type Action =
@@ -119,20 +121,23 @@ export type Action =
   | { type: 'REDO' }
   | { type: 'SNAPSHOT' }
   | { type: 'INITIALIZE_CANVASES'; payload: { width: number, height: number } }
-  | { type: 'ADD_ITEM'; payload: { type: ItemType, activeItemId: string | null, canvasSize: { width: number, height: number }, newItemId?: string, imageElement?: HTMLImageElement, name?: string } }
+  | { type: 'ADD_ITEM'; payload: { type: 'group' | 'object', activeItemId: string | null, canvasSize: { width: number, height: number }, newItemId?: string, imageElement?: HTMLImageElement, name?: string, initialDimensions?: { width: number, height: number } } }
+  | { type: 'ADD_ITEM_BELOW'; payload: { targetId: string, canvasSize: { width: number, height: number }, newItemId: string } }
+  | { type: 'PASTE_FROM_CLIPBOARD'; payload: { newItemId: string, clipboard: ClipboardData, canvasSize: { width: number, height: number }, activeItemId: string | null } }
   | { type: 'DELETE_ITEM'; payload: { id: string } }
-  | { type: 'UPDATE_ITEM'; payload: { id: string, updates: Partial<SketchObject> } }
+  | { type: 'UPDATE_ITEM'; payload: { id: string, updates: Partial<CanvasItem> } }
   | { type: 'MOVE_ITEM'; payload: { draggedId: string; targetId: string; position: 'top' | 'bottom' | 'middle' } }
   | { type: 'MERGE_ITEMS'; payload: { sourceId: string, targetId: string } }
-  // FIX: Allow image property in UPDATE_BACKGROUND payload to handle AI-generated background replacements.
   | { type: 'UPDATE_BACKGROUND'; payload: { color?: string, image?: HTMLImageElement } }
-  | { type: 'SET_CANVAS_FROM_IMAGE', payload: { image: HTMLImageElement } }
+  | { type: 'SET_CANVAS_FROM_IMAGE'; payload: { image: HTMLImageElement } }
   | { type: 'REMOVE_BACKGROUND_IMAGE' }
   | { type: 'CLEAR_CANVAS' }
   | { type: 'CROP_CANVAS'; payload: { cropRect: CropRect } }
   | { type: 'COPY_ITEM'; payload: { id: string } }
   | { type: 'APPLY_TRANSFORM'; payload: { id: string, transform: TransformState, sourceBbox: CropRect } }
   | { type: 'RESIZE_CANVAS'; payload: { width: number, height: number } }
+  | { type: 'SET_SCALE_FACTOR'; payload: number }
+  | { type: 'SET_SCALE_UNIT'; payload: ScaleUnit }
   | { type: 'LOAD_PROJECT_STATE'; payload: { newState: AppState } }
   | { type: 'COMMIT_DRAWING'; payload: { activeItemId: string; beforeCanvas: HTMLCanvasElement } };
 
@@ -145,7 +150,7 @@ function appReducer(state: AppState, action: Action): AppState {
                 if (!obj.canvas) {
                     const { canvas, context } = createNewCanvas(width, height);
                     if (obj.isBackground) {
-                        context.fillStyle = obj.color || '#FFFFFF';
+                        context.fillStyle = obj.color || '#F0F0F0';
                         context.fillRect(0, 0, width, height);
                     }
                     return { ...obj, canvas, context };
@@ -155,34 +160,116 @@ function appReducer(state: AppState, action: Action): AppState {
             return { ...state, objects: newObjects, canvasSize: { width, height } };
         }
         case 'ADD_ITEM': {
-            const { type, activeItemId, canvasSize, newItemId, imageElement, name } = action.payload;
+            const { type, activeItemId, canvasSize, newItemId, imageElement, name, initialDimensions } = action.payload;
             const activeItem = activeItemId ? state.objects.find(i => i.id === activeItemId) : null;
             let parentId: string | null = null;
             if (activeItem) {
                 parentId = activeItem.type === 'group' ? activeItem.id : activeItem.parentId;
             }
 
+            let newObject: CanvasItem;
+
+            if (type === 'group') {
+                const groupObject: SketchObject = {
+                    id: newItemId ?? `group-${Date.now()}`,
+                    name: name ?? `Carpeta ${state.objects.filter(i => i.type === 'group').length + 1}`,
+                    type: 'group',
+                    isVisible: true,
+                    opacity: 1,
+                    parentId: parentId,
+                };
+                newObject = groupObject;
+            } else { // type === 'object'
+                const sketchObject: SketchObject = {
+                    id: newItemId ?? `object-${Date.now()}`,
+                    name: name ?? `Objeto ${state.objects.filter(i => i.type === 'object' && !i.isBackground).length + 1}`,
+                    type: 'object',
+                    isVisible: true,
+                    opacity: 1,
+                    parentId: parentId,
+                };
+    
+                const { canvas, context } = createNewCanvas(canvasSize.width, canvasSize.height);
+                sketchObject.canvas = canvas;
+                sketchObject.context = context;
+
+                if (imageElement) {
+                    if (initialDimensions) {
+                        const x = (canvasSize.width - initialDimensions.width) / 2;
+                        const y = (canvasSize.height - initialDimensions.height) / 2;
+                        context.drawImage(imageElement, x, y, initialDimensions.width, initialDimensions.height);
+                    } else {
+                        context.drawImage(imageElement, 0, 0);
+                    }
+                }
+                newObject = sketchObject;
+            }
+            
+            const newItems = [...state.objects];
+            if (activeItem && activeItem.type !== 'group') {
+                const activeIndex = newItems.findIndex(i => i.id === activeItemId);
+                if (activeIndex !== -1) {
+                    // Insert after the active item. In the reversed Outliner view, this appears "above".
+                    newItems.splice(activeIndex + 1, 0, newObject);
+                } else {
+                    // Fallback: add to the end (top of the list)
+                    newItems.push(newObject);
+                }
+            } else {
+                // If no item is selected, or a group is selected, add to the end.
+                // This places it at the top of the root, or at the top inside the selected group.
+                newItems.push(newObject);
+            }
+            return { ...state, objects: newItems };
+        }
+        case 'ADD_ITEM_BELOW': {
+            const { targetId, canvasSize, newItemId } = action.payload;
+            const targetItem = state.objects.find(i => i.id === targetId);
+            if (!targetItem) return state;
+
+            const sketchObject: SketchObject = {
+                id: newItemId,
+                name: `Objeto ${state.objects.filter(i => i.type === 'object' && !i.isBackground).length + 1}`,
+                type: 'object',
+                isVisible: true,
+                opacity: 1,
+                parentId: targetItem.parentId,
+            };
+
+            const { canvas, context } = createNewCanvas(canvasSize.width, canvasSize.height);
+            sketchObject.canvas = canvas;
+            sketchObject.context = context;
+
+            const newItems = [...state.objects];
+            const targetIndex = newItems.findIndex(i => i.id === targetId);
+            if (targetIndex !== -1) {
+                newItems.splice(targetIndex, 0, sketchObject);
+            } else {
+                newItems.push(sketchObject);
+            }
+            
+            return { ...state, objects: newItems };
+        }
+        case 'PASTE_FROM_CLIPBOARD': {
+            const { newItemId, clipboard, canvasSize, activeItemId } = action.payload;
+            const activeItem = activeItemId ? state.objects.find(i => i.id === activeItemId) : null;
+            const parentId = activeItem ? (activeItem.type === 'group' ? activeItem.id : activeItem.parentId) : null;
+
+            const { canvas, context } = createNewCanvas(canvasSize.width, canvasSize.height);
+            context.putImageData(clipboard.imageData, clipboard.sourceRect.x, clipboard.sourceRect.y);
+
             const newObject: SketchObject = {
-                id: newItemId ?? `${type}-${Date.now()}`,
-                name: name ?? (type === 'group' ? `Carpeta ${state.objects.filter(i => i.type === 'group').length + 1}` : `Objeto ${state.objects.filter(i => i.type === 'object' && !i.isBackground).length + 1}`),
-                type: type,
+                id: newItemId,
+                name: `Pegado ${state.objects.filter(i => i.name.startsWith('Pegado')).length + 1}`,
+                type: 'object',
                 isVisible: true,
                 opacity: 1,
                 parentId: parentId,
+                canvas,
+                context,
             };
 
-            if (type === 'object') {
-                const { canvas, context } = createNewCanvas(canvasSize.width, canvasSize.height);
-                newObject.canvas = canvas;
-                newObject.context = context;
-
-                if (imageElement) {
-                    context.drawImage(imageElement, 0, 0);
-                }
-            }
-            
-            const newItems = [...state.objects, newObject];
-            return { ...state, objects: newItems };
+            return { ...state, objects: [...state.objects, newObject] };
         }
         case 'DELETE_ITEM': {
             const { id } = action.payload;
@@ -259,20 +346,22 @@ function appReducer(state: AppState, action: Action): AppState {
             if (itemIndex === -1) return state;
 
             const originalItem = state.objects[itemIndex];
-            if (originalItem.isBackground) return state;
+            if (originalItem.type === 'object' && originalItem.isBackground) return state;
 
-            const newItem: SketchObject = {
+            let newItem: CanvasItem;
+
+            const newSketchItem: SketchObject = {
                 ...originalItem,
                 id: `${originalItem.type}-${Date.now()}`,
                 name: `Copia de ${originalItem.name}`,
             };
-
             if (originalItem.canvas) {
                 const { canvas, context } = createNewCanvas(originalItem.canvas.width, originalItem.canvas.height);
                 context.drawImage(originalItem.canvas, 0, 0);
-                newItem.canvas = canvas;
-                newItem.context = context;
+                newSketchItem.canvas = canvas;
+                newSketchItem.context = context;
             }
+            newItem = newSketchItem;
 
             const newItems = [...state.objects];
             newItems.splice(itemIndex + 1, 0, newItem);
@@ -281,21 +370,64 @@ function appReducer(state: AppState, action: Action): AppState {
         }
         case 'MERGE_ITEMS': {
             const { sourceId, targetId } = action.payload;
-            const sourceItem = state.objects.find(i => i.id === sourceId);
-            const targetItem = state.objects.find(i => i.id === targetId);
+            const sourceItem = state.objects.find(i => i.id === sourceId) as SketchObject | undefined;
+            const targetItem = state.objects.find(i => i.id === targetId) as SketchObject | undefined;
 
-            if (sourceItem?.canvas && targetItem?.context) {
-                targetItem.context.drawImage(sourceItem.canvas, 0, 0);
+            if (!sourceItem || !targetItem || !sourceItem.canvas || !targetItem.canvas) {
+                return state;
             }
             
-            const newItems = state.objects.filter(i => i.id !== sourceId);
-            return { ...state, objects: newItems };
+            const sourceIndex = state.objects.findIndex(i => i.id === sourceId);
+            const targetIndex = state.objects.findIndex(i => i.id === targetId);
+
+            const topItem = sourceIndex > targetIndex ? sourceItem : targetItem;
+            const bottomItem = sourceIndex > targetIndex ? targetItem : sourceItem;
+            
+            const { canvas: newCanvas, context: newCtx } = createNewCanvas(bottomItem.canvas.width, bottomItem.canvas.height);
+
+            const bakeOpacity = (item: SketchObject): HTMLCanvasElement => {
+                const { canvas: tempCanvas, context: tempCtx } = createNewCanvas(item.canvas!.width, item.canvas!.height);
+                tempCtx.drawImage(item.canvas!, 0, 0);
+                try {
+                    const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+                    const data = imageData.data;
+                    for (let i = 3; i < data.length; i+=4) {
+                        data[i] = data[i] * item.opacity;
+                    }
+                    tempCtx.putImageData(imageData, 0, 0);
+                } catch(e) {
+                    console.error("Could not bake opacity, falling back to simple draw.", e);
+                    tempCtx.clearRect(0,0, tempCanvas.width, tempCanvas.height);
+                    tempCtx.globalAlpha = item.opacity;
+                    tempCtx.drawImage(item.canvas!, 0, 0);
+                    tempCtx.globalAlpha = 1.0;
+                }
+                return tempCanvas;
+            }
+
+            const bottomBakedCanvas = bakeOpacity(bottomItem);
+            newCtx.drawImage(bottomBakedCanvas, 0, 0);
+
+            const topBakedCanvas = bakeOpacity(topItem);
+            newCtx.drawImage(topBakedCanvas, 0, 0);
+
+            const updatedBottomItem: SketchObject = {
+                ...bottomItem,
+                canvas: newCanvas,
+                context: newCtx,
+                opacity: 1,
+            };
+
+            const newObjects = state.objects
+                .map(i => (i.id === bottomItem.id ? updatedBottomItem : i))
+                .filter(i => i.id !== topItem.id); 
+
+            return { ...state, objects: newObjects };
         }
         case 'UPDATE_BACKGROUND': {
-            // FIX: Handle both color and image updates for the background layer.
             const { color, image } = action.payload;
             const newObjects = state.objects.map(o => {
-                if (o.isBackground && o.context) {
+                if (o.type === 'object' && o.isBackground && o.context) {
                     const updatedObject = { ...o };
                     if (color) {
                         updatedObject.color = color;
@@ -308,6 +440,10 @@ function appReducer(state: AppState, action: Action): AppState {
                     if (image) {
                         updatedObject.backgroundImage = image;
                         updatedObject.context.clearRect(0, 0, o.context.canvas.width, o.context.canvas.height);
+                        if (updatedObject.color) { // Draw color behind image if it exists
+                            updatedObject.context.fillStyle = updatedObject.color;
+                            updatedObject.context.fillRect(0, 0, o.context.canvas.width, o.context.canvas.height);
+                        }
                         updatedObject.context.drawImage(image, 0, 0, o.context.canvas.width, o.context.canvas.height);
                     }
                     return updatedObject;
@@ -320,18 +456,16 @@ function appReducer(state: AppState, action: Action): AppState {
             const { image } = action.payload;
             const newCanvasSize = { width: image.width, height: image.height };
 
-            const newObjects = state.objects.map(item => {
+            const newObjects = state.objects.map((item): CanvasItem => {
                 const oldCanvas = item.canvas;
                 const { canvas: newCanvas, context: newCtx } = createNewCanvas(newCanvasSize.width, newCanvasSize.height);
 
                 if (item.isBackground) {
                     newCtx.drawImage(image, 0, 0);
-                    // Reset background color to avoid confusion
                     return { ...item, canvas: newCanvas, context: newCtx, color: '#FFFFFF', backgroundImage: image };
                 }
                 
                 if (oldCanvas) {
-                    // Preserve existing content for other layers
                     newCtx.drawImage(oldCanvas, 0, 0);
                 }
 
@@ -342,7 +476,7 @@ function appReducer(state: AppState, action: Action): AppState {
         }
         case 'REMOVE_BACKGROUND_IMAGE': {
             const newObjects = state.objects.map(o => {
-                if (o.isBackground && o.context) {
+                if (o.type === 'object' && o.isBackground && o.context) {
                     o.context.fillStyle = o.color || '#FFFFFF';
                     o.context.fillRect(0, 0, o.context.canvas.width, o.context.canvas.height);
                     const { backgroundImage, ...rest } = o;
@@ -357,11 +491,13 @@ function appReducer(state: AppState, action: Action): AppState {
              if (state.canvasSize.width > 0) {
                  newInitialState.objects.forEach(obj => {
                      const { canvas, context } = createNewCanvas(state.canvasSize.width, state.canvasSize.height);
-                     obj.canvas = canvas;
-                     obj.context = context;
-                     if (obj.isBackground) {
-                         context.fillStyle = obj.color!;
-                         context.fillRect(0,0, canvas.width, canvas.height);
+                     if (obj.type === 'object') {
+                         obj.canvas = canvas;
+                         obj.context = context;
+                         if (obj.isBackground) {
+                             context.fillStyle = obj.color!;
+                             context.fillRect(0,0, canvas.width, canvas.height);
+                         }
                      }
                  });
                  newInitialState.canvasSize = state.canvasSize;
@@ -372,7 +508,7 @@ function appReducer(state: AppState, action: Action): AppState {
             const { cropRect } = action.payload;
             const newCanvasSize = { width: Math.round(cropRect.width), height: Math.round(cropRect.height) };
 
-            const newObjects = state.objects.map(item => {
+            const newObjects = state.objects.map((item): CanvasItem => {
                 if (item.canvas) {
                     const { canvas: newCanvas, context: newCtx } = createNewCanvas(newCanvasSize.width, newCanvasSize.height);
                     newCtx.drawImage(
@@ -391,7 +527,7 @@ function appReducer(state: AppState, action: Action): AppState {
             const { width, height } = action.payload;
             const newCanvasSize = { width: Math.round(width), height: Math.round(height) };
 
-            const newObjects = state.objects.map(item => {
+            const newObjects = state.objects.map((item): CanvasItem => {
                 if (item.canvas) {
                     const { canvas: newCanvas, context: newCtx } = createNewCanvas(newCanvasSize.width, newCanvasSize.height);
                     
@@ -468,6 +604,12 @@ function appReducer(state: AppState, action: Action): AppState {
             
             return { ...state, objects: newObjects };
         }
+        case 'SET_SCALE_FACTOR': {
+            return { ...state, scaleFactor: action.payload };
+        }
+        case 'SET_SCALE_UNIT': {
+            return { ...state, scaleUnit: action.payload };
+        }
         case 'SNAPSHOT':
         case 'COMMIT_DRAWING': {
             // These actions are handled by the historyReducer, not the appReducer.
@@ -528,47 +670,59 @@ export function historyReducer(state: HistoryState, action: Action): HistoryStat
     // Special, highly optimized handling for the most frequent history action.
     if (action.type === 'COMMIT_DRAWING') {
         const { activeItemId, beforeCanvas } = action.payload;
-        
-        // This is the state as it was *before* the drawing was committed.
-        const stateForPast: AppState = {
-            ...present, // Copy canvasSize etc.
+
+        const previousState = {
+            ...present,
             objects: present.objects.map(obj => {
-                if (obj.id === activeItemId) {
-                    // For the object that was drawn on, use the 'before' canvas state.
-                    const context = beforeCanvas.getContext('2d', { willReadFrequently: true });
-                    if (!context) throw new Error("Failed to get context for beforeCanvas");
-                    return { ...obj, canvas: beforeCanvas, context: context };
+                if (obj.id === activeItemId && obj.type === 'object') {
+                    // Create a new object with the old canvas for the history
+                    return { ...obj, canvas: beforeCanvas };
                 }
-                // For all other objects, just carry over the reference.
                 return obj;
             })
         };
         
-        const newPast = [...past, stateForPast];
+        const newPast = [...past, previousState];
         if (newPast.length > MAX_HISTORY_SIZE) {
             newPast.shift();
         }
 
-        // 'present' state was already mutated by the drawing operation.
-        // To trigger a re-render, we create a new state object with a new objects array reference.
+        // The 'present' state's canvas was mutated. To make React detect the change,
+        // we need to create a new state object and a new `objects` array.
+        const newPresent = {
+            ...present,
+            objects: [...present.objects] // shallow copy of array is enough to trigger downstream useMemo/useEffect
+        };
+
         return {
             past: newPast,
-            present: { ...present, objects: [...present.objects] },
+            present: newPresent,
             future: [],
         };
     }
 
-    // All other actions are processed by the appReducer to get the new state.
+    // For all other actions that modify state:
     const newPresent = appReducer(present, action);
 
-    // If the reducer didn't make a change, do nothing.
-    if (newPresent === present) {
+    // If the reducer didn't make any changes, return the original state.
+    if (present === newPresent) {
         return state;
     }
     
-    // The previous 'present' state becomes the newest 'past' state.
-    // No deep cloning needed because appReducer should handle immutability for canvas-mutating actions.
-    const newPast = [...past, present];
+    // A change was made. Add the *old* present state to the past.
+    // Crucially, we must clone the canvases in the old state before adding it
+    // to history, to prevent future drawing mutations from affecting it.
+    const presentSnapshot = {
+        ...present,
+        objects: present.objects.map(obj => {
+            if (obj.type === 'object' && obj.canvas) {
+                return { ...obj, canvas: cloneCanvas(obj.canvas) };
+            }
+            return obj;
+        })
+    };
+
+    const newPast = [...past, presentSnapshot];
     if (newPast.length > MAX_HISTORY_SIZE) {
         newPast.shift();
     }

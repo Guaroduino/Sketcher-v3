@@ -53,8 +53,8 @@ export const CanvasSizeModal: React.FC<CanvasSizeModalProps> = ({
     };
 
     const handleApply = () => {
-        const newWidth = parseFloat(String(width));
-        const newHeight = parseFloat(String(height));
+        const newWidth = Number(width);
+        const newHeight = Number(height);
         if (!isNaN(newWidth) && !isNaN(newHeight) && newWidth > 0 && newHeight > 0) {
             onApply(newWidth, newHeight);
         }
@@ -98,7 +98,6 @@ export const CanvasSizeModal: React.FC<CanvasSizeModalProps> = ({
                                 type="number"
                                 id="canvas-width"
                                 value={width}
-                                // FIX: Convert input string value to number before setting state.
                                 onChange={(e) => setWidth(Number(e.target.value))}
                                 className="w-full bg-[--bg-tertiary] text-[--text-primary] text-sm rounded-md p-2"
                             />
@@ -109,7 +108,6 @@ export const CanvasSizeModal: React.FC<CanvasSizeModalProps> = ({
                                 type="number"
                                 id="canvas-height"
                                 value={height}
-                                // FIX: Convert input string value to number before setting state.
                                 onChange={(e) => setHeight(Number(e.target.value))}
                                 className="w-full bg-[--bg-tertiary] text-[--text-primary] text-sm rounded-md p-2"
                             />

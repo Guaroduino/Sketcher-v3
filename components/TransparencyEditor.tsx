@@ -1,423 +1,535 @@
-
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import type { LibraryItem, RgbColor, Point } from '../types';
-import { ZoomInIcon, ZoomOutIcon, HandIcon, CrosshairIcon, BrushIcon, EraserIcon, UndoIcon } from './icons';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import type { LibraryImage, RgbColor, Point, ScaleUnit } from '../types';
+import { ZoomInIcon, ZoomOutIcon, HandIcon, CrosshairIcon, UndoIcon, XIcon, EraserIcon, RedoIcon, RefreshCwIcon, HistoryIcon } from './icons';
+import { getCanvasPoint, hexToRgb, rgbToHex } from '../utils/canvasUtils';
 
 interface TransparencyEditorProps {
-  item: LibraryItem & { originalDataUrl: string };
-  onCancel: () => void;
-  onApply: (newImageDataUrl: string, colors: RgbColor[]) => void;
+    item: (LibraryImage & { originalDataUrl: string }) | null;
+    onApply: (newImageDataUrl: string, colors: RgbColor[], scaleFactor: number, tolerance: number, scaleUnit: ScaleUnit) => void;
+    onCancel: () => void;
 }
 
-type EditorTool = 'picker' | 'pan' | 'eraser' | 'restorer';
-type PreviewBg = 'checker' | 'green' | 'blue';
+type Tool = 'picker' | 'eraser' | 'pan';
+type HistoryState = { colors: RgbColor[]; eraserMaskData: ImageData | null };
 
-export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, onCancel, onApply }) => {
-  const [transparentColors, setTransparentColors] = useState<RgbColor[]>([]);
-  const [tolerance, setTolerance] = useState<number>(20);
-  const [brushSize, setBrushSize] = useState<number>(40);
-  
-  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
-  const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  
-  const [viewTransform, setViewTransform] = useState({ zoom: 1, pan: { x: 0, y: 0 } });
-  const panState = useRef({ isPanning: false, startX: 0, startY: 0, startPan: { x: 0, y: 0 } });
-  const drawState = useRef({ isDrawing: false, lastPoint: null as Point | null });
-  
-  const [activeTool, setActiveTool] = useState<EditorTool>('picker');
-  const [previewBg, setPreviewBg] = useState<PreviewBg>('checker');
+export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, onApply, onCancel }) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+    const originalCanvasRef = useRef<HTMLCanvasElement>(null);
+    const colorMaskCanvasRef = useRef<HTMLCanvasElement>(null);
+    const eraserMaskCanvasRef = useRef<HTMLCanvasElement>(null);
+    const transparentCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  const historyRef = useRef<{ stack: ImageData[], index: number }>({ stack: [], index: -1 });
-  const [canUndo, setCanUndo] = useState(false);
-  const isInitialized = useRef(false);
-
-  const sourceDataUrl = item.originalDataUrl;
-
-  const updatePreview = useCallback(() => {
-    const previewCtx = previewCanvasRef.current?.getContext('2d');
-    const sourceCanvas = sourceCanvasRef.current;
-    const maskCanvas = maskCanvasRef.current;
-    if (!previewCtx || !sourceCanvas || !maskCanvas) return;
-
-    previewCtx.save();
-    previewCtx.setTransform(1, 0, 0, 1, 0, 0);
-    previewCtx.clearRect(0, 0, previewCtx.canvas.width, previewCtx.canvas.height);
+    const [activeTool, setActiveTool] = useState<Tool>('picker');
+    const [viewTransform, setViewTransform] = useState({ zoom: 1, pan: { x: 0, y: 0 } });
+    const [tolerance, setTolerance] = useState(30);
+    const [eraserSettings, setEraserSettings] = useState({ size: 50 });
+    const [scaleFactor, setScaleFactor] = useState(5); // Always in px/mm
+    const [scaleUnit, setScaleUnit] = useState<ScaleUnit>('mm');
+    const [scaleInputValue, setScaleInputValue] = useState('5');
+    const [imageElement, setImageElement] = useState<HTMLImageElement | null>(null);
     
-    previewCtx.drawImage(sourceCanvas, 0, 0);
-    
-    previewCtx.globalCompositeOperation = 'destination-in';
-    previewCtx.drawImage(maskCanvas, 0, 0);
-    
-    previewCtx.restore();
-  }, []);
+    const [history, setHistory] = useState<HistoryState[]>([]);
+    const [historyIndex, setHistoryIndex] = useState(-1);
 
-  const saveMaskState = useCallback(() => {
-    const maskCtx = maskCanvasRef.current?.getContext('2d', { willReadFrequently: true });
-    if (!maskCtx) return;
+    const dragState = useRef<{ isPanning: boolean; isErasing: boolean; lastPoint: Point | null; }>({ isPanning: false, isErasing: false, lastPoint: null });
 
-    const { stack, index } = historyRef.current;
-    const imageData = maskCtx.getImageData(0, 0, maskCtx.canvas.width, maskCtx.canvas.height);
+    const currentHistoryState = useMemo(() => history[historyIndex], [history, historyIndex]);
+    const currentColors = useMemo(() => currentHistoryState?.colors ?? [], [currentHistoryState]);
+    const canUndo = historyIndex > 0;
+    const canRedo = historyIndex < history.length - 1;
+    const unitMultipliers = useMemo(() => ({ mm: 1, cm: 10, m: 1000 }), []);
 
-    const newStack = stack.slice(0, index + 1);
-    newStack.push(imageData);
+    const recordChange = useCallback((newState: HistoryState) => {
+        const newHistory = history.slice(0, historyIndex + 1);
+        setHistory([...newHistory, newState]);
+        setHistoryIndex(newHistory.length);
+    }, [history, historyIndex]);
 
-    if (newStack.length > 30) {
-        newStack.shift();
-    }
-    
-    historyRef.current.stack = newStack;
-    historyRef.current.index = newStack.length - 1;
-    
-    setCanUndo(historyRef.current.index > 0);
-  }, []);
-
-  const handleUndo = () => {
-    const { stack, index } = historyRef.current;
-    if (index <= 0) return;
-
-    const newIndex = index - 1;
-    const imageData = stack[newIndex];
-    
-    const maskCtx = maskCanvasRef.current?.getContext('2d');
-    if (maskCtx) {
-        maskCtx.putImageData(imageData, 0, 0);
-        updatePreview();
-    }
-    
-    historyRef.current.index = newIndex;
-    setCanUndo(newIndex > 0);
-  };
-
-  // Effect to initialize canvases
-  useEffect(() => {
-    if (!sourceDataUrl) return;
-    const image = new Image();
-    image.crossOrigin = 'anonymous';
-    
-    image.onload = () => {
-      const { naturalWidth: width, naturalHeight: height } = image;
-      
-      sourceCanvasRef.current = document.createElement('canvas');
-      sourceCanvasRef.current.width = width;
-      sourceCanvasRef.current.height = height;
-      const sourceCtx = sourceCanvasRef.current.getContext('2d', { willReadFrequently: true });
-      sourceCtx?.drawImage(image, 0, 0);
-      
-      maskCanvasRef.current = document.createElement('canvas');
-      maskCanvasRef.current.width = width;
-      maskCanvasRef.current.height = height;
-      
-      const previewCanvas = previewCanvasRef.current;
-      if (previewCanvas) {
-        previewCanvas.width = width;
-        previewCanvas.height = height;
-        
-        // Zoom to extents logic
-        const container = previewCanvas.parentElement;
-        if (container) {
-          const viewWidth = container.offsetWidth;
-          const viewHeight = container.offsetHeight;
-          const padding = 0.9;
-          
-          if (width > 0 && height > 0) {
-            const scaleX = viewWidth / width;
-            const scaleY = viewHeight / height;
-            const newZoom = Math.min(scaleX, scaleY) * padding;
-            const newPanX = (viewWidth - width * newZoom) / 2;
-            const newPanY = (viewHeight - height * newZoom) / 2;
-            setViewTransform({ zoom: newZoom, pan: { x: newPanX, y: newPanY } });
-          }
+    useEffect(() => {
+        if (item) {
+            const initialScaleFactor = item.scaleFactor || 5;
+            const initialScaleUnit = item.scaleUnit || 'mm';
+            setScaleFactor(initialScaleFactor);
+            setScaleUnit(initialScaleUnit);
+            setScaleInputValue(String(Number((initialScaleFactor * unitMultipliers[initialScaleUnit]).toFixed(2))));
+            setTolerance(item.tolerance !== undefined ? item.tolerance : 30);
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.onload = () => {
+                setImageElement(img);
+            };
+            img.src = item.originalDataUrl;
+        } else {
+            setImageElement(null);
+            setHistory([]);
+            setHistoryIndex(-1);
+            setViewTransform({ zoom: 1, pan: { x: 0, y: 0 } });
         }
-      }
-      
-      isInitialized.current = true;
-      historyRef.current = { stack: [], index: -1 };
-      setCanUndo(false);
-      setTransparentColors(item.transparentColors || []);
-    };
-    image.src = sourceDataUrl;
+    }, [item, unitMultipliers]);
 
-    return () => {
-        isInitialized.current = false;
-        // Reset zoom when closing
-        setViewTransform({ zoom: 1, pan: { x: 0, y: 0 } });
-    }
-  }, [sourceDataUrl, item.transparentColors]);
+    const redraw = useCallback(() => {
+        if (!transparentCanvasRef.current || !previewCanvasRef.current) return;
 
-  // Effect to re-process mask from colors/tolerance and save history
-  useEffect(() => {
-    if (!isInitialized.current) return;
-    
-    const sourceCtx = sourceCanvasRef.current?.getContext('2d', { willReadFrequently: true });
-    const maskCtx = maskCanvasRef.current?.getContext('2d', { willReadFrequently: true });
-    if (!sourceCtx || !maskCtx) return;
+        const transparentCanvas = transparentCanvasRef.current;
+        const previewCanvas = previewCanvasRef.current;
+        const previewCtx = previewCanvas.getContext('2d');
+        if (!previewCtx) return;
 
-    const { width, height } = sourceCtx.canvas;
-    
-    maskCtx.fillStyle = 'white';
-    maskCtx.fillRect(0, 0, width, height);
-
-    const imageData = sourceCtx.getImageData(0, 0, width, height);
-    const data = imageData.data;
-    const maskImageData = maskCtx.getImageData(0, 0, width, height);
-    const maskData = maskImageData.data;
-    const toleranceSq = tolerance * tolerance;
-
-    for (let i = 0; i < data.length; i += 4) {
-         if (data[i + 3] === 0) {
-            maskData[i+3] = 0;
-            continue;
-         }
-         const r = data[i], g = data[i+1], b = data[i+2];
-         for (const color of transparentColors) {
-             const distSq = (r - color.r)**2 + (g - color.g)**2 + (b - color.b)**2;
-             if (distSq <= toleranceSq) {
-                 maskData[i+3] = 0;
-                 break;
-             }
-         }
-    }
-    maskCtx.putImageData(maskImageData, 0, 0);
-    
-    saveMaskState();
-    updatePreview();
-
-  }, [transparentColors, tolerance, updatePreview, saveMaskState]);
-
-  const getPointOnCanvas = useCallback((e: { clientX: number, clientY: number }): Point | null => {
-    const container = previewCanvasRef.current?.parentElement;
-    if (!container) return null;
-    const rect = container.getBoundingClientRect();
-
-    const viewX = e.clientX - rect.left;
-    const viewY = e.clientY - rect.top;
-
-    const canvasX = (viewX - viewTransform.pan.x) / viewTransform.zoom;
-    const canvasY = (viewY - viewTransform.pan.y) / viewTransform.zoom;
-    
-    return { x: canvasX, y: canvasY };
-  }, [viewTransform.pan, viewTransform.zoom]);
-
-  const handleColorPick = (point: Point) => {
-    const sourceCtx = sourceCanvasRef.current?.getContext('2d', { willReadFrequently: true });
-    if (!sourceCtx) return;
-
-    const pixel = sourceCtx.getImageData(point.x, point.y, 1, 1).data;
-    if (pixel[3] === 0) return;
-    
-    const newColor = { r: pixel[0], g: pixel[1], b: pixel[2] };
-    if (!transparentColors.some(c => c.r === newColor.r && c.g === newColor.g && c.b === newColor.b)) {
-        setTransparentColors(prev => [...prev, newColor]);
-    }
-  };
-
-  const drawOnMask = (p1: Point, p2: Point, tool: 'eraser' | 'restorer') => {
-      const maskCtx = maskCanvasRef.current?.getContext('2d');
-      if (!maskCtx) return;
-
-      maskCtx.save();
-      maskCtx.globalCompositeOperation = tool === 'eraser' ? 'destination-out' : 'source-over';
-      maskCtx.strokeStyle = 'white';
-      maskCtx.fillStyle = 'white';
-      maskCtx.lineWidth = brushSize;
-      maskCtx.lineCap = 'round';
-      maskCtx.lineJoin = 'round';
-      
-      if (p1.x === p2.x && p1.y === p2.y) {
-        maskCtx.beginPath();
-        maskCtx.arc(p1.x, p1.y, brushSize / 2, 0, Math.PI * 2);
-        maskCtx.fill();
-      } else {
-        maskCtx.beginPath();
-        maskCtx.moveTo(p1.x, p1.y);
-        maskCtx.lineTo(p2.x, p2.y);
-        maskCtx.stroke();
-      }
-      maskCtx.restore();
-      updatePreview();
-  };
-
-  const handleApply = () => {
-    if (!previewCanvasRef.current) return;
-    onApply(previewCanvasRef.current.toDataURL(), transparentColors);
-  };
-  
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    // This is the key fix, mirroring the main canvas's pointer handling.
-    // Some browsers fire a pointerdown event with pressure 0 when a stylus hovers,
-    // which we need to ignore to prevent unintentionally starting a stroke.
-    if (e.pointerType === 'pen' && e.pressure === 0) return;
-
-    const point = getPointOnCanvas(e);
-    if (!point) return;
-
-    if (activeTool === 'pan') {
-        panState.current = { isPanning: true, startX: e.clientX, startY: e.clientY, startPan: viewTransform.pan };
-        return;
-    }
-    
-    if (activeTool === 'picker') {
-        handleColorPick(point);
-    }
-    
-    if (activeTool === 'eraser' || activeTool === 'restorer') {
-        saveMaskState();
-        drawState.current = { isDrawing: true, lastPoint: point };
-        drawOnMask(point, point, activeTool);
-    }
-  };
-
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (panState.current.isPanning) {
-        const dx = e.clientX - panState.current.startX;
-        const dy = e.clientY - panState.current.startY;
-        setViewTransform(prev => ({ ...prev, pan: { x: panState.current.startPan.x + dx, y: panState.current.startPan.y + dy } }));
-        return;
-    }
-    
-    if (drawState.current.isDrawing && (activeTool === 'eraser' || activeTool === 'restorer')) {
-        const events: PointerEvent[] = e.nativeEvent.getCoalescedEvents ? e.nativeEvent.getCoalescedEvents() : [e.nativeEvent];
+        previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+        previewCtx.save();
+        previewCtx.translate(viewTransform.pan.x, viewTransform.pan.y);
+        previewCtx.scale(viewTransform.zoom, viewTransform.zoom);
         
-        for (const event of events) {
-            const point = getPointOnCanvas(event);
-            if (!point) continue;
+        if (transparentCanvas.width > 0) {
+            previewCtx.imageSmoothingEnabled = viewTransform.zoom < 3;
+            previewCtx.drawImage(transparentCanvas, 0, 0);
+        }
 
-            if (drawState.current.lastPoint) {
-                drawOnMask(drawState.current.lastPoint, point, activeTool);
+        previewCtx.restore();
+
+        // --- Draw Scale Bar ---
+        previewCtx.save();
+        const barScreenY = previewCanvas.height - 30;
+        const barScreenX = 20;
+        
+        const targetScreenLength = 100;
+        const mmPerScreenPixel = 1 / (scaleFactor * viewTransform.zoom);
+        const targetMmLength = targetScreenLength * mmPerScreenPixel;
+        
+        const niceMmSteps = [0.1, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
+        let bestStepMm = niceMmSteps[0];
+        for (const step of niceMmSteps) {
+            if (step > targetMmLength) {
+                break;
             }
-            drawState.current.lastPoint = point;
+            bestStepMm = step;
         }
-    }
-  };
 
-  const handlePointerUp = () => {
-    panState.current.isPanning = false;
-    drawState.current = { isDrawing: false, lastPoint: null };
-  };
-  
-  const zoomBy = (factor: number, clientX?: number, clientY?: number) => {
-    const canvas = previewCanvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.parentElement!.getBoundingClientRect();
-    const pointerViewX = clientX ? clientX - rect.left : rect.width / 2;
-    const pointerViewY = clientY ? clientY - rect.top : rect.height / 2;
+        const finalScreenLength = bestStepMm * scaleFactor * viewTransform.zoom;
+
+        let label = `${bestStepMm}mm`;
+        if (bestStepMm >= 1000) {
+            label = `${bestStepMm / 1000}m`;
+        } else if (bestStepMm >= 10) {
+            label = `${bestStepMm / 10}cm`;
+        }
+
+        // Background for readability
+        previewCtx.font = '12px sans-serif';
+        const textMetrics = previewCtx.measureText(label);
+        const textWidth = textMetrics.width;
+        const bgWidth = Math.max(finalScreenLength, textWidth) + 16;
+        const bgX = barScreenX - 8;
+        const bgY = barScreenY - 18;
+        previewCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        previewCtx.fillRect(bgX, bgY, bgWidth, 24);
+
+        // Bar
+        previewCtx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+        previewCtx.lineWidth = 1.5;
+        previewCtx.beginPath();
+        previewCtx.moveTo(barScreenX, barScreenY - 5);
+        previewCtx.lineTo(barScreenX, barScreenY);
+        previewCtx.lineTo(barScreenX + finalScreenLength, barScreenY);
+        previewCtx.lineTo(barScreenX + finalScreenLength, barScreenY - 5);
+        previewCtx.stroke();
+        
+        // Label
+        previewCtx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        previewCtx.textAlign = 'center';
+        previewCtx.fillText(label, barScreenX + finalScreenLength / 2, barScreenY - 8);
+
+        previewCtx.restore();
+
+    }, [viewTransform, scaleFactor]);
+
+    const composeTransparentImage = useCallback(() => {
+        const originalCanvas = originalCanvasRef.current;
+        const colorMaskCanvas = colorMaskCanvasRef.current;
+        const eraserMaskCanvas = eraserMaskCanvasRef.current;
+        const transparentCanvas = transparentCanvasRef.current;
+        if (!originalCanvas || !colorMaskCanvas || !eraserMaskCanvas || !transparentCanvas) return;
+        const transparentCtx = transparentCanvas.getContext('2d');
+        if (!transparentCtx) return;
+
+        transparentCtx.clearRect(0, 0, transparentCanvas.width, transparentCanvas.height);
+        transparentCtx.drawImage(originalCanvas, 0, 0);
+        transparentCtx.globalCompositeOperation = 'destination-in';
+        transparentCtx.drawImage(colorMaskCanvas, 0, 0);
+        transparentCtx.globalCompositeOperation = 'destination-out';
+        transparentCtx.drawImage(eraserMaskCanvas, 0, 0);
+        transparentCtx.globalCompositeOperation = 'source-over';
+        
+        redraw();
+    }, [redraw]);
     
-    setViewTransform(current => {
-      const newZoom = current.zoom * factor;
-      const pointerCanvasX = (pointerViewX - current.pan.x) / current.zoom;
-      const pointerCanvasY = (pointerViewY - current.pan.y) / current.zoom;
-      const newPanX = pointerViewX - pointerCanvasX * newZoom;
-      const newPanY = pointerViewY - pointerCanvasY * newZoom;
-      return { zoom: newZoom, pan: { x: newPanX, y: newPanY } };
-    });
-  };
+    // This single effect now handles updating ALL masks and composing the final image.
+    // This fixes the race condition between color mask and eraser mask updates.
+    useEffect(() => {
+        if (!currentHistoryState || !imageElement) return;
 
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    zoomBy(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX, e.clientY);
-  };
-  
-  const canvasStyle: React.CSSProperties = {
-    transform: `translate(${viewTransform.pan.x}px, ${viewTransform.pan.y}px) scale(${viewTransform.zoom})`,
-    transformOrigin: 'top left',
-    willChange: 'transform',
-    imageRendering: 'pixelated',
-  };
-  
-  const bgClasses = {
-    checker: "bg-[--bg-primary] [background-image:linear-gradient(45deg,#808080_25%,transparent_25%),linear-gradient(-45deg,#808080_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#808080_75%),linear-gradient(-45deg,transparent_75%,#808080_75%)] [background-size:20px_20px] [background-position:0_0,0_10px,10px_-10px,-10px_0px]",
-    green: "bg-green-500",
-    blue: "bg-blue-500",
-  };
+        const originalCtx = originalCanvasRef.current?.getContext('2d', { willReadFrequently: true });
+        const colorMaskCtx = colorMaskCanvasRef.current?.getContext('2d');
+        const eraserCtx = eraserMaskCanvasRef.current?.getContext('2d');
 
-  const containerCursor = activeTool === 'pan' ? (panState.current.isPanning ? 'grabbing' : 'grab') : 'crosshair';
+        if (!originalCtx || !colorMaskCtx || !eraserCtx) return;
 
-  const toolButtonClasses = (toolName: EditorTool) => `p-2 rounded-md transition-colors ${activeTool === toolName ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`;
-  
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-      <div className="bg-[--bg-secondary] text-[--text-primary] rounded-lg shadow-xl p-6 w-full max-w-6xl h-full max-h-[90vh] flex flex-col">
-        <h2 className="text-xl font-bold mb-4 flex-shrink-0">Editor de Transparencia</h2>
+        const { width, height } = imageElement;
+        const { colors, eraserMaskData } = currentHistoryState;
+
+        // 1. Update eraser mask canvas from history
+        if (eraserMaskData) {
+            eraserCtx.putImageData(eraserMaskData, 0, 0);
+        } else {
+            eraserCtx.clearRect(0, 0, width, height);
+        }
+
+        // 2. Update color mask canvas from history
+        const originalData = originalCtx.getImageData(0, 0, width, height).data;
+        const maskImageData = colorMaskCtx.createImageData(width, height);
+        const maskData = maskImageData.data;
+        const toleranceSq = (tolerance / 100 * 255) ** 2 * 3;
+
+        for (let i = 0; i < originalData.length; i += 4) {
+            let isTransparent = false;
+            if (colors.length > 0) {
+                const r = originalData[i];
+                const g = originalData[i+1];
+                const b = originalData[i+2];
+                
+                for (const color of colors) {
+                    const distSq = (r - color.r)**2 + (g - color.g)**2 + (b - color.b)**2;
+                    if (distSq <= toleranceSq) {
+                        isTransparent = true;
+                        break;
+                    }
+                }
+            }
+            maskData[i] = 255; maskData[i+1] = 255; maskData[i+2] = 255;
+            maskData[i + 3] = isTransparent ? 0 : 255;
+        }
+        colorMaskCtx.putImageData(maskImageData, 0, 0);
+
+        // 3. Compose the final image now that both masks are up-to-date
+        composeTransparentImage();
+
+    }, [currentHistoryState, tolerance, imageElement, composeTransparentImage]);
+
+
+    useEffect(() => {
+        if (!imageElement || !originalCanvasRef.current || !eraserMaskCanvasRef.current || !transparentCanvasRef.current) return;
+
+        const { width, height } = imageElement;
+        [originalCanvasRef.current, eraserMaskCanvasRef.current, transparentCanvasRef.current, colorMaskCanvasRef.current].forEach(canvas => {
+            if (canvas) {
+                canvas.width = width;
+                canvas.height = height;
+            }
+        });
         
-        <div 
-          className={`relative flex-grow rounded-md flex justify-center items-center min-h-0 overflow-hidden ${bgClasses[previewBg]}`}
-          style={{ cursor: containerCursor }}
-          onWheel={handleWheel}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
-        >
-          <canvas ref={previewCanvasRef} className="absolute top-0 left-0" style={canvasStyle} />
-        </div>
+        originalCanvasRef.current.getContext('2d')?.drawImage(imageElement, 0, 0);
         
-        <div className="flex-shrink-0 pt-4 space-y-4">
-          <div className="bg-[--bg-primary] p-2 rounded-lg flex items-center flex-wrap gap-6 text-xs">
-            {/* Herramientas */}
-            <div className="flex items-center gap-2">
-                <button onClick={() => setActiveTool('picker')} className={toolButtonClasses('picker')} title="Cuentagotas"><CrosshairIcon className="w-5 h-5" /></button>
-                <button onClick={() => setActiveTool('pan')} className={toolButtonClasses('pan')} title="Mover"><HandIcon className="w-5 h-5" /></button>
-                <button onClick={() => setActiveTool('eraser')} className={toolButtonClasses('eraser')} title="Goma"><EraserIcon className="w-5 h-5" /></button>
-                <button onClick={() => setActiveTool('restorer')} className={toolButtonClasses('restorer')} title="Restaurador"><BrushIcon className="w-5 h-5" /></button>
-            </div>
+        const eraserCtx = eraserMaskCanvasRef.current.getContext('2d');
+        if (!eraserCtx) return;
+        eraserCtx.clearRect(0, 0, width, height);
+        const initialEraserMaskData = eraserCtx.getImageData(0, 0, width, height);
 
-            {/* Zoom & Undo */}
-            <div className="flex items-center gap-2">
-                <button onClick={() => zoomBy(1.2)} className="p-2 rounded-md bg-[--bg-tertiary] hover:bg-[--bg-hover] transition-colors"><ZoomInIcon className="w-5 h-5" /></button>
-                <button onClick={() => zoomBy(1 / 1.2)} className="p-2 rounded-md bg-[--bg-tertiary] hover:bg-[--bg-hover] transition-colors"><ZoomOutIcon className="w-5 h-5" /></button>
-                <button onClick={handleUndo} disabled={!canUndo} className="p-2 rounded-md bg-[--bg-tertiary] hover:bg-[--bg-hover] transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Deshacer"><UndoIcon className="w-5 h-5" /></button>
-            </div>
+        setHistory([{
+            colors: item?.transparentColors || [],
+            eraserMaskData: initialEraserMaskData
+        }]);
+        setHistoryIndex(0);
+        
+    }, [imageElement, item]);
 
-            {/* Fondo */}
-            <div className="flex items-center gap-2">
-                <span className="font-bold text-[--text-secondary]">Fondo:</span>
-                <button onClick={() => setPreviewBg('checker')} className={`w-6 h-6 rounded border-2 ${previewBg === 'checker' ? 'border-[--accent-primary]' : 'border-transparent'} bg-white [background-image:linear-gradient(45deg,#ccc_25%,transparent_25%),linear-gradient(-45deg,#ccc_25%,transparent_25%)] [background-size:10px_10px]`}></button>
-                <button onClick={() => setPreviewBg('green')} className={`w-6 h-6 rounded border-2 ${previewBg === 'green' ? 'border-white' : 'border-transparent'} bg-green-500`}></button>
-                <button onClick={() => setPreviewBg('blue')} className={`w-6 h-6 rounded border-2 ${previewBg === 'blue' ? 'border-white' : 'border-transparent'} bg-blue-500`}></button>
-            </div>
-            
-            {/* Sensibilidad / Tamaño */}
-            <div className="flex items-center gap-2 w-48">
-              {['eraser', 'restorer'].includes(activeTool) ? (
-                <>
-                  <label htmlFor="brushSize" className="font-bold text-[--text-secondary] flex-shrink-0">Tamaño: {brushSize}</label>
-                  <input type="range" id="brushSize" min="1" max="200" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-full" />
-                </>
-              ) : (
-                <>
-                  <label htmlFor="tolerance" className="font-bold text-[--text-secondary] flex-shrink-0">Sensibilidad: {tolerance}</label>
-                  <input type="range" id="tolerance" min="0" max="100" value={tolerance} onChange={(e) => setTolerance(parseInt(e.target.value, 10))} className="w-full" />
-                </>
-              )}
-            </div>
 
-             {/* Colores */}
-             <div className="flex items-center gap-2">
-                <span className="font-bold text-[--text-secondary]">Colores Transparentes:</span>
-                 <div className="flex flex-wrap gap-1 bg-[--bg-tertiary] p-1 rounded-md">
-                    {transparentColors.map((color, index) => (
-                        <div key={index}
-                            onClick={() => setTransparentColors(prev => prev.filter((_, i) => i !== index))}
-                            className="w-6 h-6 rounded-md border-2 border-gray-500 cursor-pointer relative group"
-                            style={{ backgroundColor: `rgb(${color.r}, ${color.g}, ${color.b})` }}
-                            title={`RGB(${color.r}, ${color.g}, ${color.b}) - Click para eliminar`}
-                        >
-                            <div className="absolute inset-0 bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-75 transition-opacity text-lg">&times;</div>
+    useEffect(() => {
+        if (imageElement && containerRef.current && historyIndex === 0) { // Only center on initial load
+            const viewWidth = containerRef.current.offsetWidth;
+            const viewHeight = containerRef.current.offsetHeight;
+            const padding = 0.9;
+            const scaleX = viewWidth / imageElement.width;
+            const scaleY = viewHeight / imageElement.height;
+            const newZoom = Math.min(scaleX, scaleY) * padding;
+            const newPanX = (viewWidth - imageElement.width * newZoom) / 2;
+            const newPanY = (viewHeight - imageElement.height * newZoom) / 2;
+            setViewTransform({ zoom: newZoom, pan: { x: newPanX, y: newPanY } });
+        }
+    }, [imageElement, historyIndex]);
+
+    useEffect(() => {
+        const resizeObserver = new ResizeObserver(() => {
+            if (containerRef.current && previewCanvasRef.current) {
+                const { width, height } = containerRef.current.getBoundingClientRect();
+                previewCanvasRef.current.width = width;
+                previewCanvasRef.current.height = height;
+                redraw();
+            }
+        });
+        if (containerRef.current) resizeObserver.observe(containerRef.current);
+        return () => resizeObserver.disconnect();
+    }, [redraw]);
+
+    useEffect(redraw, [redraw]);
+
+    const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        // FIX: The original check (e.button !== 0) prevented middle-click panning. 
+        // This is updated to allow both left-click (0) and middle-click (1) to proceed.
+        if ((e.button !== 0 && e.button !== 1) || !currentHistoryState) return;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        const point = getCanvasPoint(e.nativeEvent, viewTransform, previewCanvasRef.current!);
+        dragState.current.lastPoint = point;
+
+        if (activeTool === 'pan' || e.button === 1) {
+            dragState.current.isPanning = true;
+        } else if (activeTool === 'picker' && originalCanvasRef.current) {
+            const ctx = originalCanvasRef.current.getContext('2d', { willReadFrequently: true });
+            if (ctx && point.x >= 0 && point.x < originalCanvasRef.current.width && point.y >= 0 && point.y < originalCanvasRef.current.height) {
+                const pixel = ctx.getImageData(Math.floor(point.x), Math.floor(point.y), 1, 1).data;
+                const newColor = { r: pixel[0], g: pixel[1], b: pixel[2] };
+                if (!currentColors.some(c => c.r === newColor.r && c.g === newColor.g && c.b === newColor.b)) {
+                    recordChange({
+                        colors: [...currentColors, newColor],
+                        eraserMaskData: currentHistoryState.eraserMaskData,
+                    });
+                }
+            }
+        } else if (activeTool === 'eraser' && eraserMaskCanvasRef.current) {
+            dragState.current.isErasing = true;
+            const eraserMaskCtx = eraserMaskCanvasRef.current.getContext('2d');
+            if (eraserMaskCtx) {
+                eraserMaskCtx.fillStyle = 'black';
+                eraserMaskCtx.beginPath();
+                eraserMaskCtx.arc(point.x, point.y, eraserSettings.size / 2, 0, Math.PI * 2);
+                eraserMaskCtx.fill();
+                composeTransparentImage();
+            }
+        }
+    };
+    
+    const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+        const point = getCanvasPoint(e.nativeEvent, viewTransform, previewCanvasRef.current!);
+        const { isPanning, isErasing, lastPoint } = dragState.current;
+
+        if (isPanning) {
+            setViewTransform(v => ({ ...v, pan: { x: v.pan.x + e.movementX, y: v.pan.y + e.movementY }}));
+        } else if (isErasing && lastPoint && eraserMaskCanvasRef.current) {
+            const eraserMaskCtx = eraserMaskCanvasRef.current.getContext('2d');
+            if (eraserMaskCtx) {
+                eraserMaskCtx.fillStyle = 'black';
+                eraserMaskCtx.strokeStyle = 'black';
+                eraserMaskCtx.lineWidth = eraserSettings.size;
+                eraserMaskCtx.lineCap = 'round';
+                eraserMaskCtx.lineJoin = 'round';
+                eraserMaskCtx.beginPath();
+                eraserMaskCtx.moveTo(lastPoint.x, lastPoint.y);
+                eraserMaskCtx.lineTo(point.x, point.y);
+                eraserMaskCtx.stroke();
+                composeTransparentImage();
+            }
+        }
+        dragState.current.lastPoint = point;
+    };
+
+    const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+        if (dragState.current.isErasing) {
+            const eraserCtx = eraserMaskCanvasRef.current?.getContext('2d');
+            if (eraserCtx && currentHistoryState) {
+                const newEraserData = eraserCtx.getImageData(0, 0, eraserCtx.canvas.width, eraserCtx.canvas.height);
+                recordChange({
+                    colors: currentColors,
+                    eraserMaskData: newEraserData,
+                });
+            }
+        }
+        dragState.current = { isPanning: false, isErasing: false, lastPoint: null };
+    };
+    
+    const handleApply = () => {
+        if (transparentCanvasRef.current) {
+            onApply(transparentCanvasRef.current.toDataURL(), currentColors, scaleFactor, tolerance, scaleUnit);
+        }
+    };
+
+    const handleUndo = () => canUndo && setHistoryIndex(i => i - 1);
+    const handleRedo = () => canRedo && setHistoryIndex(i => i + 1);
+    const handleReset = () => (history.length > 0) && setHistoryIndex(0);
+    
+    const handleFullReset = () => {
+        // This is a destructive action that clears history to a fully opaque state.
+        if (!imageElement || !eraserMaskCanvasRef.current) return;
+        
+        const eraserCtx = eraserMaskCanvasRef.current.getContext('2d');
+        if (!eraserCtx) return;
+        
+        const { width, height } = imageElement;
+        eraserCtx.clearRect(0, 0, width, height);
+        const initialEraserMaskData = eraserCtx.getImageData(0, 0, width, height);
+
+        setHistory([{
+            colors: [], // No transparent colors
+            eraserMaskData: initialEraserMaskData
+        }]);
+        setHistoryIndex(0);
+    };
+
+    const handleUnitChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const newUnit = e.target.value as ScaleUnit;
+        const currentPxPerMm = scaleFactor;
+        setScaleUnit(newUnit);
+        setScaleInputValue(String(Number((currentPxPerMm * unitMultipliers[newUnit]).toFixed(2))));
+    };
+
+    const handleScaleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
+        setScaleInputValue(value);
+        const numericValue = parseFloat(value);
+        if (!isNaN(numericValue) && numericValue > 0) {
+            setScaleFactor(numericValue / unitMultipliers[scaleUnit]);
+        }
+    };
+
+    if (!item) return null;
+
+    const toolButtonClasses = (tool: Tool) => `p-2 rounded-md transition-colors ${activeTool === tool ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'}`;
+
+    return (
+         <div className="fixed inset-0 bg-black/75 z-40 flex items-center justify-center p-4">
+            <div className="bg-[--bg-secondary] rounded-lg shadow-xl w-full h-full max-w-6xl max-h-[90vh] flex flex-col">
+                <div className="flex-shrink-0 flex items-center justify-between p-2 border-b border-[--bg-tertiary]">
+                    <h2 className="text-lg font-bold">Editar Transparencia: {item.name}</h2>
+                    <div className="flex items-center gap-4">
+                        <button onClick={handleApply} className="px-4 py-2 rounded-md bg-green-600 hover:bg-green-500 text-white font-semibold">Aplicar</button>
+                        <button onClick={onCancel} className="p-2 rounded-full hover:bg-[--bg-tertiary]"><XIcon className="w-6 h-6"/></button>
+                    </div>
+                </div>
+                <div className="flex-grow flex min-h-0">
+                    <div className="w-64 flex-shrink-0 bg-[--bg-primary] p-4 flex flex-col gap-4 border-r border-[--bg-tertiary] overflow-y-auto">
+                        <div>
+                            <h3 className="text-sm font-bold uppercase text-[--text-secondary] mb-2">Herramientas</h3>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <button onClick={() => setActiveTool('picker')} className={toolButtonClasses('picker')} title="Cuentagotas"><CrosshairIcon className="w-5 h-5" /></button>
+                                <button onClick={() => setActiveTool('eraser')} className={toolButtonClasses('eraser')} title="Borrador"><EraserIcon className="w-5 h-5" /></button>
+                                <button onClick={() => setActiveTool('pan')} className={toolButtonClasses('pan')} title="Mover"><HandIcon className="w-5 h-5" /></button>
+                                <button onClick={() => setViewTransform(v => ({...v, zoom: v.zoom * 1.2}))} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Acercar"><ZoomInIcon className="w-5 h-5" /></button>
+                                <button onClick={() => setViewTransform(v => ({...v, zoom: v.zoom / 1.2}))} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Alejar"><ZoomOutIcon className="w-5 h-5" /></button>
+                            </div>
                         </div>
-                    ))}
-                    {transparentColors.length === 0 && <div className="w-6 h-6 rounded-md bg-transparent" />}
+                        
+                        <div>
+                            <h3 className="text-sm font-bold uppercase text-[--text-secondary] mb-2">Historial</h3>
+                             <div className="flex items-center gap-2">
+                                <button onClick={handleUndo} disabled={!canUndo} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Deshacer"><UndoIcon className="w-5 h-5" /></button>
+                                <button onClick={handleRedo} disabled={!canRedo} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Rehacer"><RedoIcon className="w-5 h-5" /></button>
+                                <button onClick={handleReset} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Restablecer Sesión"><HistoryIcon className="w-5 h-5" /></button>
+                                <button onClick={handleFullReset} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Restaurar Original (sin transparencia)"><RefreshCwIcon className="w-5 h-5" /></button>
+                            </div>
+                        </div>
+
+                        {activeTool === 'eraser' && (
+                            <div>
+                                <h3 className="text-sm font-bold uppercase text-[--text-secondary] mb-2">Ajustes del Borrador</h3>
+                                <div>
+                                    <label htmlFor="eraser-size" className="text-xs text-[--text-secondary]">Tamaño: {eraserSettings.size}</label>
+                                    <input
+                                        type="range" id="eraser-size" min="1" max="200" step="1"
+                                        value={eraserSettings.size}
+                                        onChange={(e) => setEraserSettings(s => ({ ...s, size: parseInt(e.target.value, 10) }))}
+                                        className="w-full"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        <div>
+                            <h3 className="text-sm font-bold uppercase text-[--text-secondary] mb-2">Selección de Color</h3>
+                            <div>
+                                <label htmlFor="tolerance" className="text-xs text-[--text-secondary]">Tolerancia: {tolerance}</label>
+                                <input
+                                    type="range" id="tolerance" min="0" max="100" step="1"
+                                    value={tolerance}
+                                    onChange={(e) => setTolerance(parseInt(e.target.value, 10))}
+                                    className="w-full"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <div className="flex justify-between items-center mb-2">
+                                <h3 className="text-sm font-bold uppercase text-[--text-secondary]">Colores Transparentes</h3>
+                            </div>
+                            <div className="max-h-60 overflow-y-auto space-y-1 pr-2">
+                                {currentColors.map((color, index) => (
+                                    <div key={index} className="flex items-center justify-between p-1 rounded bg-[--bg-tertiary]">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-6 h-6 rounded border border-white/20" style={{ backgroundColor: rgbToHex(color.r, color.g, color.b) }} />
+                                            <span className="text-xs font-mono">{rgbToHex(color.r, color.g, color.b)}</span>
+                                        </div>
+                                        <button onClick={() => {
+                                            if (!currentHistoryState) return;
+                                            const newColors = currentColors.filter((_, i) => i !== index);
+                                            recordChange({
+                                                colors: newColors,
+                                                eraserMaskData: currentHistoryState.eraserMaskData,
+                                            });
+                                        }} className="p-1 rounded-full text-xs text-gray-400 hover:bg-red-500 hover:text-white">✕</button>
+                                    </div>
+                                ))}
+                                {currentColors.length === 0 && <p className="text-xs text-center text-[--text-secondary] py-2">Usa el cuentagotas para añadir colores.</p>}
+                            </div>
+                        </div>
+
+                        <div className="mt-auto pt-4 border-t border-[--bg-tertiary]">
+                            <h3 className="text-sm font-bold uppercase text-[--text-secondary] mb-2">Propiedades</h3>
+                            <div>
+                                <label className="text-xs text-[--text-secondary]">Factor de Escala</label>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-sm">1</span>
+                                    <select 
+                                        value={scaleUnit} 
+                                        onChange={handleUnitChange}
+                                        className="bg-[--bg-tertiary] text-sm rounded-md p-1 border border-[--bg-hover]"
+                                    >
+                                        <option value="mm">mm</option>
+                                        <option value="cm">cm</option>
+                                        <option value="m">m</option>
+                                    </select>
+                                    <span className="text-sm">=</span>
+                                    <input 
+                                        type="number" 
+                                        value={scaleInputValue}
+                                        onChange={handleScaleInputChange}
+                                        className="w-20 bg-[--bg-secondary] text-sm rounded-md p-1 border border-[--bg-tertiary]"
+                                    />
+                                    <span className="text-sm">px</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div 
+                        ref={containerRef} 
+                        className="flex-grow bg-gray-500"
+                        onPointerDown={handlePointerDown}
+                        onPointerMove={handlePointerMove}
+                        onPointerUp={handlePointerUp}
+                        onPointerLeave={handlePointerUp}
+                        style={{
+                            cursor: activeTool === 'pan' ? (dragState.current.isPanning ? 'grabbing' : 'grab') : 'crosshair',
+                            backgroundImage: 'linear-gradient(45deg, #808080 25%, transparent 25%), linear-gradient(-45deg, #808080 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #808080 75%), linear-gradient(-45deg, transparent 75%, #808080 75%)',
+                            backgroundSize: '20px 20px',
+                            backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px'
+                        }}
+                    >
+                        <canvas ref={previewCanvasRef} className="w-full h-full" />
+                        <canvas ref={originalCanvasRef} className="hidden" />
+                        <canvas ref={colorMaskCanvasRef} className="hidden" />
+                        <canvas ref={eraserMaskCanvasRef} className="hidden" />
+                        <canvas ref={transparentCanvasRef} className="hidden" />
+                    </div>
                 </div>
             </div>
-          </div>
         </div>
-        
-        <div className="flex justify-end space-x-4 pt-6 flex-shrink-0">
-          <button onClick={onCancel} className="px-4 py-2 rounded-md bg-[--bg-tertiary] hover:bg-[--bg-hover]">Cancelar</button>
-          <button onClick={handleApply} className="px-4 py-2 rounded-md bg-[--accent-primary] hover:bg-[--accent-hover] text-white">Aplicar Cambios</button>
-        </div>
-      </div>
-    </div>
-  );
+    );
 };

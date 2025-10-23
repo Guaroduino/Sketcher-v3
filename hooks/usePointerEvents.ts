@@ -1,18 +1,21 @@
 import React, { useRef, useCallback, useEffect } from 'react';
 import type {
-    SketchObject, Tool, Guide, Point, RulerGuide, PerspectiveGuide, MirrorGuide, OrthogonalGuide,
+    CanvasItem, SketchObject, Tool, Guide, Point, RulerGuide, PerspectiveGuide, MirrorGuide, OrthogonalGuide,
     CropRect, ViewTransform, PerspectiveControlPoint, TransformState, AffineTransformState, FreeTransformState, GridGuide,
-    StrokeMode, StrokeState, BrushSettings, EraserSettings, MarkerSettings, FXBrushSettings
+    StrokeMode, StrokeState, BrushSettings, EraserSettings, SolidMarkerSettings, NaturalMarkerSettings, AirbrushSettings, FXBrushSettings,
+    Selection, MagicWandSettings
 } from '../types';
-import { getCanvasPoint, isNearPoint, projectPointOnLine, pointInPolygon, cloneCanvas, generateSpline } from '../utils/canvasUtils';
+import { getCanvasPoint, isNearPoint, projectPointOnLine, pointInPolygon, cloneCanvas } from '../utils/canvasUtils';
 import { clearCanvas } from '../utils/canvasUtils';
 
 type DragAction =
     | { type: 'none' }
     | { type: 'pan'; startX: number; startY: number; startPan: { x: number; y: number } }
     | { type: 'draw'; points: Point[] }
+    | { type: 'selection'; tool: 'marquee-rect' | 'lasso'; startPoint: Point; points: Point[] }
     | { type: 'crop'; handle: 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r' | 'move'; startRect: CropRect, startPoint: Point }
-    | { type: 'transform'; handle: string; startState: TransformState, startPoint: Point; center?: Point };
+    | { type: 'transform'; handle: string; startState: TransformState, startPoint: Point; center?: Point }
+    | { type: 'text-place' };
 
 type GuideDragState =
     | { type: 'ruler', id: string, part: 'start' | 'end' | 'line', offset: Point }
@@ -25,6 +28,7 @@ type GuideDragState =
 type PerspectiveVPs = { vpGreen: Point | null, vpRed: Point | null, vpBlue: Point | null };
 
 export function usePointerEvents({
+    items,
     uiCanvasRef,
     previewCanvasRef,
     viewTransform,
@@ -32,7 +36,9 @@ export function usePointerEvents({
     activeItem,
     tool,
     isDrawingTool,
+    isSelectionTool,
     onDrawCommit,
+    onSelectItem,
     drawStrokeWithMirroring,
     areGuidesLocked,
     activeGuide,
@@ -52,6 +58,8 @@ export function usePointerEvents({
     transformState,
     setTransformState,
     isAspectRatioLocked,
+    isAngleSnapEnabled,
+    angleSnapValue,
     livePreviewLayerId,
     setLivePreviewLayerId,
     isPerspectiveStrokeLockEnabled,
@@ -62,18 +70,34 @@ export function usePointerEvents({
     setStrokeState,
     brushSettings,
     eraserSettings,
-    markerSettings,
+    solidMarkerSettings,
+    naturalMarkerSettings,
+    airbrushSettings,
     fxBrushSettings,
+    magicWandSettings,
+    selection,
+    setSelection,
+    onUpdateItem,
+    forceRender,
+    getMinZoom,
+    MAX_ZOOM,
+    onAddItem,
+    textEditState,
+    setTextEditState,
+    onCommitText,
 }: {
+    items: CanvasItem[];
     uiCanvasRef: React.RefObject<HTMLCanvasElement>;
     previewCanvasRef: React.RefObject<HTMLCanvasElement>;
     viewTransform: ViewTransform;
     setViewTransform: React.Dispatch<React.SetStateAction<ViewTransform>>;
-    activeItem: SketchObject | null | undefined;
+    activeItem: CanvasItem | null | undefined;
     tool: Tool;
     isDrawingTool: boolean;
+    isSelectionTool: boolean;
     onDrawCommit: (activeItemId: string, beforeCanvas: HTMLCanvasElement) => void;
-    drawStrokeWithMirroring: (ctx: CanvasRenderingContext2D, points: Point[]) => void;
+    onSelectItem: (id: string | null) => void;
+    drawStrokeWithMirroring: (ctx: CanvasRenderingContext2D, points: Point[], options?: { arcStartAngle?: number, arcEndAngle?: number }) => void;
     areGuidesLocked: boolean;
     activeGuide: Guide;
     isOrthogonalVisible: boolean;
@@ -92,6 +116,8 @@ export function usePointerEvents({
     transformState: TransformState | null;
     setTransformState: React.Dispatch<React.SetStateAction<TransformState | null>>;
     isAspectRatioLocked: boolean;
+    isAngleSnapEnabled: boolean;
+    angleSnapValue: 1 | 5 | 10 | 15;
     livePreviewLayerId: string | null;
     setLivePreviewLayerId: React.Dispatch<React.SetStateAction<string | null>>;
     isPerspectiveStrokeLockEnabled: boolean;
@@ -102,8 +128,21 @@ export function usePointerEvents({
     setStrokeState: React.Dispatch<React.SetStateAction<StrokeState | null>>;
     brushSettings: BrushSettings;
     eraserSettings: EraserSettings;
-    markerSettings: MarkerSettings;
+    solidMarkerSettings: SolidMarkerSettings;
+    naturalMarkerSettings: NaturalMarkerSettings;
+    airbrushSettings: AirbrushSettings;
     fxBrushSettings: FXBrushSettings;
+    magicWandSettings: MagicWandSettings;
+    selection: Selection | null;
+    setSelection: React.Dispatch<React.SetStateAction<Selection | null>>;
+    onUpdateItem: (id: string, updates: Partial<CanvasItem>) => void;
+    forceRender: () => void;
+    getMinZoom: () => number;
+    MAX_ZOOM: number;
+    onAddItem: (type: 'group' | 'object') => string;
+    textEditState: { position: Point; value: string; activeItemId: string; } | null;
+    setTextEditState: React.Dispatch<React.SetStateAction<{ position: Point; value: string; activeItemId: string; } | null>>;
+    onCommitText: (textState: { position: Point; value: string; activeItemId: string; }) => void;
 }) {
 
     const dragAction = useRef<DragAction>({ type: 'none' });
@@ -112,6 +151,14 @@ export function usePointerEvents({
     const orthogonalLock = useRef<{ axis: 'x' | 'y', startPoint: Point } | null>(null);
     const beforeCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const arcDrawingState = useRef<{ lastAngle: number; totalAngle: number } | null>(null);
+    const activePointers = useRef(new Map<number, { x: number; y: number }>());
+    const lastGestureState = useRef<{ distance: number; midpoint: Point } | null>(null);
+    const wasInGestureRef = useRef(false);
+
+    const setDragAction = (action: DragAction) => {
+        dragAction.current = action;
+        forceRender();
+    };
 
     useEffect(() => {
         if (!strokeState) {
@@ -123,18 +170,16 @@ export function usePointerEvents({
     }, [strokeState, previewCanvasRef]);
 
     useEffect(() => {
-        // Reset arc angle tracking if stroke state is cleared or no longer an arc
-        if (!strokeState || strokeState.mode !== 'arc' || strokeState.points.length < 2) {
-            arcDrawingState.current = null;
-        }
-    }, [strokeState]);
+        // Reset arc drawing state if tool or mode changes
+        arcDrawingState.current = null;
+    }, [tool, strokeMode]);
 
     const snapPointToGrid = useCallback((point: Point): Point => {
         if (!isSnapToGridEnabled || gridGuide.type === 'none') {
             return point;
         }
         const { spacing } = gridGuide;
-
+    
         if (gridGuide.type === 'cartesian') {
             return {
                 ...point,
@@ -144,79 +189,236 @@ export function usePointerEvents({
         }
         
         if (gridGuide.type === 'isometric') {
-            const angle1 = gridGuide.isoAngle * Math.PI / 180;
-            const angle2 = (180 - gridGuide.isoAngle) * Math.PI / 180;
-
-            // These are vectors that generate the grid points
-            const sin_a1_minus_a2 = Math.sin(angle1 - angle2);
-            if (Math.abs(sin_a1_minus_a2) < 1e-6) return point;
-
-            const ux = spacing * Math.cos(angle2) / sin_a1_minus_a2;
-            const uy = spacing * Math.sin(angle2) / sin_a1_minus_a2;
-            const vx = -spacing * Math.cos(angle1) / sin_a1_minus_a2;
-            const vy = -spacing * Math.sin(angle1) / sin_a1_minus_a2;
-
-            // Inverse matrix to find grid coords (i, j)
-            const det = ux * vy - vx * uy;
-            if (Math.abs(det) < 1e-6) return point;
-            const invDet = 1 / det;
-
-            const m11 = vy * invDet;
-            const m12 = -vx * invDet;
-            const m21 = -uy * invDet;
-            const m22 = ux * invDet;
+            const s = spacing;
+            const { x, y } = point;
+    
+            const angle_rad = -30 * (Math.PI / 180);
+            const cos_a = Math.cos(angle_rad);
+            const sin_a = Math.sin(angle_rad);
+            const x_rot = x * cos_a - y * sin_a;
+            const y_rot = x * sin_a + y * cos_a;
+    
+            const L = s * 2 / Math.sqrt(3);
+    
+            const q_f = (x_rot * (Math.sqrt(3) / 3) - y_rot / 3) / (L / Math.sqrt(3));
+            const r_f = (y_rot * 2 / 3) / (L / Math.sqrt(3));
             
-            const i_prime = m11 * point.x + m12 * point.y;
-            const j_prime = m21 * point.x + m22 * point.y;
-            
-            const i = Math.round(i_prime);
-            const j = Math.round(j_prime);
-
-            // Transform back to world coordinates
-            return { ...point, x: i * ux + j * vx, y: i * uy + j * vy };
+            const s_f = -q_f - r_f;
+    
+            let q_r = Math.round(q_f);
+            let r_r = Math.round(r_f);
+            let s_r = Math.round(s_f);
+    
+            const dq = Math.abs(q_r - q_f);
+            const dr = Math.abs(r_r - r_f);
+            const ds = Math.abs(s_r - s_f);
+    
+            if (dq > dr && dq > ds) {
+                q_r = -r_r - s_r;
+            } else if (dr > ds) {
+                r_r = -q_r - s_r;
+            }
+    
+            const snapped_x_rot = L * (q_r + r_r / 2);
+            const snapped_y_rot = L * (r_r * Math.sqrt(3) / 2);
+    
+            const final_angle_rad = 30 * (Math.PI / 180);
+            const cos_fa = Math.cos(final_angle_rad);
+            const sin_fa = Math.sin(final_angle_rad);
+    
+            const snapped_x = snapped_x_rot * cos_fa - snapped_y_rot * sin_fa;
+            const snapped_y = snapped_x_rot * sin_fa + snapped_y_rot * cos_fa;
+    
+            return { ...point, x: snapped_x, y: snapped_y };
         }
-
+    
         return point;
     }, [isSnapToGridEnabled, gridGuide]);
 
     const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-        if (!uiCanvasRef.current || e.button !== 0) return;
+        if (!uiCanvasRef.current) return;
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
         if (e.pointerType === 'pen' && e.pressure === 0) return;
 
         e.currentTarget.setPointerCapture(e.pointerId);
-        const rawPoint = getCanvasPoint(e, viewTransform, uiCanvasRef.current);
-        const point = snapPointToGrid(rawPoint); // Snap all interaction points
+        activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
         
-        strokeLockInfo.current = null; // Reset on every new stroke
+        if (activePointers.current.size === 2) {
+            wasInGestureRef.current = true; // Set flag that we entered a multi-touch gesture
+            // If a drawing stroke is in progress, the browser will likely fire a `pointercancel`
+            // event for that drawing pointer. We preserve the `dragAction` so that when `onPointerUp`
+            // (called by `onPointerCancel`) is executed, it can commit the stroke that has been
+            // drawn so far. This prevents strokes from disappearing on multi-touch interruptions (e.g. palm rejection).
+            if (dragAction.current.type !== 'draw') {
+                setDragAction({ type: 'none' });
+                setStrokeState(null);
+            }
+    
+            const pointers: {x: number, y: number}[] = Array.from(activePointers.current.values());
+            if (pointers.length < 2) return;
+    
+            const p1 = pointers[0];
+            const p2 = pointers[1];
+            
+            const rect = uiCanvasRef.current!.getBoundingClientRect();
+            const p1View = { x: p1.x - rect.left, y: p1.y - rect.top };
+            const p2View = { x: p2.x - rect.left, y: p2.y - rect.top };
+    
+            lastGestureState.current = {
+                distance: Math.hypot(p1View.x - p2View.x, p1View.y - p2View.y),
+                midpoint: { x: (p1View.x + p2View.x) / 2, y: (p1View.y + p2View.y) / 2 },
+            };
+            return;
+        }
+
+        if (activePointers.current.size > 1) {
+            return;
+        }
+
+        const rawPoint = getCanvasPoint(e, viewTransform, uiCanvasRef.current!);
+        const point = snapPointToGrid(rawPoint);
+        
+        if (tool === 'text') {
+            if (textEditState) {
+                onCommitText(textEditState);
+            }
+            setDragAction({ type: 'text-place' });
+            return;
+        }
+
+        strokeLockInfo.current = null;
+
+        if (isSelectionTool) {
+            setSelection(null);
+            if (tool === 'marquee-rect' || tool === 'lasso') {
+                setDragAction({ type: 'selection', tool, startPoint: point, points: [point] });
+                return;
+            } else if (tool === 'magic-wand') {
+                if (!activeItem || activeItem.type !== 'object' || !activeItem.canvas) return;
+                const canvas = activeItem.canvas;
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                if (!ctx) return;
+        
+                try {
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const { data, width, height } = imageData;
+                    const startX = Math.floor(point.x);
+                    const startY = Math.floor(point.y);
+            
+                    if (startX < 0 || startX >= width || startY < 0 || startY >= height) return;
+            
+                    const startIndex = (startY * width + startX) * 4;
+                    const startColor = { r: data[startIndex], g: data[startIndex + 1], b: data[startIndex + 2], a: data[startIndex + 3] };
+                    
+                    if (startColor.a === 0) { setSelection(null); return; }
+            
+                    const { tolerance, contiguous } = magicWandSettings;
+                    const toleranceSq = (tolerance / 100 * 255) ** 2 * 3;
+            
+                    const selected = new Uint8Array(width * height);
+                    const q: [number, number][] = [[startX, startY]];
+                    const visited = new Uint8Array(width * height);
+                    visited[startY * width + startX] = 1;
+                    
+                    let minX = startX, maxX = startX, minY = startY, maxY = startY;
+
+                    const checkPixel = (x: number, y: number) => {
+                        const index = (y * width + x) * 4;
+                        const pColor = { r: data[index], g: data[index+1], b: data[index+2], a: data[index+3] };
+                        if (pColor.a > 0) {
+                            const distSq = (startColor.r - pColor.r) ** 2 + (startColor.g - pColor.g) ** 2 + (startColor.b - pColor.b) ** 2;
+                            return distSq <= toleranceSq;
+                        }
+                        return false;
+                    };
+            
+                    if (contiguous) {
+                        while (q.length > 0) {
+                            const [x, y] = q.shift()!;
+                            selected[y * width + x] = 1;
+                            minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+                
+                            const neighbors = [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]];
+                            for (const [nx, ny] of neighbors) {
+                                if (nx >= 0 && nx < width && ny >= 0 && ny < height && !visited[ny * width + nx]) {
+                                    visited[ny * width + nx] = 1;
+                                    if (checkPixel(nx, ny)) {
+                                        q.push([nx, ny]);
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        for (let y = 0; y < height; y++) {
+                            for (let x = 0; x < width; x++) {
+                                if (checkPixel(x, y)) {
+                                    selected[y * width + x] = 1;
+                                    minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+                                }
+                            }
+                        }
+                    }
+                    
+                    const path = new Path2D();
+                    for (let y = minY; y <= maxY; y++) {
+                        for (let x = minX; x <= maxX; x++) {
+                            if (selected[y * width + x]) {
+                                let endX = x;
+                                while(endX + 1 <= maxX && selected[y * width + endX + 1]) {
+                                    endX++;
+                                }
+                                path.rect(x, y, endX - x + 1, 1);
+                                x = endX;
+                            }
+                        }
+                    }
+                    
+                    const boundingBox = { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+                    
+                    setSelection({ path, boundingBox, sourceItemId: activeItem.id });
+                } catch (e) {
+                    console.error("Failed to perform magic wand selection", e);
+                    setSelection(null);
+                }
+                return;
+            }
+        }
 
         if (isDrawingTool && (strokeMode === 'polyline' || strokeMode === 'curve' || strokeMode === 'arc')) {
             if (strokeState) {
                 const newPoints = [...strokeState.points, point];
+
+                if (strokeMode === 'arc' && newPoints.length === 2) {
+                    const [center, start] = newPoints;
+                    const startAngle = Math.atan2(start.y - center.y, start.x - center.x);
+                    arcDrawingState.current = {
+                        lastAngle: startAngle,
+                        totalAngle: startAngle,
+                    };
+                }
                 
                 let shouldCommit = false;
-                if (strokeMode === 'curve' && newPoints.length === 3) shouldCommit = true;
+                if (strokeMode === 'curve' && newPoints.length === 3) {
+                    shouldCommit = true;
+                }
                 if (strokeMode === 'arc' && newPoints.length === 3) {
-                    // Calculate final sweep angle based on accumulated angle from moves
-                    if (arcDrawingState.current) {
-                        const [center] = strokeState.points;
-                        const finalAngle = Math.atan2(point.y - center.y, point.x - center.x);
-                        
-                        let delta = finalAngle - arcDrawingState.current.lastAngle;
-                        if (delta > Math.PI) delta -= 2 * Math.PI;
-                        else if (delta < -Math.PI) delta += 2 * Math.PI;
-
-                        const finalTotalAngle = arcDrawingState.current.totalAngle + delta;
-                        
-                        // Augment the final point with the calculated sweep angle
-                        (newPoints[2] as Point & { sweepAngle: number }).sweepAngle = finalTotalAngle;
-                    }
                     shouldCommit = true;
                 }
 
                 if (shouldCommit) {
-                    if (activeItem?.context) {
+                    if (activeItem?.type === 'object' && activeItem?.context) {
                         beforeCanvasRef.current = cloneCanvas(activeItem.canvas!);
-                        drawStrokeWithMirroring(activeItem.context, newPoints);
+
+                        let options: { arcStartAngle?: number, arcEndAngle?: number } | undefined = undefined;
+                        if (strokeMode === 'arc' && arcDrawingState.current) {
+                            const [center, start] = newPoints;
+                            const startAngle = Math.atan2(start.y - center.y, start.x - center.x);
+                            options = { arcStartAngle: startAngle, arcEndAngle: arcDrawingState.current.totalAngle };
+                            drawStrokeWithMirroring(activeItem.context, [center, start], options);
+                        } else {
+                            drawStrokeWithMirroring(activeItem.context, newPoints);
+                        }
+
                         onDrawCommit(activeItem.id, beforeCanvasRef.current);
                     }
                     setStrokeState(null);
@@ -226,7 +428,7 @@ export function usePointerEvents({
                 }
 
                 setStrokeState({ ...strokeState, points: newPoints });
-                return; // Prevent starting a drag action
+                return;
             }
         }
 
@@ -300,8 +502,8 @@ export function usePointerEvents({
             }
         }
 
-        if (tool === 'pan') {
-            dragAction.current = { type: 'pan', startX: e.clientX, startY: e.clientY, startPan: viewTransform.pan };
+        if (tool === 'pan' || (e.button === 1 && e.pointerType === 'mouse')) {
+            setDragAction({ type: 'pan', startX: e.clientX, startY: e.clientY, startPan: viewTransform.pan });
             e.currentTarget.style.cursor = 'grabbing';
             return;
         }
@@ -315,13 +517,12 @@ export function usePointerEvents({
             };
             for (const [name, pos] of Object.entries(handles)) {
                 if (isNearPoint(point, pos, handleThreshold)) {
-                    dragAction.current = { type: 'crop', handle: name as 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r', startRect: cropRect, startPoint: point };
+                    setDragAction({ type: 'crop', handle: name as 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r', startRect: cropRect, startPoint: point });
                     return;
                 }
             }
-            // Check if clicking inside the rect for move
             if (point.x > x && point.x < x + width && point.y > y && point.y < y + height) {
-                dragAction.current = { type: 'crop', handle: 'move', startRect: cropRect, startPoint: point };
+                setDragAction({ type: 'crop', handle: 'move', startRect: cropRect, startPoint: point });
                 return;
             }
         }
@@ -345,13 +546,12 @@ export function usePointerEvents({
                  };
                  for (const [name, pos] of Object.entries(handles)) {
                      if (isNearPoint(point, pos, handleThreshold)) {
-                         dragAction.current = { type: 'transform', handle: name, startState: transformState, startPoint: point, center };
+                         setDragAction({ type: 'transform', handle: name, startState: transformState, startPoint: point, center });
                          return;
                      }
                  }
-                 // Check move
                  if (pointInPolygon(point, [handles.tl, handles.tr, handles.br, handles.bl])) {
-                     dragAction.current = { type: 'transform', handle: 'move', startState: transformState, startPoint: point };
+                     setDragAction({ type: 'transform', handle: 'move', startState: transformState, startPoint: point });
                      return;
                  }
             } else if (transformState.type === 'free') {
@@ -359,18 +559,18 @@ export function usePointerEvents({
                  const handleDefs = { tl: corners.tl, tr: corners.tr, bl: corners.bl, br: corners.br };
                  for (const [name, pos] of Object.entries(handleDefs)) {
                      if (isNearPoint(point, pos, handleThreshold)) {
-                          dragAction.current = { type: 'transform', handle: name, startState: transformState, startPoint: point }; 
+                          setDragAction({ type: 'transform', handle: name, startState: transformState, startPoint: point }); 
                           return;
                      }
                  }
                  if (pointInPolygon(point, [corners.tl, corners.tr, corners.br, corners.bl])) {
-                     dragAction.current = { type: 'transform', handle: 'move', startState: transformState, startPoint: point }; 
+                     setDragAction({ type: 'transform', handle: 'move', startState: transformState, startPoint: point }); 
                      return;
                  }
             }
         }
         
-        if (isDrawingTool && activeItem) {
+        if (isDrawingTool && activeItem && activeItem.type === 'object') {
             if (activeItem.canvas) {
                 beforeCanvasRef.current = cloneCanvas(activeItem.canvas);
             }
@@ -385,25 +585,45 @@ export function usePointerEvents({
             orthogonalLock.current = null;
             let guideApplied = false;
 
-            if (activeGuide === 'perspective' && perspectiveGuide && !isPerspectiveStrokeLockEnabled) {
-                const { vpGreen, vpRed, vpBlue } = perspectiveVPs.current;
-                const vps = [vpGreen, vpRed, vpBlue].filter((vp): vp is Point => vp !== null);
-                let bestGuideLine: { start: Point; end: Point } | null = null, minDistance = Infinity;
-                const checkLine = (p1: Point, p2: Point) => {
-                    const projectedPoint = projectPointOnLine(rawPoint, p1, p2);
-                    const distance = Math.hypot(rawPoint.x - projectedPoint.x, rawPoint.y - projectedPoint.y);
-                    if (distance < minDistance) { minDistance = distance; bestGuideLine = { start: p1, end: p2 }; }
-                };
-                vps.forEach(vp => checkLine(vp, perspectiveGuide.guidePoint));
-                if (vpGreen) perspectiveGuide.extraGuideLines.green.forEach(g => checkLine(vpGreen, g.handle));
-                if (vpRed) perspectiveGuide.extraGuideLines.red.forEach(g => checkLine(vpRed, g.handle));
-                if (vpBlue) perspectiveGuide.extraGuideLines.blue.forEach(g => checkLine(vpBlue, g.handle));
-                if (bestGuideLine && minDistance < (15 / viewTransform.zoom)) {
-                    lockedPerspectiveLine.current = bestGuideLine;
-                    finalPoint = projectPointOnLine(rawPoint, bestGuideLine.start, bestGuideLine.end);
-                    guideApplied = true;
+            if (activeGuide === 'perspective' && perspectiveGuide) {
+                if (isPerspectiveStrokeLockEnabled) {
+                    const { vpGreen, vpRed, vpBlue } = perspectiveVPs.current;
+                    const vps = [vpGreen, vpRed, vpBlue].filter((vp): vp is Point => vp !== null);
+                    if (vps.length > 0) {
+                        let closestVP: Point = vps[0];
+                        let minDistance = Math.hypot(rawPoint.x - vps[0].x, rawPoint.y - vps[0].y);
+                        for (let i = 1; i < vps.length; i++) {
+                            const distance = Math.hypot(rawPoint.x - vps[i].x, rawPoint.y - vps[i].y);
+                            if (distance < minDistance) {
+                                minDistance = distance;
+                                closestVP = vps[i];
+                            }
+                        }
+                        strokeLockInfo.current = { startPoint: rawPoint, targetVP: closestVP };
+                        guideApplied = true;
+                    }
+                } else {
+                    const { vpGreen, vpRed, vpBlue } = perspectiveVPs.current;
+                    const vps = [vpGreen, vpRed, vpBlue].filter((vp): vp is Point => vp !== null);
+                    let bestGuideLine: { start: Point; end: Point } | null = null, minDistance = Infinity;
+                    const checkLine = (p1: Point, p2: Point) => {
+                        const projectedPoint = projectPointOnLine(rawPoint, p1, p2);
+                        const distance = Math.hypot(rawPoint.x - projectedPoint.x, rawPoint.y - projectedPoint.y);
+                        if (distance < minDistance) { minDistance = distance; bestGuideLine = { start: p1, end: p2 }; }
+                    };
+                    vps.forEach(vp => checkLine(vp, perspectiveGuide.guidePoint));
+                    if (vpGreen) perspectiveGuide.extraGuideLines.green.forEach(g => checkLine(vpGreen, g.handle));
+                    if (vpRed) perspectiveGuide.extraGuideLines.red.forEach(g => checkLine(vpRed, g.handle));
+                    if (vpBlue) perspectiveGuide.extraGuideLines.blue.forEach(g => checkLine(vpBlue, g.handle));
+                    if (bestGuideLine && minDistance < (15 / viewTransform.zoom)) {
+                        lockedPerspectiveLine.current = bestGuideLine;
+                        finalPoint = projectPointOnLine(rawPoint, bestGuideLine.start, bestGuideLine.end);
+                        guideApplied = true;
+                    }
                 }
-            } else if (activeGuide === 'ruler' && rulerGuides.length > 0) {
+            }
+
+            if (!guideApplied && activeGuide === 'ruler' && rulerGuides.length > 0) {
                 let closestProjectedPoint: Point | null = null, minDistance = Infinity;
                 rulerGuides.forEach(guide => {
                     const projected = projectPointOnLine(rawPoint, guide.start, guide.end);
@@ -415,417 +635,483 @@ export function usePointerEvents({
                     guideApplied = true;
                 }
             }
-
+            
             if (!guideApplied) {
                 finalPoint = snapPointToGrid(rawPoint);
             }
             
             const pressure = e.pointerType === 'pen' ? e.pressure : 1.0;
             const firstPoint = { ...finalPoint, pressure };
-            dragAction.current = { type: 'draw', points: [firstPoint] };
+            setDragAction({ type: 'draw', points: [firstPoint] });
             
             const previewCtx = previewCanvasRef.current?.getContext('2d');
             if (previewCtx) {
+                clearCanvas(previewCtx);
                 if (tool === 'eraser') {
-                    // FIX: Populate preview before hiding main layer to prevent flicker.
-                    if (beforeCanvasRef.current) {
-                        clearCanvas(previewCtx);
-                        previewCtx.save();
-                        previewCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
-                        previewCtx.drawImage(beforeCanvasRef.current, 0, 0);
-                        previewCtx.restore();
-                    }
                     setLivePreviewLayerId(activeItem.id);
                 }
 
-                // Draw first point/dab
                 previewCtx.save();
                 previewCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
-                if (tool !== 'eraser') {
-                    clearCanvas(previewCtx);
-                }
                 if (strokeMode === 'freehand') {
-                    drawStrokeWithMirroring(previewCtx, dragAction.current.points);
+                    drawStrokeWithMirroring(previewCtx, [firstPoint]);
                 }
                 previewCtx.restore();
             }
         }
-    }, [tool, viewTransform, activeItem, isDrawingTool, cropRect, activeGuide, rulerGuides, mirrorGuides, perspectiveGuide, areGuidesLocked, setPerspectiveGuide, setRulerGuides, setMirrorGuides, setGuideDragState, perspectiveVPs, transformState, drawStrokeWithMirroring, isPerspectiveStrokeLockEnabled, snapPointToGrid, strokeMode, strokeState, setStrokeState, onDrawCommit, setLivePreviewLayerId]);
+    }, [tool, viewTransform, activeItem, isDrawingTool, isSelectionTool, magicWandSettings, setSelection, cropRect, activeGuide, rulerGuides, mirrorGuides, perspectiveGuide, areGuidesLocked, setPerspectiveGuide, setRulerGuides, setMirrorGuides, setGuideDragState, perspectiveVPs, transformState, drawStrokeWithMirroring, isPerspectiveStrokeLockEnabled, snapPointToGrid, strokeMode, strokeState, setStrokeState, onDrawCommit, setLivePreviewLayerId, onAddItem, setTextEditState, textEditState, onCommitText]);
 
     const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
         if (!uiCanvasRef.current) return;
-        const rawPoint = getCanvasPoint(e, viewTransform, uiCanvasRef.current);
-
-        if (guideDragState) {
-            const point = snapPointToGrid(rawPoint);
-            if (guideDragState.type === 'ruler') {
-                setRulerGuides(guides => guides.map(g => {
-                    if (g.id !== guideDragState.id) return g;
-                    if (guideDragState.part === 'line') {
-                        const newMid = { x: point.x - guideDragState.offset.x, y: point.y - guideDragState.offset.y }, oldMid = { x: (g.start.x + g.end.x) / 2, y: (g.start.y + g.end.y) / 2 }, dx = newMid.x - oldMid.x, dy = newMid.y - oldMid.y;
-                        return { ...g, start: { x: g.start.x + dx, y: g.start.y + dy }, end: { x: g.end.x + dx, y: g.end.y + dy } };
-                    }
-                    return { ...g, [guideDragState.part]: point };
-                }));
+    
+        if (activePointers.current.has(e.pointerId)) {
+            activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        }
+    
+        if (activePointers.current.size === 2) {
+            if (!lastGestureState.current) {
+                const pointers: { x: number; y: number }[] = Array.from(activePointers.current.values());
+                if (pointers.length < 2) return;
+                const [p1, p2] = pointers;
+                const rect = uiCanvasRef.current!.getBoundingClientRect();
+                const p1View = { x: p1.x - rect.left, y: p1.y - rect.top };
+                const p2View = { x: p2.x - rect.left, y: p2.y - rect.top };
+                lastGestureState.current = {
+                    distance: Math.hypot(p1View.x - p2View.x, p1View.y - p2View.y),
+                    midpoint: { x: (p1View.x + p2View.x) / 2, y: (p1View.y + p2View.y) / 2 },
+                };
+                return;
             }
-            if (guideDragState.type === 'mirror') {
-                setMirrorGuides(guides => guides.map(g => {
-                    if (g.id !== guideDragState.id) return g;
-                    if (guideDragState.part === 'line') {
-                        const newMid = { x: point.x - guideDragState.offset.x, y: point.y - guideDragState.offset.y }, oldMid = { x: (g.start.x + g.end.x) / 2, y: (g.start.y + g.end.y) / 2 }, dx = newMid.x - oldMid.x, dy = newMid.y - oldMid.y;
-                        return { ...g, start: { x: g.start.x + dx, y: g.start.y + dy }, end: { x: g.end.x + dx, y: g.end.y + dy } };
-                    }
-                    return { ...g, [guideDragState.part]: point };
-                }));
-            }
-            if (guideDragState.type === 'perspective') {
-                const { color, lineId, part } = guideDragState;
-                setPerspectiveGuide(g => g ? { ...g, lines: { ...g.lines, [color]: g.lines[color].map(line => line.id === lineId ? { ...line, [part]: point } : line) } } : null);
-            } else if (guideDragState.type === 'perspective-point') {
-                setPerspectiveGuide(g => g ? { ...g, guidePoint: point } : null);
-            } else if (guideDragState.type === 'perspective-extra') {
-                const { color, id } = guideDragState;
-                setPerspectiveGuide(g => g ? { ...g, extraGuideLines: { ...g.extraGuideLines, [color]: g.extraGuideLines[color].map(p => p.id === id ? { ...p, handle: point } : p) } } : null);
-            }
+    
+            const pointers: { x: number; y: number }[] = Array.from(activePointers.current.values());
+            if (pointers.length < 2) return;
+            const [p1, p2] = pointers;
+            const rect = uiCanvasRef.current!.getBoundingClientRect();
+            const p1View = { x: p1.x - rect.left, y: p1.y - rect.top };
+            const p2View = { x: p2.x - rect.left, y: p2.y - rect.top };
+            const newMidpoint = { x: (p1View.x + p2View.x) / 2, y: (p1View.y + p2View.y) / 2 };
+            const newDistance = Math.hypot(p1View.x - p2View.x, p1View.y - p2View.y);
+            const zoomFactor = (lastGestureState.current.distance > 1e-6) ? newDistance / lastGestureState.current.distance : 1.0;
+    
+            setViewTransform(currentTransform => {
+                if (!lastGestureState.current) return currentTransform;
+                const { zoom, pan } = currentTransform;
+                const minZoom = getMinZoom();
+                const newZoom = Math.max(minZoom, Math.min(zoom * zoomFactor, MAX_ZOOM));
+                const midpointCanvasX = (lastGestureState.current.midpoint.x - pan.x) / zoom;
+                const midpointCanvasY = (lastGestureState.current.midpoint.y - pan.y) / zoom;
+                const newPanX = newMidpoint.x - midpointCanvasX * newZoom;
+                const newPanY = newMidpoint.y - midpointCanvasY * newZoom;
+                return { zoom: newZoom, pan: { x: newPanX, y: newPanY } };
+            });
+    
+            lastGestureState.current = { distance: newDistance, midpoint: newMidpoint };
             return;
         }
+    
+        const rawPoint = getCanvasPoint(e, viewTransform, uiCanvasRef.current!);
+        const isDragging = dragAction.current.type !== 'none';
         
-        const point = snapPointToGrid(rawPoint);
-
+        const previewCtx = previewCanvasRef.current?.getContext('2d');
+        if (!previewCtx) return;
+        clearCanvas(previewCtx);
+    
         if (strokeState) {
-            const previewCtx = previewCanvasRef.current?.getContext('2d');
-            if (!previewCtx) return;
+            const point = snapPointToGrid(rawPoint);
+            const previewPoints = [...strokeState.points, point];
+            let options: { arcStartAngle?: number, arcEndAngle?: number } | undefined = undefined;
 
-            const points = strokeState.points;
-            clearCanvas(previewCtx);
+            if (strokeState.mode === 'arc' && strokeState.points.length === 2 && arcDrawingState.current) {
+                const [center] = strokeState.points;
+                const currentAngle = Math.atan2(point.y - center.y, point.x - center.x);
+                
+                let delta = currentAngle - arcDrawingState.current.lastAngle;
+                // Handle angle wrapping
+                if (delta > Math.PI) delta -= 2 * Math.PI;
+                else if (delta < -Math.PI) delta += 2 * Math.PI;
+                
+                arcDrawingState.current.totalAngle += delta;
+                arcDrawingState.current.lastAngle = currentAngle;
+                
+                const startAngle = Math.atan2(strokeState.points[1].y - center.y, strokeState.points[1].x - center.x);
+                options = { arcStartAngle: startAngle, arcEndAngle: arcDrawingState.current.totalAngle };
+            }
+    
             previewCtx.save();
             previewCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
+            
+            drawStrokeWithMirroring(previewCtx, previewPoints, options);
+            
+            if (strokeState.mode === 'arc' && strokeState.points.length >= 1) {
+                previewCtx.strokeStyle = 'rgba(128, 128, 128, 0.4)';
+                previewCtx.lineWidth = 1 / viewTransform.zoom;
+                previewCtx.setLineDash([2 / viewTransform.zoom, 2 / viewTransform.zoom]);
+                
+                const center = strokeState.points[0];
 
-            if (strokeState.mode === 'polyline' || strokeState.mode === 'curve') {
-                if (points.length >= 1) {
-                    drawStrokeWithMirroring(previewCtx, [...points, point]);
+                previewCtx.beginPath();
+                previewCtx.moveTo(center.x, center.y);
+                previewCtx.lineTo(point.x, point.y);
+                previewCtx.stroke();
+
+                if (strokeState.points.length > 1) {
+                    const start = strokeState.points[1];
+                    const radius = Math.hypot(start.x-center.x, start.y-center.y);
+                    previewCtx.beginPath();
+                    previewCtx.arc(center.x, center.y, radius, 0, 2*Math.PI);
+                    previewCtx.stroke();
                 }
-            } else if (strokeState.mode === 'arc') {
-                if (points.length === 1) { // Center set, preview radius
-                    const center = points[0];
-                    previewCtx.strokeStyle = 'rgba(128, 128, 128, 0.8)';
+                previewCtx.setLineDash([]);
+            }
+            
+            previewCtx.restore();
+            return;
+        }
+    
+        if (isDragging || guideDragState) {
+            const point = snapPointToGrid(rawPoint);
+            
+            if (guideDragState) {
+                if (guideDragState.type === 'ruler') {
+                    setRulerGuides(guides => guides.map(g => {
+                        if (g.id !== guideDragState.id) return g;
+                        if (guideDragState.part === 'line') {
+                            const newMid = { x: point.x - guideDragState.offset.x, y: point.y - guideDragState.offset.y }, oldMid = { x: (g.start.x + g.end.x) / 2, y: (g.start.y + g.end.y) / 2 }, dx = newMid.x - oldMid.x, dy = newMid.y - oldMid.y;
+                            return { ...g, start: { x: g.start.x + dx, y: g.start.y + dy }, end: { x: g.end.x + dx, y: g.end.y + dy } };
+                        }
+                        return { ...g, [guideDragState.part]: point };
+                    }));
+                }
+                if (guideDragState.type === 'mirror') {
+                    setMirrorGuides(guides => guides.map(g => {
+                        if (g.id !== guideDragState.id) return g;
+                        if (guideDragState.part === 'line') {
+                            const newMid = { x: point.x - guideDragState.offset.x, y: point.y - guideDragState.offset.y }, oldMid = { x: (g.start.x + g.end.x) / 2, y: (g.start.y + g.end.y) / 2 }, dx = newMid.x - oldMid.x, dy = newMid.y - oldMid.y;
+                            return { ...g, start: { x: g.start.x + dx, y: g.start.y + dy }, end: { x: g.end.x + dx, y: g.end.y + dy } };
+                        }
+                        return { ...g, [guideDragState.part]: point };
+                    }));
+                }
+                if (guideDragState.type === 'perspective') {
+                    const { color, lineId, part } = guideDragState;
+                    setPerspectiveGuide(g => g ? { ...g, lines: { ...g.lines, [color]: g.lines[color].map(line => line.id === lineId ? { ...line, [part]: point } : line) } } : null);
+                } else if (guideDragState.type === 'perspective-point') {
+                    setPerspectiveGuide(g => g ? { ...g, guidePoint: point } : null);
+                } else if (guideDragState.type === 'perspective-extra') {
+                    const { color, id } = guideDragState;
+                    setPerspectiveGuide(g => g ? { ...g, extraGuideLines: { ...g.extraGuideLines, [color]: g.extraGuideLines[color].map(p => p.id === id ? { ...p, handle: point } : p) } } : null);
+                }
+                return;
+            }
+
+            previewCtx.save();
+            previewCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
+            
+            switch (dragAction.current.type) {
+                case 'crop': {
+                    if (!cropRect) break;
+                    const { handle, startRect, startPoint: dragStartPoint } = dragAction.current;
+                    const dx = point.x - dragStartPoint.x;
+                    const dy = point.y - dragStartPoint.y;
+                    
+                    let { x, y, width, height } = startRect;
+
+                    if (handle === 'move') {
+                        setCropRect({ ...startRect, x: x + dx, y: y + dy });
+                    } else {
+                        if (handle.includes('r')) width += dx;
+                        if (handle.includes('l')) { width -= dx; x += dx; }
+                        if (handle.includes('b')) height += dy;
+                        if (handle.includes('t')) { height -= dy; y += dy; }
+                        
+                        if (width < 1) width = 1;
+                        if (height < 1) height = 1;
+
+                        setCropRect({ x, y, width, height });
+                    }
+                    break;
+                }
+                case 'transform': {
+                    const { handle, startState, startPoint: dragStartPoint, center } = dragAction.current;
+                    
+                    if (startState.type === 'affine') {
+                        let { x, y, width, height, rotation } = startState;
+                        const dx = point.x - dragStartPoint.x;
+                        const dy = point.y - dragStartPoint.y;
+
+                        if (handle === 'move') {
+                            setTransformState({ ...startState, x: x + dx, y: y + dy });
+                        } else if (handle === 'rotate' && center) {
+                            const startAngle = Math.atan2(dragStartPoint.y - center.y, dragStartPoint.x - center.x);
+                            const currentAngle = Math.atan2(point.y - center.y, point.x - center.x);
+                            const newRotation = startState.rotation + (currentAngle - startAngle);
+                            
+                            let finalRotation = newRotation;
+                            if (isAngleSnapEnabled) {
+                                const snapAngleRad = angleSnapValue * (Math.PI / 180);
+                                finalRotation = Math.round(newRotation / snapAngleRad) * snapAngleRad;
+                            }
+
+                            setTransformState({ ...startState, rotation: finalRotation });
+                        } else { 
+                            const cos = Math.cos(-rotation);
+                            const sin = Math.sin(-rotation);
+
+                            const worldDelta = { x: point.x - dragStartPoint.x, y: point.y - dragStartPoint.y };
+
+                            const localDelta = {
+                                x: worldDelta.x * cos - worldDelta.y * sin,
+                                y: worldDelta.x * sin + worldDelta.y * cos,
+                            };
+
+                            let newWidth = width;
+                            let newHeight = height;
+                            
+                            if (handle.includes('r')) newWidth += localDelta.x;
+                            if (handle.includes('l')) newWidth -= localDelta.x;
+                            if (handle.includes('b')) newHeight += localDelta.y;
+                            if (handle.includes('t')) newHeight -= localDelta.y;
+
+                            if (isAspectRatioLocked && (newWidth !== width || newHeight !== height)) {
+                                const aspect = width / height;
+                                if (handle.length === 2) {
+                                    const newRatio = Math.abs(newWidth / newHeight);
+                                    if (newRatio > aspect) {
+                                        newHeight = Math.sign(newHeight) * Math.abs(newWidth / aspect);
+                                    } else {
+                                        newWidth = Math.sign(newWidth) * Math.abs(newHeight * aspect);
+                                    }
+                                } else if (handle.includes('l') || handle.includes('r')) {
+                                    newHeight = Math.sign(newHeight) * Math.abs(newWidth / aspect);
+                                } else {
+                                    newWidth = Math.sign(newWidth) * Math.abs(newHeight * aspect);
+                                }
+                            }
+                            
+                            if (newWidth < 1) newWidth = 1;
+                            if (newHeight < 1) newHeight = 1;
+                            
+                            const dw = newWidth - width;
+                            const dh = newHeight - height;
+
+                            let cxDelta = 0;
+                            let cyDelta = 0;
+                            if (handle.includes('l')) cxDelta -= dw / 2;
+                            if (handle.includes('r')) cxDelta += dw / 2;
+                            if (handle.includes('t')) cyDelta -= dh / 2;
+                            if (handle.includes('b')) cyDelta += dh / 2;
+                            
+                            const cosR = Math.cos(rotation);
+                            const sinR = Math.sin(rotation);
+                            const worldCxDelta = cxDelta * cosR - cyDelta * sinR;
+                            const worldCyDelta = cxDelta * sinR + cyDelta * cosR;
+                            
+                            const newCenterX = center.x + worldCxDelta;
+                            const newCenterY = center.y + worldCyDelta;
+
+                            setTransformState({
+                                ...startState,
+                                x: newCenterX - newWidth / 2,
+                                y: newCenterY - newHeight / 2,
+                                width: newWidth,
+                                height: newHeight,
+                            });
+                        }
+                    } else if (startState.type === 'free') {
+                        const dx = point.x - dragStartPoint.x;
+                        const dy = point.y - dragStartPoint.y;
+                        const newCorners = { ...startState.corners };
+                        if (handle === 'move') {
+                            Object.keys(newCorners).forEach(key => {
+                                const cornerKey = key as keyof typeof newCorners;
+                                newCorners[cornerKey] = {
+                                    x: startState.corners[cornerKey].x + dx,
+                                    y: startState.corners[cornerKey].y + dy
+                                };
+                            });
+                        } else if (handle in newCorners) {
+                            const cornerKey = handle as keyof typeof newCorners;
+                            newCorners[cornerKey] = point;
+                        }
+                        setTransformState({ ...startState, corners: newCorners });
+                    }
+                    break;
+                }
+                case 'selection': {
+                    const { tool: selectionTool, startPoint } = dragAction.current;
+                    dragAction.current.points.push(point);
+                    
+                    previewCtx.strokeStyle = 'rgba(0,0,0,0.7)';
                     previewCtx.lineWidth = 1 / viewTransform.zoom;
                     previewCtx.setLineDash([4 / viewTransform.zoom, 2 / viewTransform.zoom]);
-                    previewCtx.beginPath();
-                    previewCtx.moveTo(center.x, center.y);
-                    previewCtx.lineTo(point.x, point.y);
-                    previewCtx.stroke();
-                    previewCtx.setLineDash([]);
-                } else if (points.length === 2) { // Center & start set, preview arc
-                    const [center, start] = points;
-                    const currentAngle = Math.atan2(point.y - center.y, point.x - center.x);
-
-                    if (arcDrawingState.current === null) {
-                        const startAngle = Math.atan2(start.y - center.y, start.x - center.x);
-                        arcDrawingState.current = {
-                            lastAngle: startAngle,
-                            totalAngle: 0,
-                        };
+                    
+                    if (selectionTool === 'marquee-rect') {
+                        previewCtx.strokeRect(startPoint.x, startPoint.y, point.x - startPoint.x, point.y - startPoint.y);
+                    } else {
+                        previewCtx.beginPath();
+                        previewCtx.moveTo(dragAction.current.points[0].x, dragAction.current.points[0].y);
+                        for (let i = 1; i < dragAction.current.points.length; i++) {
+                            previewCtx.lineTo(dragAction.current.points[i].x, dragAction.current.points[i].y);
+                        }
+                        previewCtx.stroke();
                     }
                     
-                    let delta = currentAngle - arcDrawingState.current.lastAngle;
-                    if (delta > Math.PI) {
-                        delta -= 2 * Math.PI;
-                    } else if (delta < -Math.PI) {
-                        delta += 2 * Math.PI;
+                    break;
+                }
+                case 'pan': {
+                    const { startX, startY, startPan } = dragAction.current;
+                    setViewTransform(v => ({ ...v, pan: { x: startPan.x + (e.clientX - startX), y: startPan.y + (e.clientY - startY) } }));
+                    break;
+                }
+                case 'draw': {
+                    const events: PointerEvent[] = e.nativeEvent.getCoalescedEvents ? e.nativeEvent.getCoalescedEvents() : [e.nativeEvent];
+                    const newPoints: Point[] = [];
+
+                    for (const event of events) {
+                        const currentRawPoint = getCanvasPoint(event, viewTransform, uiCanvasRef.current!);
+                        let finalPoint = currentRawPoint;
+                        let guideApplied = false;
+                        
+                        if (activeGuide === 'perspective' && isPerspectiveStrokeLockEnabled) {
+                            if (strokeLockInfo.current && strokeLockInfo.current.targetVP) { finalPoint = projectPointOnLine(currentRawPoint, strokeLockInfo.current.startPoint, strokeLockInfo.current.targetVP); guideApplied = true; }
+                        } else if (lockedPerspectiveLine.current) {
+                            finalPoint = projectPointOnLine(currentRawPoint, lockedPerspectiveLine.current.start, lockedPerspectiveLine.current.end); guideApplied = true;
+                        } else if (isOrthogonalVisible && orthogonalGuide) {
+                            const startPoint = dragAction.current.points[0];
+                            if (!orthogonalLock.current && Math.hypot(currentRawPoint.x - startPoint.x, currentRawPoint.y - startPoint.y) > (10 / viewTransform.zoom)) { const angleRad = (orthogonalGuide.angle * Math.PI) / 180, cos = Math.cos(-angleRad), sin = Math.sin(-angleRad), relativeX = currentRawPoint.x - startPoint.x, relativeY = currentRawPoint.y - startPoint.y, unrotatedX = relativeX * cos - relativeY * sin, unrotatedY = relativeX * sin + relativeY * cos; orthogonalLock.current = { axis: Math.abs(unrotatedX) > Math.abs(unrotatedY) ? 'x' : 'y', startPoint }; }
+                            if (orthogonalLock.current) { const { startPoint: lockStartPoint, axis } = orthogonalLock.current, angleRad = (orthogonalGuide.angle * Math.PI) / 180, cos = Math.cos(-angleRad), sin = Math.sin(-angleRad), relativeX = currentRawPoint.x - lockStartPoint.x, relativeY = currentRawPoint.y - lockStartPoint.y, unrotatedX = relativeX * cos - relativeY * sin, unrotatedY = relativeX * sin + relativeY * cos, snappedUnrotatedX = axis === 'x' ? unrotatedX : 0, snappedUnrotatedY = axis === 'y' ? unrotatedY : 0, cosBack = Math.cos(angleRad), sinBack = Math.sin(angleRad), rotatedX = snappedUnrotatedX * cosBack - snappedUnrotatedY * sinBack, rotatedY = snappedUnrotatedX * sinBack + snappedUnrotatedY * cosBack; finalPoint = { x: lockStartPoint.x + rotatedX, y: lockStartPoint.y + rotatedY }; guideApplied = true; }
+                        } else if (activeGuide === 'ruler' && rulerGuides.length > 0) {
+                            let closestProjectedPoint: Point | null = null, minDistance = Infinity;
+                            rulerGuides.forEach(guide => { const projected = projectPointOnLine(rawPoint, guide.start, guide.end); const dist = Math.hypot(rawPoint.x - projected.x, rawPoint.y - projected.y); if (dist < minDistance) { minDistance = dist; closestProjectedPoint = projected; } });
+                            if (closestProjectedPoint) { finalPoint = closestProjectedPoint; guideApplied = true; }
+                        }
+
+                        if (!guideApplied) { finalPoint = snapPointToGrid(currentRawPoint); }
+                        const pressure = event.pointerType === 'pen' ? event.pressure : 1.0;
+                        newPoints.push({ ...finalPoint, pressure });
                     }
 
-                    arcDrawingState.current.totalAngle += delta;
-                    arcDrawingState.current.lastAngle = currentAngle;
+                    if(newPoints.length === 0) break;
                     
-                    const augmentedEnd = { ...point, sweepAngle: arcDrawingState.current.totalAngle };
+                    dragAction.current.points.push(...newPoints);
+
+                    if (tool === 'eraser' && beforeCanvasRef.current) {
+                        previewCtx.drawImage(beforeCanvasRef.current, 0, 0);
+                    }
                     
-                    drawStrokeWithMirroring(previewCtx, [...points, augmentedEnd]);
+                    if (strokeMode === 'line') {
+                        const allPoints = dragAction.current.points;
+                        drawStrokeWithMirroring(previewCtx, [allPoints[0], allPoints[allPoints.length - 1]]);
+                    } else if (strokeMode === 'freehand' || strokeMode === 'polyline') {
+                        drawStrokeWithMirroring(previewCtx, dragAction.current.points);
+                    }
+                    
+                    break;
                 }
             }
             previewCtx.restore();
         }
-        
-        if (dragAction.current.type === 'none') return;
-
-        switch (dragAction.current.type) {
-            case 'pan': {
-                const { startX, startY, startPan } = dragAction.current;
-                setViewTransform(v => ({ ...v, pan: { x: startPan.x + (e.clientX - startX), y: startPan.y + (e.clientY - startY) } }));
-                break;
-            }
-            case 'draw': {
-                if (!isDrawingTool || !activeItem) break;
-                
-                const events: PointerEvent[] = e.nativeEvent.getCoalescedEvents ? e.nativeEvent.getCoalescedEvents() : [e.nativeEvent];
-                const lastPoint = dragAction.current.points.length > 0 ? dragAction.current.points[dragAction.current.points.length - 1] : null;
-                const newPoints: Point[] = [];
-
-                for (const event of events) {
-                    const currentRawPoint = getCanvasPoint(event, viewTransform, uiCanvasRef.current!);
-                    let finalPoint = currentRawPoint;
-                    let guideApplied = false;
-                    
-                    if (activeGuide === 'perspective' && isPerspectiveStrokeLockEnabled) {
-                        // This logic now applies per point, which is less ideal but works.
-                        if (strokeLockInfo.current && strokeLockInfo.current.targetVP) {
-                            finalPoint = projectPointOnLine(currentRawPoint, strokeLockInfo.current.startPoint, strokeLockInfo.current.targetVP);
-                            guideApplied = true;
-                        }
-                    } else if (lockedPerspectiveLine.current) {
-                        finalPoint = projectPointOnLine(currentRawPoint, lockedPerspectiveLine.current.start, lockedPerspectiveLine.current.end);
-                        guideApplied = true;
-                    } else if (isOrthogonalVisible && orthogonalGuide) {
-                        const startPoint = dragAction.current.points[0];
-                        if (!orthogonalLock.current && Math.hypot(currentRawPoint.x - startPoint.x, currentRawPoint.y - startPoint.y) > (10 / viewTransform.zoom)) {
-                            const angleRad = (orthogonalGuide.angle * Math.PI) / 180, cos = Math.cos(-angleRad), sin = Math.sin(-angleRad), relativeX = currentRawPoint.x - startPoint.x, relativeY = currentRawPoint.y - startPoint.y, unrotatedX = relativeX * cos - relativeY * sin, unrotatedY = relativeX * sin + relativeY * cos;
-                            orthogonalLock.current = { axis: Math.abs(unrotatedX) > Math.abs(unrotatedY) ? 'x' : 'y', startPoint };
-                        }
-                        if (orthogonalLock.current) {
-                            const { startPoint: lockStartPoint, axis } = orthogonalLock.current, angleRad = (orthogonalGuide.angle * Math.PI) / 180, cos = Math.cos(-angleRad), sin = Math.sin(-angleRad), relativeX = currentRawPoint.x - lockStartPoint.x, relativeY = currentRawPoint.y - lockStartPoint.y, unrotatedX = relativeX * cos - relativeY * sin, unrotatedY = relativeX * sin + relativeY * cos, snappedUnrotatedX = axis === 'x' ? unrotatedX : 0, snappedUnrotatedY = axis === 'y' ? unrotatedY : 0, cosBack = Math.cos(angleRad), sinBack = Math.sin(angleRad), rotatedX = snappedUnrotatedX * cosBack - snappedUnrotatedY * sinBack, rotatedY = snappedUnrotatedX * sinBack + snappedUnrotatedY * cosBack;
-                            finalPoint = { x: lockStartPoint.x + rotatedX, y: lockStartPoint.y + rotatedY };
-                            guideApplied = true;
-                        }
-                    } else if (activeGuide === 'ruler' && rulerGuides.length > 0) {
-                        let closestProjectedPoint: Point | null = null, minDistance = Infinity;
-                        rulerGuides.forEach(guide => {
-                            const projected = projectPointOnLine(currentRawPoint, guide.start, guide.end);
-                            const dist = Math.hypot(currentRawPoint.x - projected.x, currentRawPoint.y - projected.y);
-                            if (dist < minDistance) { minDistance = dist; closestProjectedPoint = projected; }
-                        });
-                        if (closestProjectedPoint) {
-                            finalPoint = closestProjectedPoint;
-                            guideApplied = true;
-                        }
-                    }
-
-                    if (!guideApplied) {
-                        finalPoint = snapPointToGrid(currentRawPoint);
-                    }
-
-                    const pressure = event.pointerType === 'pen' ? event.pressure : 1.0;
-                    const currentPoint = { ...finalPoint, pressure };
-                    newPoints.push(currentPoint);
-                }
-
-                if(newPoints.length === 0) break;
-
-                dragAction.current.points.push(...newPoints);
-
-                const previewCtx = previewCanvasRef.current?.getContext('2d');
-                if (!previewCtx) break;
-
-                if (tool === 'eraser') {
-                    clearCanvas(previewCtx);
-                    previewCtx.save();
-                    previewCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
-                    if (beforeCanvasRef.current) {
-                        previewCtx.drawImage(beforeCanvasRef.current, 0, 0);
-                    }
-                    drawStrokeWithMirroring(previewCtx, dragAction.current.points);
-                    previewCtx.restore();
-
-                } else if (strokeMode === 'line') {
-                    clearCanvas(previewCtx);
-                    previewCtx.save();
-                    previewCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
-                    drawStrokeWithMirroring(previewCtx, [dragAction.current.points[0], newPoints[newPoints.length-1]]);
-                    previewCtx.restore();
-                } else if (strokeMode === 'freehand') {
-                     previewCtx.save();
-                     previewCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
-                     const segmentToDraw = lastPoint ? [lastPoint, ...newPoints] : newPoints;
-                     drawStrokeWithMirroring(previewCtx, segmentToDraw);
-                     previewCtx.restore();
-                }
-                break;
-            }
-            case 'crop': {
-                const { handle, startRect, startPoint: startDragPoint } = dragAction.current;
-                const dx = point.x - startDragPoint.x;
-                const dy = point.y - startDragPoint.y;
-
-                let newRect = { ...startRect };
-
-                if (handle.includes('l')) {
-                    newRect.x = startRect.x + dx;
-                    newRect.width = startRect.width - dx;
-                } else if (handle.includes('r')) {
-                    newRect.width = startRect.width + dx;
-                }
-
-                if (handle.includes('t')) {
-                    newRect.y = startRect.y + dy;
-                    newRect.height = startRect.height - dy;
-                } else if (handle.includes('b')) {
-                    newRect.height = startRect.height + dy;
-                }
-                
-                if (handle === 'move') {
-                    newRect.x = startRect.x + dx;
-                    newRect.y = startRect.y + dy;
-                }
-
-                if (newRect.width < 0) {
-                    newRect.x = newRect.x + newRect.width;
-                    newRect.width = Math.abs(newRect.width);
-                }
-                if (newRect.height < 0) {
-                    newRect.y = newRect.y + newRect.height;
-                    newRect.height = Math.abs(newRect.height);
-                }
-
-                setCropRect(newRect);
-                break;
-            }
-            case 'transform': {
-                const { handle, startState, startPoint } = dragAction.current;
-                const dx = point.x - startPoint.x;
-                const dy = point.y - startPoint.y;
-
-                if (startState.type === 'affine') {
-                    const { center } = dragAction.current;
-                    if (handle === 'move') {
-                        setTransformState(s => s ? { ...s, x: startState.x + dx, y: startState.y + dy } as AffineTransformState : null);
-                    } else if (handle === 'rotate' && center) {
-                        const newRotation = Math.atan2(point.y - center.y, point.x - center.x) + Math.PI / 2;
-                        setTransformState(s => s ? { ...s, rotation: newRotation } as AffineTransformState : null);
-                    } else if (center) { // Scaling handles - anchored from center
-                        // Vector from the center to the dragged point
-                        const vec = { x: point.x - center.x, y: point.y - center.y };
-            
-                        // Un-rotate this vector to be in the transform box's local coordinate space
-                        const cos = Math.cos(-startState.rotation);
-                        const sin = Math.sin(-startState.rotation);
-                        const localVec = {
-                            x: vec.x * cos - vec.y * sin,
-                            y: vec.x * sin + vec.y * cos,
-                        };
-
-                        const startHalfWidth = startState.width / 2;
-                        const startHalfHeight = startState.height / 2;
-
-                        // Determine new half-dimensions based on which handle is being dragged
-                        let newHalfWidth = startHalfWidth;
-                        let newHalfHeight = startHalfHeight;
-
-                        if (handle.includes('l') || handle.includes('r')) {
-                             newHalfWidth = Math.abs(localVec.x);
-                        }
-                        if (handle.includes('t') || handle.includes('b')) {
-                            newHalfHeight = Math.abs(localVec.y);
-                        }
-
-                        // Handle aspect ratio lock
-                        if (isAspectRatioLocked && startState.width > 0 && startState.height > 0) {
-                            const aspectRatio = startState.width / startState.height;
-                            const isCorner = handle.length === 2; // tl, tr, etc.
-
-                            if (isCorner) {
-                                // For corners, maintain aspect ratio based on the largest change
-                                if ((newHalfWidth / startHalfWidth) > (newHalfHeight / startHalfHeight)) {
-                                    newHalfHeight = newHalfWidth / aspectRatio;
-                                } else {
-                                    newHalfWidth = newHalfHeight * aspectRatio;
-                                }
-                            } else if (handle.includes('l') || handle.includes('r')) {
-                                newHalfHeight = newHalfWidth / aspectRatio;
-                            } else { // t or b
-                                newHalfWidth = newHalfHeight * aspectRatio;
-                            }
-                        }
-                        
-                        const newWidth = newHalfWidth * 2;
-                        const newHeight = newHalfHeight * 2;
-            
-                        // Recalculate top-left (x, y) based on fixed center and new dimensions
-                        const cosR = Math.cos(startState.rotation);
-                        const sinR = Math.sin(startState.rotation);
-                        
-                        const cornerVecX = -newWidth / 2;
-                        const cornerVecY = -newHeight / 2;
-                        
-                        const rotatedCornerVecX = cornerVecX * cosR - cornerVecY * sinR;
-                        const rotatedCornerVecY = cornerVecX * sinR + cornerVecY * cosR;
-            
-                        const newX = center.x + rotatedCornerVecX;
-                        const newY = center.y + rotatedCornerVecY;
-            
-                        setTransformState(s => {
-                            if (!s || s.type !== 'affine') return s;
-                            return {
-                                ...s,
-                                x: newX,
-                                y: newY,
-                                width: newWidth,
-                                height: newHeight,
-                            } as AffineTransformState;
-                        });
-                    }
-                } else if (startState.type === 'free') {
-                    if (handle === 'move') {
-                        const newCorners = {
-                            tl: { x: startState.corners.tl.x + dx, y: startState.corners.tl.y + dy },
-                            tr: { x: startState.corners.tr.x + dx, y: startState.corners.tr.y + dy },
-                            bl: { x: startState.corners.bl.x + dx, y: startState.corners.bl.y + dy },
-                            br: { x: startState.corners.br.x + dx, y: startState.corners.br.y + dy },
-                        };
-                        setTransformState({ ...startState, corners: newCorners } as FreeTransformState);
-                    } else { // Corner drag
-                        setTransformState(s => {
-                            if (!s || s.type !== 'free') return null;
-                            return { ...s, corners: { ...s.corners, [handle]: point } } as FreeTransformState
-                        });
-                    }
-                }
-                break;
-            }
-        }
-    }, [viewTransform, setViewTransform, drawStrokeWithMirroring, guideDragState, setRulerGuides, setMirrorGuides, setPerspectiveGuide, activeGuide, isOrthogonalVisible, rulerGuides, orthogonalGuide, setCropRect, setTransformState, isAspectRatioLocked, activeItem, tool, isDrawingTool, isPerspectiveStrokeLockEnabled, perspectiveVPs, snapPointToGrid, strokeMode, strokeState]);
+    }, [viewTransform, setViewTransform, guideDragState, setRulerGuides, setMirrorGuides, setPerspectiveGuide, strokeState, snapPointToGrid, previewCanvasRef, isDrawingTool, activeItem, strokeMode, drawStrokeWithMirroring, activeGuide, isPerspectiveStrokeLockEnabled, perspectiveVPs, lockedPerspectiveLine, isOrthogonalVisible, orthogonalGuide, rulerGuides, getMinZoom, MAX_ZOOM, cropRect, setCropRect, transformState, setTransformState, isAspectRatioLocked, isAngleSnapEnabled, angleSnapValue]);
     
     const onPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+        const wasGesture = wasInGestureRef.current;
+
         if (e.currentTarget.hasPointerCapture(e.pointerId)) {
             e.currentTarget.releasePointerCapture(e.pointerId);
+        }
+        activePointers.current.delete(e.pointerId);
+
+        if (activePointers.current.size < 2) {
+            lastGestureState.current = null;
+        }
+
+        if (activePointers.current.size === 0) {
+            wasInGestureRef.current = false; // Reset gesture flag only when all pointers are up
+        }
+
+        if (dragAction.current.type === 'pan') {
+            e.currentTarget.style.cursor = 'grab';
         }
 
         if (guideDragState) {
             setGuideDragState(null);
+            setDragAction({ type: 'none' });
             return;
         }
 
-        const currentActionType = dragAction.current.type;
+        const currentAction = dragAction.current;
+        const currentActionType = currentAction.type;
 
-        if (currentActionType === 'draw' && activeItem?.context) {
-            const pointsToDraw = (strokeMode === 'line')
-                ? [dragAction.current.points[0], snapPointToGrid(getCanvasPoint(e, viewTransform, uiCanvasRef.current!))]
-                : dragAction.current.points;
-
-            let finalPoints = pointsToDraw;
+        if (currentActionType === 'text-place') {
+            const point = getCanvasPoint(e, viewTransform, uiCanvasRef.current!);
             
-            let smoothness = 0;
-            if (tool === 'brush') smoothness = brushSettings.smoothness;
-            else if (tool === 'marker') smoothness = markerSettings.smoothness;
-            else if (tool === 'fx-brush') smoothness = fxBrushSettings.smoothness;
+            // Unconditionally create a new object for the text.
+            const newObjectId = onAddItem('object');
+            
+            if (newObjectId) {
+                // If there was a text box open before, commit it.
+                if (textEditState) {
+                    onCommitText(textEditState);
+                }
+                // Open the new text box on the newly created object.
+                setTextEditState({
+                    position: point,
+                    value: '',
+                    activeItemId: newObjectId,
+                });
+            }
+            setDragAction({ type: 'none' });
+            return;
+        }
 
-            if (strokeMode === 'freehand' && smoothness > 0 && pointsToDraw.length > 2) {
-                const detail = Math.max(1, Math.floor(smoothness / 10)); // e.g. 1-9
-                finalPoints = generateSpline(pointsToDraw, detail);
+        if (currentActionType === 'selection' && activeItem) {
+            const { tool: selectionTool, startPoint, points } = currentAction;
+            const endPoint = getCanvasPoint(e, viewTransform, uiCanvasRef.current!);
+            
+            const path = new Path2D();
+            let boundingBox: CropRect;
+
+            if (selectionTool === 'marquee-rect') {
+                const x = Math.min(startPoint.x, endPoint.x);
+                const y = Math.min(startPoint.y, endPoint.y);
+                const width = Math.abs(startPoint.x - endPoint.x);
+                const height = Math.abs(startPoint.y - endPoint.y);
+                path.rect(x, y, width, height);
+                boundingBox = { x, y, width, height };
+            } else { 
+                if (points.length > 2) {
+                    path.moveTo(points[0].x, points[0].y);
+                    for (let i = 1; i < points.length; i++) {
+                        path.lineTo(points[i].x, points[i].y);
+                    }
+                    path.closePath();
+                    
+                    const minX = Math.min(...points.map(p => p.x));
+                    const maxX = Math.max(...points.map(p => p.x));
+                    const minY = Math.min(...points.map(p => p.y));
+                    const maxY = Math.max(...points.map(p => p.y));
+                    boundingBox = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+                } else {
+                    boundingBox = { x: startPoint.x, y: startPoint.y, width: 0, height: 0 };
+                }
             }
 
-            if (finalPoints.length > 0) {
-                if (beforeCanvasRef.current) {
-                    // Restore canvas to its state before the stroke for a clean redraw of the smoothed line
-                    if(tool === 'eraser' || (smoothness > 0 && strokeMode === 'freehand')){
-                        activeItem.context.clearRect(0, 0, activeItem.canvas!.width, activeItem.canvas!.height);
-                        activeItem.context.drawImage(beforeCanvasRef.current, 0, 0);
-                    }
-                }
-                
-                drawStrokeWithMirroring(activeItem.context, finalPoints);
+            if (boundingBox.width > 0 || boundingBox.height > 0) {
+                setSelection({ path, boundingBox, sourceItemId: activeItem.id });
+            }
+        }
 
-                if (beforeCanvasRef.current) {
-                    onDrawCommit(activeItem.id, beforeCanvasRef.current);
-                }
+        if (currentActionType === 'draw' && activeItem?.type === 'object' && activeItem.context) {
+            const pointsToDraw = (strokeMode === 'line')
+                ? [currentAction.points[0], snapPointToGrid(getCanvasPoint(e, viewTransform, uiCanvasRef.current!))]
+                : currentAction.points;
+
+            if (pointsToDraw.length > 0) {
+                drawStrokeWithMirroring(activeItem.context, pointsToDraw);
+            }
+            
+            if (beforeCanvasRef.current) {
+                onDrawCommit(activeItem.id, beforeCanvasRef.current);
             }
         }
         
@@ -837,16 +1123,60 @@ export function usePointerEvents({
         lockedPerspectiveLine.current = null;
         strokeLockInfo.current = null;
         orthogonalLock.current = null;
-        dragAction.current = { type: 'none' };
+        
+        if (
+            currentActionType === 'none' &&
+            !guideDragState &&
+            activePointers.current.size === 0 &&
+            tool === 'select' && // Restrict object selection to the 'select' tool.
+            !wasGesture
+        ) {
+            const point = getCanvasPoint(e, viewTransform, uiCanvasRef.current!);
+            
+            // Iterate from top to bottom (reverse order of rendering) to find the clicked item.
+            const clickedItem = [...items].reverse().find(item => {
+                if (item.type !== 'object' || !item.canvas || !item.isVisible || item.isBackground) {
+                    return false;
+                }
+
+                const ctx = item.canvas.getContext('2d', { willReadFrequently: true });
+                if (!ctx) return false;
+
+                // Check for non-transparent pixel at the clicked point.
+                try {
+                    if (point.x >= 0 && point.x < item.canvas.width && point.y >= 0 && point.y < item.canvas.height) {
+                        const pixel = ctx.getImageData(Math.floor(point.x), Math.floor(point.y), 1, 1).data;
+                        return pixel[3] > 10; // Use a small tolerance for alpha.
+                    }
+                } catch (err) {
+                    console.error("Could not get pixel data for selection:", err);
+                    return false;
+                }
+                return false;
+            });
+
+            onSelectItem(clickedItem ? clickedItem.id : null);
+        }
+
+        setDragAction({ type: 'none' });
         beforeCanvasRef.current = null;
         
         if (livePreviewLayerId) {
             setLivePreviewLayerId(null);
         }
 
-    }, [activeItem, drawStrokeWithMirroring, onDrawCommit, guideDragState, setGuideDragState, previewCanvasRef, livePreviewLayerId, setLivePreviewLayerId, strokeMode, viewTransform, uiCanvasRef, snapPointToGrid, tool, brushSettings, markerSettings, fxBrushSettings]);
+    }, [activeItem, drawStrokeWithMirroring, onDrawCommit, guideDragState, setGuideDragState, previewCanvasRef, livePreviewLayerId, setLivePreviewLayerId, strokeMode, viewTransform, uiCanvasRef, snapPointToGrid, setSelection, onAddItem, textEditState, onCommitText, setTextEditState, onSelectItem, tool, items]);
 
     const onPointerCancel = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+            e.currentTarget.releasePointerCapture(e.pointerId);
+        }
+        activePointers.current.delete(e.pointerId);
+
+        if (activePointers.current.size < 2) {
+            lastGestureState.current = null;
+        }
+        
         onPointerUp(e);
     }, [onPointerUp]);
     
@@ -854,7 +1184,7 @@ export function usePointerEvents({
         if (!uiCanvasRef.current) return;
         
         if (strokeState && strokeState.mode === 'polyline' && strokeState.points.length >= 2) {
-            if (activeItem?.context) {
+            if (activeItem?.type === 'object' && activeItem.context) {
                 beforeCanvasRef.current = cloneCanvas(activeItem.canvas!);
                 drawStrokeWithMirroring(activeItem.context, strokeState.points);
                 onDrawCommit(activeItem.id, beforeCanvasRef.current);
@@ -896,10 +1226,15 @@ export function usePointerEvents({
         e.preventDefault();
         const factor = 1.1, zoomFactor = e.deltaY < 0 ? factor : 1 / 1.2, rect = e.currentTarget.getBoundingClientRect(), pointerViewX = e.clientX - rect.left, pointerViewY = e.clientY - rect.top;
         setViewTransform(currentTransform => {
-            const newZoom = currentTransform.zoom * zoomFactor, pointerCanvasX = (pointerViewX - currentTransform.pan.x) / currentTransform.zoom, pointerCanvasY = (pointerViewY - currentTransform.pan.y) / currentTransform.zoom, newPanX = pointerViewX - pointerCanvasX * newZoom, newPanY = pointerViewY - pointerCanvasY * newZoom;
+            const minZoom = getMinZoom();
+            const newZoom = Math.max(minZoom, Math.min(currentTransform.zoom * zoomFactor, MAX_ZOOM));
+            const pointerCanvasX = (pointerViewX - currentTransform.pan.x) / currentTransform.zoom;
+            const pointerCanvasY = (pointerViewY - currentTransform.pan.y) / currentTransform.zoom;
+            const newPanX = pointerViewX - pointerCanvasX * newZoom;
+            const newPanY = pointerViewY - pointerCanvasY * newZoom;
             return { zoom: newZoom, pan: { x: newPanX, y: newPanY } };
         });
-    }, [setViewTransform]);
+    }, [setViewTransform, getMinZoom, MAX_ZOOM]);
 
-    return { onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onDoubleClick, onWheel };
+    return { onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onDoubleClick, onWheel, dragActionRef: dragAction };
 }

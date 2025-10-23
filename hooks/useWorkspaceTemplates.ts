@@ -17,9 +17,14 @@ export function useWorkspaceTemplates() {
         }
     }, []);
 
-    const saveTemplatesToStorage = (updatedTemplates: WorkspaceTemplate[]) => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedTemplates));
-    };
+    const saveTemplatesToStorage = useCallback((updatedTemplates: WorkspaceTemplate[]) => {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedTemplates));
+        } catch (e) {
+            console.error("Failed to save workspace templates to localStorage", e);
+            alert("Could not save workspace template. The data may be invalid.");
+        }
+    }, []);
 
     const saveTemplate = useCallback((name: string, data: Omit<WorkspaceTemplate, 'id' | 'name'>): string => {
         const newTemplate: WorkspaceTemplate = {
@@ -33,7 +38,7 @@ export function useWorkspaceTemplates() {
             return updated;
         });
         return newTemplate.id;
-    }, []);
+    }, [saveTemplatesToStorage]);
 
     const deleteTemplate = useCallback((id: string) => {
         setTemplates(prev => {
@@ -41,7 +46,7 @@ export function useWorkspaceTemplates() {
             saveTemplatesToStorage(updated);
             return updated;
         });
-    }, []);
+    }, [saveTemplatesToStorage]);
     
     return {
         templates,

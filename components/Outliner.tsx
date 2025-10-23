@@ -1,31 +1,29 @@
 import React, { useState, useRef, useEffect } from 'react';
-import type { SketchObject, ItemType } from '../types';
-import { LayersIcon, PlusIcon, TrashIcon, EyeOpenIcon, EyeClosedIcon, UploadIcon, FolderIcon, MergeIcon, DragHandleIcon, ExportIcon, CopyIcon, ArrowUpIcon, ArrowDownIcon, MergeUpIcon } from './icons';
-import type { DragState } from '../App';
+import type { CanvasItem, ItemType } from '../types';
+import { LayersIcon, PlusIcon, TrashIcon, EyeOpenIcon, EyeClosedIcon, UploadIcon, FolderIcon, MergeIcon, ExportIcon, CopyIcon, ArrowUpIcon, ArrowDownIcon, MergeUpIcon, MoreVerticalIcon, AddAboveIcon, AddBelowIcon } from './icons';
 
 type DragPosition = 'top' | 'bottom' | 'middle';
 
 interface OutlinerProps {
-  items: SketchObject[];
+  items: CanvasItem[];
   activeItemId: string | null;
-  onAddItem: (type: ItemType) => void;
+  onAddItem: (type: 'group' | 'object') => void;
   onCopyItem: (id: string) => void;
   onDeleteItem: (id: string) => void;
   onSelectItem: (id: string) => void;
-  onUpdateItem: (id: string, updates: Partial<SketchObject>) => void;
+  onUpdateItem: (id: string, updates: Partial<CanvasItem>) => void;
   onMoveItem: (draggedId: string, targetId: string, position: DragPosition) => void;
   onMergeItems: (draggedId: string, targetId: string) => void;
   onUpdateBackground: (updates: { color?: string, file?: File }) => void;
   onRemoveBackgroundImage: () => void;
   onExportItem: () => void;
   onOpenCanvasSizeModal: () => void;
-  dragState: DragState | null;
-  onStartDrag: (dragInfo: Omit<DragState, 'isDragging'>) => void;
-  onEndDrag: () => void;
   activeItemState: { canMoveUp: boolean; canMoveDown: boolean; canMergeDown: boolean; canMergeUp: boolean; };
   onMoveItemUpDown: (id: string, direction: 'up' | 'down') => void;
   onMergeItemDown: (id: string) => void;
   onMergeItemUp: (id: string) => void;
+  onAddObjectAbove: (id: string) => void;
+  onAddObjectBelow: (id: string) => void;
 }
 
 export const Outliner: React.FC<OutlinerProps> = ({
@@ -42,19 +40,18 @@ export const Outliner: React.FC<OutlinerProps> = ({
   onRemoveBackgroundImage,
   onExportItem,
   onOpenCanvasSizeModal,
-  dragState,
-  onStartDrag,
-  onEndDrag,
   activeItemState,
   onMoveItemUpDown,
   onMergeItemDown,
   onMergeItemUp,
+  onAddObjectAbove,
+  onAddObjectBelow,
 }) => {
   const [isAddMenuOpen, setAddMenuOpen] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const [dragOverInfo, setDragOverInfo] = useState<{ id: string; position: DragPosition } | null>(null);
-  const backgroundObject = items.find(i => i.isBackground);
-  const hasBackgroundImage = !!backgroundObject?.backgroundImage;
+  const backgroundObject = items.find(i => i.type === 'object' && i.isBackground);
+  const hasBackgroundImage = !!(backgroundObject?.type === 'object' && backgroundObject.backgroundImage);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -75,86 +72,72 @@ export const Outliner: React.FC<OutlinerProps> = ({
     }
   };
   
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>, item: SketchObject) => {
-    if (item.isBackground) return;
-    // Don't start drag on interactive elements like inputs or buttons
-    if ((e.target as HTMLElement).closest('button, input')) {
-      return;
-    }
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
-    
-    e.stopPropagation();
-    e.currentTarget.setPointerCapture(e.pointerId);
+    const handleDragStart = (e: React.DragEvent<HTMLDivElement>, item: CanvasItem) => {
+        e.stopPropagation();
+        e.dataTransfer.effectAllowed = 'copyMove';
+        // Use JSON to pass rich data
+        e.dataTransfer.setData('application/json', JSON.stringify({ type: 'outliner-item', id: item.id }));
+    };
 
-    onStartDrag({
-        type: 'outliner',
-        id: item.id,
-        name: item.name,
-        pointerStart: { x: e.clientX, y: e.clientY },
-        pointerCurrent: { x: e.clientX, y: e.clientY },
-    });
-  };
+    const handleDragOver = (e: React.DragEvent<HTMLDivElement>, item: CanvasItem) => {
+        e.preventDefault();
+        e.stopPropagation();
 
-  const handlePointerOver = (e: React.PointerEvent<HTMLDivElement>, item: SketchObject) => {
-    if (!dragState || !dragState.isDragging || item.id === dragState.id) return;
-    e.stopPropagation();
+        const rect = e.currentTarget.getBoundingClientRect();
+        const y = e.clientY - rect.top;
+        const height = rect.height;
+        let position: DragPosition;
+        
+        const draggedItemType = e.dataTransfer.types.find(t => t === 'application/json');
+        if (!draggedItemType) return;
 
-    const rect = e.currentTarget.getBoundingClientRect();
-    const y = e.clientY - rect.top;
-    const height = rect.height;
-    let position: DragPosition;
-    
-    const draggedItem = items.find(i => i.id === dragState.id);
-    if (!draggedItem) return;
+        const isObjectDrop = true; // Assume any drop could be an object for merging
 
-    if (item.type === 'group' || (item.type === 'object' && draggedItem.type === 'object')) {
-      const dropInsideThreshold = height * 0.25;
-      if (y < dropInsideThreshold) {
-        position = 'top';
-      } else if (y > height - dropInsideThreshold) {
-        position = 'bottom';
-      } else {
-        position = 'middle';
-      }
-    } else {
-      position = y < height / 2 ? 'top' : 'bottom';
-    }
-    
-    setDragOverInfo({ id: item.id, position });
-  };
-  
-  const handlePointerLeave = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.stopPropagation();
-    setDragOverInfo(null);
-  };
+        if (item.type === 'group' || (item.type === 'object' && isObjectDrop)) {
+            const dropInsideThreshold = height * 0.25;
+            if (y < dropInsideThreshold) {
+                position = 'top';
+            } else if (y > height - dropInsideThreshold) {
+                position = 'bottom';
+            } else {
+                position = 'middle';
+            }
+        } else {
+            position = y < height / 2 ? 'top' : 'bottom';
+        }
+        setDragOverInfo({ id: item.id, position });
+    };
 
-  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.stopPropagation();
+    const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+        e.stopPropagation();
+        setDragOverInfo(null);
+    };
 
-    if (dragState && dragOverInfo && dragState.isDragging) {
-      if (dragOverInfo.position === 'middle' && items.find(i => i.id === dragOverInfo.id)?.type === 'object') {
-          onMergeItems(dragState.id, dragOverInfo.id);
-      } else {
-          onMoveItem(dragState.id, dragOverInfo.id, dragOverInfo.position);
-      }
-    }
-    setDragOverInfo(null);
-    // Defer ending the drag so the onClick handler can check if a drag occurred
-    setTimeout(() => onEndDrag(), 0);
-  };
+    const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetItem: CanvasItem) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragOverInfo(null);
+        
+        try {
+            const data = JSON.parse(e.dataTransfer.getData('application/json'));
+            if (data.type !== 'outliner-item' || !data.id) return;
+            const draggedId = data.id;
 
-  const handleClick = (e: React.MouseEvent<HTMLDivElement>, item: SketchObject) => {
-    // If a drag operation was just completed, don't process this as a click.
-    // The dragState is still available because onEndDrag is deferred.
-    if (dragState && dragState.isDragging) {
-      return;
-    }
-    onSelectItem(item.id);
-  };
+            if (dragOverInfo && dragOverInfo.id === targetItem.id) {
+                if (dragOverInfo.position === 'middle' && targetItem.type === 'object') {
+                    onMergeItems(draggedId, targetItem.id);
+                } else {
+                    onMoveItem(draggedId, targetItem.id, dragOverInfo.position);
+                }
+            }
+        } catch (error) {
+            // Potentially a drop from another source, ignore for now.
+        }
+    };
 
 
-  const renderItem = (item: SketchObject, depth: number) => {
-    if (item.isBackground) return null;
+  const renderItem = (item: CanvasItem, depth: number) => {
+    if (item.type === 'object' && item.isBackground) return null;
     const isGroup = item.type === 'group';
     const isObject = item.type === 'object';
     const isActive = activeItemId === item.id;
@@ -164,7 +147,7 @@ export const Outliner: React.FC<OutlinerProps> = ({
     const isMergeTarget = isObject && isDragOver && dragOverPosition === 'middle';
 
     const getBgColor = () => {
-        if (isDragOver && dragOverPosition === 'middle') return 'bg-red-700';
+        if (isDragOver && dragOverPosition === 'middle' && isObject) return 'bg-red-700';
         if (isActive) return 'bg-[--accent-hover]';
         return 'bg-[--bg-secondary] hover:bg-[--bg-tertiary]';
     }
@@ -172,32 +155,35 @@ export const Outliner: React.FC<OutlinerProps> = ({
     return (
       <div
         key={item.id}
-        onClick={(e) => handleClick(e, item)}
-        onPointerDown={(e) => handlePointerDown(e, item)}
-        onPointerOver={(e) => handlePointerOver(e, item)}
-        onPointerLeave={handlePointerLeave}
-        onPointerUp={handlePointerUp}
-        onDragStart={(e) => e.preventDefault()}
+        draggable={!(item.type === 'object' && item.isBackground)}
+        onDragStart={(e) => handleDragStart(e, item)}
+        onDragOver={(e) => handleDragOver(e, item)}
+        onDragLeave={handleDragLeave}
+        onDrop={(e) => handleDrop(e, item)}
+        onClick={() => onSelectItem(item.id)}
         className={`group relative p-2 rounded-lg transition-colors duration-100 ${getBgColor()}`}
-        style={{ marginLeft: `${depth * 16}px`, cursor: item.isBackground ? 'default' : 'grab', touchAction: 'none', userSelect: 'none' }}
+        style={{ marginLeft: `${depth * 16}px` }}
       >
         {isDragOver && dragOverPosition === 'top' && <div className="absolute top-0 left-0 right-0 h-0.5 bg-[--accent-primary] z-10" />}
         {isDragOver && dragOverPosition === 'bottom' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[--accent-primary] z-10" />}
         
         <div className="flex items-center justify-between">
-          <div className="flex items-center flex-grow">
-            {!item.isBackground && <DragHandleIcon className="w-4 h-4 mr-2 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />}
-            {isGroup && <FolderIcon className="w-4 h-4 mr-2 text-red-400" />}
+          <div className="flex items-center flex-grow min-w-0">
+             <span className="flex-shrink-0 cursor-grab text-[--text-secondary] hover:text-[--text-primary] mr-2">
+                <MoreVerticalIcon className="w-5 h-5"/>
+            </span>
+            {isGroup && <FolderIcon className="w-4 h-4 mr-2 text-red-400 flex-shrink-0" />}
             {isMergeTarget && <MergeIcon className="w-4 h-4 mr-2 text-red-400" />}
             <input
               type="text"
               value={item.name}
               onClick={(e) => e.stopPropagation()}
+              onDragStart={(e) => e.stopPropagation()}
               onChange={(e) => onUpdateItem(item.id, { name: e.target.value })}
-              className="bg-transparent text-sm w-full outline-none pointer-events-auto"
+              className="bg-transparent text-sm w-full outline-none pointer-events-auto truncate"
             />
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 ml-2 flex-shrink-0">
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -211,7 +197,7 @@ export const Outliner: React.FC<OutlinerProps> = ({
                 <EyeClosedIcon className="w-4 h-4 text-gray-500" />
               )}
             </button>
-            {!item.isBackground && (
+            {!(item.type === 'object' && item.isBackground) && (
                 <button
                 onClick={(e) => {
                     e.stopPropagation();
@@ -224,7 +210,7 @@ export const Outliner: React.FC<OutlinerProps> = ({
             )}
           </div>
         </div>
-        {isActive && isObject && (
+        {isActive && (item.type === 'object') && (
             <div className="mt-2 space-y-2">
                 <div>
                     <label htmlFor={`opacity-${item.id}`} className="text-xs text-[--text-secondary]">Opacidad</label>
@@ -239,33 +225,47 @@ export const Outliner: React.FC<OutlinerProps> = ({
                         className="w-full h-1 bg-[--bg-tertiary] rounded-lg appearance-none cursor-pointer"
                     />
                 </div>
-                 <div className="flex items-center gap-2 border-t border-[--bg-tertiary] pt-2">
-                    <span className="text-xs text-[--text-secondary]">Acciones:</span>
+                 <div className="flex items-center flex-wrap gap-1 border-t border-[--bg-tertiary] pt-2">
                     <button
                         onClick={(e) => { e.stopPropagation(); onMoveItemUpDown(item.id, 'up'); }}
                         disabled={!activeItemState.canMoveUp}
-                        className="p-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Move Up">
-                        <ArrowUpIcon className="w-4 h-4" />
+                        className="p-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Mover arriba">
+                        <ArrowUpIcon className="w-3.5 h-3.5" />
                     </button>
                     <button
                         onClick={(e) => { e.stopPropagation(); onMoveItemUpDown(item.id, 'down'); }}
                         disabled={!activeItemState.canMoveDown}
-                        className="p-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Move Down">
-                        <ArrowDownIcon className="w-4 h-4" />
+                        className="p-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Mover abajo">
+                        <ArrowDownIcon className="w-3.5 h-3.5" />
                     </button>
                     {isObject && (
                         <>
+                            <div className="w-px h-3.5 bg-[--bg-tertiary] mx-0.5" />
+
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onAddObjectAbove(item.id); }}
+                                className="p-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover]" title="Añadir objeto arriba">
+                                <AddAboveIcon className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onAddObjectBelow(item.id); }}
+                                className="p-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover]" title="Añadir objeto abajo">
+                                <AddBelowIcon className="w-3.5 h-3.5" />
+                            </button>
+
+                            <div className="w-px h-3.5 bg-[--bg-tertiary] mx-0.5" />
+
                             <button
                                 onClick={(e) => { e.stopPropagation(); onMergeItemUp(item.id); }}
                                 disabled={!activeItemState.canMergeUp}
-                                className="p-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Merge Up">
-                                <MergeUpIcon className="w-4 h-4" />
+                                className="p-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Combinar arriba">
+                                <MergeUpIcon className="w-3.5 h-3.5" />
                             </button>
                             <button
                                 onClick={(e) => { e.stopPropagation(); onMergeItemDown(item.id); }}
                                 disabled={!activeItemState.canMergeDown}
-                                className="p-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Merge Down">
-                                <MergeIcon className="w-4 h-4" />
+                                className="p-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Combinar abajo">
+                                <MergeIcon className="w-3.5 h-3.5" />
                             </button>
                         </>
                     )}
@@ -278,11 +278,11 @@ export const Outliner: React.FC<OutlinerProps> = ({
   
   const renderTree = (parentId: string | null = null, depth = 0) => {
     return items
-      .filter(item => item.parentId === parentId && !item.isBackground)
+      .filter(item => item.parentId === parentId && !(item.type === 'object' && item.isBackground))
       .reverse()
       .flatMap(item => [
         renderItem(item, depth),
-        ...renderTree(item.id, depth + 1)
+        ...(item.type === 'group' ? renderTree(item.id, depth + 1) : [])
       ]);
   };
 
@@ -296,7 +296,7 @@ export const Outliner: React.FC<OutlinerProps> = ({
         <div className="flex items-center space-x-1">
            <button
             onClick={onExportItem}
-            disabled={!activeItemId || !!items.find(i => i.id === activeItemId)?.isBackground}
+            disabled={!activeItemId || !!items.find(i => i.id === activeItemId && i.type === 'object' && i.isBackground)}
             className="p-2 rounded-md hover:bg-[--bg-tertiary] disabled:text-gray-600 disabled:cursor-not-allowed disabled:hover:bg-transparent"
             title="Exportar objeto seleccionado"
           >
@@ -304,7 +304,7 @@ export const Outliner: React.FC<OutlinerProps> = ({
           </button>
            <button
             onClick={() => activeItemId && onCopyItem(activeItemId)}
-            disabled={!activeItemId || !!items.find(i => i.id === activeItemId)?.isBackground}
+            disabled={!activeItemId || !!items.find(i => i.id === activeItemId && i.type === 'object' && i.isBackground)}
             className="p-2 rounded-md hover:bg-[--bg-tertiary] disabled:text-gray-600 disabled:cursor-not-allowed disabled:hover:bg-transparent"
             title="Duplicar objeto seleccionado"
           >
@@ -335,7 +335,7 @@ export const Outliner: React.FC<OutlinerProps> = ({
                  <input
                     type="color"
                     id="canvas-color"
-                    value={backgroundObject?.color || '#FFFFFF'}
+                    value={(backgroundObject?.type === 'object' && backgroundObject.color) || '#FFFFFF'}
                     onChange={(e) => onUpdateBackground({ color: e.target.value })}
                     className="w-10 h-10 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer flex-shrink-0"
                     title="Color de fondo"

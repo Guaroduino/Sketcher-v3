@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
-import type { BrushSettings, EraserSettings, MarkerSettings, AirbrushSettings, FXBrushSettings, BrushPreset } from '../types';
+import type { BrushSettings, EraserSettings, SolidMarkerSettings, NaturalMarkerSettings, AirbrushSettings, FXBrushSettings, BrushPreset, MagicWandSettings, TextSettings } from '../types';
 
 const initialBrushSettings: BrushSettings = {
-    size: 10,
+    size: 3,
     opacity: 1,
     color: '#000000',
     lineCap: 'round',
     lineJoin: 'round',
-    smoothness: 50,
     hasStrokeCaps: true,
     pressureControl: {
         size: true,
@@ -21,22 +20,38 @@ const initialEraserSettings: EraserSettings = {
     tipShape: 'round',
 };
 
-const initialMarkerSettings: MarkerSettings = {
+const initialSolidMarkerSettings: SolidMarkerSettings = {
     size: 20,
     opacity: 0.7,
     color: '#ef4444',
     tipShape: 'line',
+    blendMode: 'source-over',
     pressureControl: {
         opacity: true,
     },
-    smoothness: 50,
 };
+
+const initialNaturalMarkerSettings: NaturalMarkerSettings = {
+    size: 30,
+    flow: 0.1,
+    color: '#3b82f6',
+    hardness: 80,
+    spacing: 1,
+    tipShape: 'line',
+    blendMode: 'source-over',
+    pressureControl: {
+        size: true,
+        flow: true,
+    },
+};
+
 
 const initialAirbrushSettings: AirbrushSettings = {
     size: 75,
-    density: 0.05,
+    density: 0.4,
     color: '#000000',
     softness: 0.9,
+    blendMode: 'source-over',
 };
 
 const initialFxBrushSettings: FXBrushSettings = {
@@ -50,7 +65,6 @@ const initialFxBrushSettings: FXBrushSettings = {
     angle: 0,
     angleFollowsStroke: false,
     tipShape: 'round',
-    smoothness: 50,
     sizeJitter: 0,
     angleJitter: 0,
     scatter: 0,
@@ -64,14 +78,30 @@ const initialFxBrushSettings: FXBrushSettings = {
     },
 };
 
+const initialMagicWandSettings: MagicWandSettings = {
+    tolerance: 20,
+    contiguous: true,
+};
+
+const initialTextSettings: TextSettings = {
+  content: 'Texto de ejemplo',
+  fontFamily: 'Arial',
+  fontSize: 48,
+  color: '#000000',
+  textAlign: 'left',
+  fontWeight: 'normal',
+};
 
 export function useToolSettings() {
     const [brushSettings, setBrushSettings] = useState<BrushSettings>(initialBrushSettings);
     const [eraserSettings, setEraserSettings] = useState<EraserSettings>(initialEraserSettings);
-    const [markerSettings, setMarkerSettings] = useState<MarkerSettings>(initialMarkerSettings);
+    const [solidMarkerSettings, setSolidMarkerSettings] = useState<SolidMarkerSettings>(initialSolidMarkerSettings);
+    const [naturalMarkerSettings, setNaturalMarkerSettings] = useState<NaturalMarkerSettings>(initialNaturalMarkerSettings);
     const [airbrushSettings, setAirbrushSettings] = useState<AirbrushSettings>(initialAirbrushSettings);
     const [fxBrushSettings, setFxBrushSettings] = useState<FXBrushSettings>(initialFxBrushSettings);
     const [brushPresets, setBrushPresets] = useState<BrushPreset[]>([]);
+    const [magicWandSettings, setMagicWandSettings] = useState<MagicWandSettings>(initialMagicWandSettings);
+    const [textSettings, setTextSettings] = useState<TextSettings>(initialTextSettings);
 
     useEffect(() => {
         try {
@@ -116,9 +146,12 @@ export function useToolSettings() {
     return {
         brushSettings, setBrushSettings,
         eraserSettings, setEraserSettings,
-        markerSettings, setMarkerSettings,
+        solidMarkerSettings, setSolidMarkerSettings,
+        naturalMarkerSettings, setNaturalMarkerSettings,
         airbrushSettings, setAirbrushSettings,
         fxBrushSettings, setFxBrushSettings,
+        magicWandSettings, setMagicWandSettings,
+        textSettings, setTextSettings,
         brushPresets,
         onSavePreset: handleSavePreset,
         onUpdatePreset: handleUpdatePreset,

@@ -12,6 +12,7 @@ export interface BaseItem {
 }
 
 export interface SketchObject extends BaseItem {
+  type: 'group' | 'object';
   offsetX?: number;
   offsetY?: number;
   rotation?: number; // Rotation in radians
@@ -23,14 +24,12 @@ export interface SketchObject extends BaseItem {
   dataUrl?: string; // For serialization
 }
 
-
 export interface BrushSettings {
   size: number;
   opacity: number;
   color: string;
   lineCap: 'butt' | 'round' | 'square';
   lineJoin: 'round' | 'bevel' | 'miter';
-  smoothness: number; // Range 0-100
   hasStrokeCaps: boolean;
   pressureControl: {
     size: boolean;
@@ -44,24 +43,6 @@ export interface EraserSettings {
     tipShape: 'round' | 'square';
 }
 
-export interface MarkerSettings {
-  size: number;
-  opacity: number;
-  color: string;
-  tipShape: 'square' | 'line';
-  pressureControl: {
-    opacity: boolean;
-  };
-  smoothness: number;
-}
-
-export interface AirbrushSettings {
-  size: number;
-  density: number; // 0-1
-  color: string;
-  softness: number; // 0-1
-}
-
 export type BlendMode = 
       | 'source-over' | 'source-in' | 'source-out' | 'source-atop'
       | 'destination-over' | 'destination-in' | 'destination-out' | 'destination-atop'
@@ -69,6 +50,40 @@ export type BlendMode =
       | 'darken' | 'lighten' | 'color-dodge' | 'color-burn' | 'hard-light'
       | 'soft-light' | 'difference' | 'exclusion' | 'hue' | 'saturation'
       | 'color' | 'luminosity';
+
+export interface SolidMarkerSettings {
+  size: number;
+  opacity: number;
+  color: string;
+  tipShape: 'square' | 'line';
+  blendMode: BlendMode;
+  pressureControl: {
+    opacity: boolean;
+  };
+}
+
+export interface NaturalMarkerSettings {
+  size: number;
+  flow: number; // Build-up opacity, 0-1
+  color: string;
+  hardness: number; // 0-100
+  spacing: number; // 1-100 percent
+  tipShape: 'round' | 'square' | 'line';
+  blendMode: BlendMode;
+  pressureControl: {
+      size: boolean;
+      flow: boolean;
+  };
+}
+
+
+export interface AirbrushSettings {
+  size: number;
+  density: number; // 0-1
+  color: string;
+  softness: number; // 0-1
+  blendMode: BlendMode;
+}
 
 export interface FXBrushSettings {
   // General
@@ -84,7 +99,6 @@ export interface FXBrushSettings {
   angle: number; // 0-360
   angleFollowsStroke: boolean;
   tipShape: 'round' | 'square' | 'line';
-  smoothness: number; // Range 0-100
   
   // Shape Dynamics
   sizeJitter: number; // 0-1 percent
@@ -111,30 +125,73 @@ export interface FXBrushSettings {
   };
 }
 
+export interface TextSettings {
+  content: string;
+  fontFamily: string;
+  fontSize: number;
+  color: string;
+  textAlign: 'left' | 'center' | 'right';
+  fontWeight: 'normal' | 'bold' | 'italic';
+}
+
 export interface BrushPreset {
     id: string;
     name: string;
     settings: FXBrushSettings;
 }
 
+export interface MagicWandSettings {
+    tolerance: number; // 0-100
+    contiguous: boolean;
+}
 
-// FIX: Add 'transform' and 'debug-brush' tools.
+export interface Selection {
+    path: Path2D;
+    boundingBox: CropRect;
+    sourceItemId: string;
+}
+
+export interface ClipboardData {
+    imageData: ImageData;
+    sourceRect: CropRect;
+}
+
+
+// FIX: Removed 'annotation' tool.
 // FIX: Added 'debug-brush' to the Tool type to match its usage in the application.
-export type Tool = 'select' | 'transform' | 'brush' | 'eraser' | 'pan' | 'marker' | 'airbrush' | 'fx-brush' | 'crop' | 'free-transform' | 'enhance' | 'debug-brush';
+export type Tool = 'select' | 'transform' | 'brush' | 'eraser' | 'pan' | 'solid-marker' | 'natural-marker' | 'airbrush' | 'fx-brush' | 'crop' | 'free-transform' | 'enhance' | 'debug-brush' | 'marquee-rect' | 'lasso' | 'magic-wand' | 'text';
 
 export type RgbColor = { r: number; g: number; b: number };
 
-export interface LibraryItem {
+interface BaseLibraryItem {
   id: string;
   name: string;
+  parentId: string | null;
+}
+
+export interface LibraryImage extends BaseLibraryItem {
   type: 'image';
   dataUrl?: string; // Download URL for images
   storagePath: string; // Path in Firebase Storage
   transparentColors?: RgbColor[];
+  scaleFactor?: number; // px/mm
+  tolerance?: number;
+  scaleUnit?: ScaleUnit;
 }
 
+export interface LibraryFolder extends BaseLibraryItem {
+  type: 'folder';
+}
+
+export type LibraryItem = LibraryImage | LibraryFolder;
+
+
 // -- New Guide Types --
+// FIX: Removed 'annotation' from ItemType
 export type ItemType = 'group' | 'object';
+
+// FIX: Update CanvasItem to only be SketchObject
+export type CanvasItem = SketchObject;
 
 export type Point = { x: number; y: number; pressure?: number };
 
@@ -143,6 +200,13 @@ export type StrokeMode = 'freehand' | 'line' | 'polyline' | 'curve' | 'arc';
 export interface StrokeState {
     mode: StrokeMode;
     points: Point[];
+}
+
+export type StrokeStyle = 'solid' | 'dashed' | 'dotted' | 'dash-dot';
+
+export interface StrokeModifier {
+  style: StrokeStyle;
+  scale: number;
 }
 
 export interface RulerGuide {
@@ -165,6 +229,8 @@ export interface GridGuide {
   spacing: number;
   majorLineFrequency: number;
   isoAngle: number; // 30, 45, 60
+  majorLineColor: string;
+  minorLineColor: string;
 }
 
 export interface PerspectiveGuideLine {
@@ -196,9 +262,13 @@ export interface OrthogonalGuide {
   angle: number; // in degrees
 }
 
+export type ScaleUnit = 'mm' | 'cm' | 'm';
+
 export interface AppState {
-    objects: SketchObject[];
+    objects: CanvasItem[];
     canvasSize: { width: number, height: number };
+    scaleFactor: number; // px/mm
+    scaleUnit: ScaleUnit;
 }
 
 export interface CropRect {
@@ -253,6 +323,8 @@ export interface WorkspaceTemplate {
   name: string;
   canvasSize: { width: number; height: number };
   backgroundColor: string;
+  scaleFactor: number; // px/mm
+  scaleUnit: ScaleUnit;
   guides: {
     activeGuide: Guide;
     isOrthogonalVisible: boolean;
@@ -268,9 +340,12 @@ export interface WorkspaceTemplate {
   toolSettings: {
     brushSettings: BrushSettings;
     eraserSettings: EraserSettings;
-    markerSettings: MarkerSettings;
+    solidMarkerSettings: SolidMarkerSettings;
+    naturalMarkerSettings: NaturalMarkerSettings;
     airbrushSettings: AirbrushSettings;
     fxBrushSettings: FXBrushSettings;
+    magicWandSettings: MagicWandSettings;
+    textSettings: TextSettings;
   };
   quickAccessSettings: QuickAccessSettings;
 }
@@ -278,7 +353,9 @@ export interface WorkspaceTemplate {
 export interface ProjectFile {
     fileFormatVersion: string;
     canvasSize: { width: number; height: number };
-    objects: SketchObject[];
+    objects: CanvasItem[];
+    scaleFactor: number; // px/mm
+    scaleUnit: ScaleUnit;
     guides: WorkspaceTemplate['guides'];
     toolSettings: WorkspaceTemplate['toolSettings'];
     quickAccessSettings: QuickAccessSettings;
