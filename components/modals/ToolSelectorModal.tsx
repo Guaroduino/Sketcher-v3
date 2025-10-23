@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Tool, BrushPreset, QuickAccessTool } from '../../types';
 // FIX: Replaced MarkerIcon with SolidMarkerIcon and NaturalMarkerIcon.
-import { XIcon, SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, NaturalMarkerIcon, AirbrushIcon, FXBrushIcon, TransformIcon, FreeTransformIcon, SparklesIcon, CropIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon } from '../icons';
+import { XIcon, SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, TransformIcon, FreeTransformIcon, SparklesIcon, CropIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon } from '../icons';
 
 interface ToolSelectorModalProps {
     isOpen: boolean;
@@ -19,9 +19,7 @@ const standardTools: { name: Tool, icon: React.FC<{className?: string}> }[] = [
     { name: 'brush', icon: BrushIcon },
     { name: 'eraser', icon: EraserIcon },
     { name: 'solid-marker', icon: SolidMarkerIcon },
-    { name: 'natural-marker', icon: NaturalMarkerIcon },
-    { name: 'airbrush', icon: AirbrushIcon },
-    { name: 'fx-brush', icon: FXBrushIcon },
+    // artistic tools removed: natural-marker, airbrush, fx-brush
     { name: 'transform', icon: TransformIcon },
     { name: 'free-transform', icon: FreeTransformIcon },
     { name: 'enhance', icon: SparklesIcon },
@@ -75,7 +73,7 @@ export const ToolSelectorModal: React.FC<ToolSelectorModalProps> = ({ isOpen, on
                                         className="p-3 rounded-lg bg-[--bg-tertiary] hover:bg-[--bg-hover] transition-colors text-left"
                                     >
                                         <div className="flex items-center gap-2">
-                                            <FXBrushIcon className="w-6 h-6 flex-shrink-0" />
+                                            <BrushIcon className="w-6 h-6 flex-shrink-0" />
                                             <span className="text-sm truncate">{preset.name}</span>
                                         </div>
                                     </button>

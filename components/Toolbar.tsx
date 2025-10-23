@@ -1465,9 +1465,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   const isSelectionGroupActive = selectionToolTools.includes(tool);
   const isSolidGroupActive = solidToolTools.includes(tool);
   const isArtisticGroupActive = artisticToolTools.includes(tool);
-  const ActiveSelectionIcon = toolIconMap[isSelectionGroupActive ? tool : lastActiveSelectionTool];
-  const ActiveSolidIcon = toolIconMap[isSolidGroupActive ? tool : lastActiveSolidTool];
-  const ActiveArtisticIcon = toolIconMap[isArtisticGroupActive ? tool : lastActiveArtisticTool];
+    const ActiveSelectionIcon = toolIconMap[isSelectionGroupActive ? tool : (typeof lastActiveSelectionTool !== 'undefined' ? lastActiveSelectionTool : 'marquee-rect')];
+    const ActiveSolidIcon = toolIconMap[isSolidGroupActive ? tool : (typeof lastActiveSolidTool !== 'undefined' ? lastActiveSolidTool : 'brush')];
+    const ActiveArtisticIcon = toolIconMap[isArtisticGroupActive ? tool : (typeof lastActiveArtisticTool !== 'undefined' ? lastActiveArtisticTool : 'natural-marker')];
 
   const getSettingsPanelStyle = (): React.CSSProperties => {
     if (!openSettings) {
@@ -1519,7 +1519,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                             setIsStrokeModifierMenuOpen(false);
                             setIsSelectionToolsMenuOpen(prev => !prev);
                         }}
-                        onDoubleClick={(e) => handleToolDoubleClick(isSelectionGroupActive ? tool : lastActiveSelectionTool, e)}
+                        onDoubleClick={(e) => handleToolDoubleClick(isSelectionGroupActive ? tool : (typeof lastActiveSelectionTool !== 'undefined' ? lastActiveSelectionTool : 'marquee-rect'), e)}
                         className={`p-3 rounded-lg transition-colors ${isSelectionGroupActive ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}
                         title="Herramientas de Selección (doble clic para opciones)"
                     >
@@ -1638,7 +1638,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         setIsStrokeModifierMenuOpen(false);
                         setIsSolidToolsMenuOpen(prev => !prev);
                     }}
-                    onDoubleClick={(e) => handleToolDoubleClick(isSolidGroupActive ? tool : lastActiveSolidTool, e)}
+                    onDoubleClick={(e) => handleToolDoubleClick(isSolidGroupActive ? tool : (typeof lastActiveSolidTool !== 'undefined' ? lastActiveSolidTool : 'brush'), e)}
                     className={`p-3 rounded-lg transition-colors ${isSolidGroupActive ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}
                     title="Herramientas de Tinta Sólida (doble clic para opciones)"
                 >
@@ -1671,7 +1671,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         setIsSolidToolsMenuOpen(false);
                         setIsArtisticToolsMenuOpen(prev => !prev);
                     }}
-                    onDoubleClick={(e) => handleToolDoubleClick(isArtisticGroupActive ? tool : lastActiveArtisticTool, e)}
+                    onDoubleClick={(e) => handleToolDoubleClick(isArtisticGroupActive ? tool : (typeof lastActiveArtisticTool !== 'undefined' ? lastActiveArtisticTool : 'natural-marker'), e)}
                     className={`p-3 rounded-lg transition-colors ${isArtisticGroupActive ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}
                     title="Herramientas Artísticas (doble clic para opciones)"
                 >

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { BrushSettings, EraserSettings, SolidMarkerSettings, NaturalMarkerSettings, AirbrushSettings, FXBrushSettings, BrushPreset, MagicWandSettings, TextSettings } from '../types';
+import type { BrushSettings, EraserSettings, SolidMarkerSettings, BrushPreset, MagicWandSettings, TextSettings } from '../types';
 
 const initialBrushSettings: BrushSettings = {
     size: 3,
@@ -31,53 +31,6 @@ const initialSolidMarkerSettings: SolidMarkerSettings = {
     },
 };
 
-const initialNaturalMarkerSettings: NaturalMarkerSettings = {
-    size: 30,
-    flow: 0.1,
-    color: '#3b82f6',
-    hardness: 80,
-    spacing: 1,
-    tipShape: 'line',
-    blendMode: 'source-over',
-    pressureControl: {
-        size: true,
-        flow: true,
-    },
-};
-
-
-const initialAirbrushSettings: AirbrushSettings = {
-    size: 75,
-    density: 0.4,
-    color: '#000000',
-    softness: 0.9,
-    blendMode: 'source-over',
-};
-
-const initialFxBrushSettings: FXBrushSettings = {
-    size: 50,
-    opacity: 1,
-    flow: 0.5,
-    color: '#000000',
-    blendMode: 'source-over',
-    hardness: 100,
-    spacing: 25,
-    angle: 0,
-    angleFollowsStroke: false,
-    tipShape: 'round',
-    sizeJitter: 0,
-    angleJitter: 0,
-    scatter: 0,
-    texture: { dataUrl: null, name: null },
-    hueJitter: 0,
-    saturationJitter: 0,
-    brightnessJitter: 0,
-    pressureControl: {
-        size: true,
-        opacity: false,
-    },
-};
-
 const initialMagicWandSettings: MagicWandSettings = {
     tolerance: 20,
     contiguous: true,
@@ -96,9 +49,7 @@ export function useToolSettings() {
     const [brushSettings, setBrushSettings] = useState<BrushSettings>(initialBrushSettings);
     const [eraserSettings, setEraserSettings] = useState<EraserSettings>(initialEraserSettings);
     const [solidMarkerSettings, setSolidMarkerSettings] = useState<SolidMarkerSettings>(initialSolidMarkerSettings);
-    const [naturalMarkerSettings, setNaturalMarkerSettings] = useState<NaturalMarkerSettings>(initialNaturalMarkerSettings);
-    const [airbrushSettings, setAirbrushSettings] = useState<AirbrushSettings>(initialAirbrushSettings);
-    const [fxBrushSettings, setFxBrushSettings] = useState<FXBrushSettings>(initialFxBrushSettings);
+    const [fxBrushSettings, setFxBrushSettings] = useState<any>({});
     const [brushPresets, setBrushPresets] = useState<BrushPreset[]>([]);
     const [magicWandSettings, setMagicWandSettings] = useState<MagicWandSettings>(initialMagicWandSettings);
     const [textSettings, setTextSettings] = useState<TextSettings>(initialTextSettings);
@@ -114,7 +65,7 @@ export function useToolSettings() {
         }
     }, []);
 
-    const handleSavePreset = (name: string, settings: FXBrushSettings): string => {
+    const handleSavePreset = (name: string, settings: any): string => {
         const newPreset: BrushPreset = { id: `preset-${Date.now()}`, name, settings };
         const updatedPresets = [...brushPresets, newPreset];
         setBrushPresets(updatedPresets);
@@ -147,8 +98,6 @@ export function useToolSettings() {
         brushSettings, setBrushSettings,
         eraserSettings, setEraserSettings,
         solidMarkerSettings, setSolidMarkerSettings,
-        naturalMarkerSettings, setNaturalMarkerSettings,
-        airbrushSettings, setAirbrushSettings,
         fxBrushSettings, setFxBrushSettings,
         magicWandSettings, setMagicWandSettings,
         textSettings, setTextSettings,

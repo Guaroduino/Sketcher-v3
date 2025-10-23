@@ -159,7 +159,8 @@ export interface ClipboardData {
 
 // FIX: Removed 'annotation' tool.
 // FIX: Added 'debug-brush' to the Tool type to match its usage in the application.
-export type Tool = 'select' | 'transform' | 'brush' | 'eraser' | 'pan' | 'solid-marker' | 'natural-marker' | 'airbrush' | 'fx-brush' | 'crop' | 'free-transform' | 'enhance' | 'debug-brush' | 'marquee-rect' | 'lasso' | 'magic-wand' | 'text';
+// Removed artistic-only tools (natural-marker, airbrush, fx-brush) to simplify the tool set.
+export type Tool = 'select' | 'transform' | 'brush' | 'eraser' | 'pan' | 'solid-marker' | 'crop' | 'free-transform' | 'enhance' | 'debug-brush' | 'marquee-rect' | 'lasso' | 'magic-wand' | 'text';
 
 export type RgbColor = { r: number; g: number; b: number };
 
