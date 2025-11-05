@@ -196,6 +196,10 @@ export function usePointerEvents({
     const activePointers = useRef(new Map<number, { x: number; y: number }>());
     const lastGestureState = useRef<{ distance: number; midpoint: Point } | null>(null);
     const wasInGestureRef = useRef(false);
+    // Base gesture state captured when a two-finger gesture starts. Contains the
+    // initial distance, midpoint, zoom and pan so we can compute incremental
+    // zoom and pan updates relative to the gesture start.
+    const gestureBaseRef = useRef<{ distance: number; midpoint: Point; zoom: number; pan: { x: number; y: number } } | null>(null);
     const longPressTimerRef = useRef<number | null>(null);
     
     const setDragAction = (action: DragAction) => {
@@ -310,6 +314,13 @@ export function usePointerEvents({
                     x: (p1.x + p2.x) / 2,
                     y: (p1.y + p2.y) / 2,
                 };
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const distance = Math.hypot(dx, dy);
+                // Capture base gesture state so subsequent moves can compute
+                // scale relative to the initial distance and keep the zoom
+                // centered on the initial midpoint.
+                gestureBaseRef.current = { distance, midpoint, zoom: viewTransform.zoom, pan: viewTransform.pan };
                 setDragAction({
                     type: 'pan',
                     startX: midpoint.x,
@@ -607,33 +618,56 @@ export function usePointerEvents({
     const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
         if (!uiCanvasRef.current) return;
     
-        if (activePointers.current.has(e.pointerId)) {
-            activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        // Use coalesced events (if available) to update pointer positions for
+        // improved responsiveness on high-frequency input (touch/pen).
+        const nativeEv = (e.nativeEvent as any);
+        const coalescedForPointer: any[] = nativeEv.getCoalescedEvents ? nativeEv.getCoalescedEvents() : [nativeEv];
+        for (const ev of coalescedForPointer) {
+            if (activePointers.current.has(ev.pointerId)) {
+                activePointers.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+            }
         }
         setDebugPointers(new Map(activePointers.current));
     
         if (activePointers.current.size >= 2) {
-            if (activePointers.current.size === 2 && dragAction.current.type === 'pan') {
-                // FIX: Explicitly type `pointers` to resolve type inference issue with Map values.
-                const pointers: {x: number, y: number}[] = Array.from(activePointers.current.values());
-                if (pointers.length === 2) { // Defensive check
-                    const [p1, p2] = pointers;
-                    const midpoint = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-                    const dx = midpoint.x - dragAction.current.startX;
-                    const dy = midpoint.y - dragAction.current.startY;
-                    setViewTransform(v => ({
-                        ...v,
-                        pan: {
-                            x: dragAction.current.startPan.x + dx,
-                            y: dragAction.current.startPan.y + dy,
-                        }
-                    }));
-                }
+            // Use two-finger gesture: combine pinch (zoom) and two-finger pan.
+            const pointers: {x: number, y: number}[] = Array.from(activePointers.current.values());
+            if (pointers.length < 2) return;
+            const [p1, p2] = pointers;
+            const midpoint = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const distance = Math.hypot(dx, dy);
+
+            // Initialize gesture base if it's the first move
+            if (!gestureBaseRef.current) {
+                gestureBaseRef.current = { distance, midpoint, zoom: viewTransform.zoom, pan: viewTransform.pan };
             }
+
+            const base = gestureBaseRef.current;
+            // Compute scale from initial gesture distance
+            const scale = base.distance > 0 ? (distance / base.distance) : 1;
+            let newZoom = base.zoom * scale;
+            const minZoom = getMinZoom ? getMinZoom() : 0.1;
+            if (newZoom < minZoom) newZoom = minZoom;
+            if (newZoom > MAX_ZOOM) newZoom = MAX_ZOOM;
+
+            // Keep the world point under the gesture midpoint stable while zooming and panning.
+            // Formula: newPan = newMidpoint - ((baseMidpoint - basePan) * (newZoom / baseZoom))
+            const r = base.zoom > 0 ? (newZoom / base.zoom) : 1;
+            const newPanX = midpoint.x - ( (base.midpoint.x - base.pan.x) * r );
+            const newPanY = midpoint.y - ( (base.midpoint.y - base.pan.y) * r );
+
+            setViewTransform(v => ({ ...v, zoom: newZoom, pan: { x: newPanX, y: newPanY } }));
+
+            // Keep dragAction as 'pan' so pointerup logic can reset it; update wasInGesture
+            wasInGestureRef.current = true;
             return;
         }
 
-        const events = (e.nativeEvent as any).getCoalescedEvents ? (e.nativeEvent as any).getCoalescedEvents() : [e.nativeEvent];
+    // Reuse coalesced events for drawing; this returns an array of
+    // low-level PointerEvent objects for higher fidelity input.
+    const events = nativeEv.getCoalescedEvents ? nativeEv.getCoalescedEvents() : [nativeEv];
         const lastEvent = events[events.length - 1];
         const currentAction = dragAction.current;
 
@@ -965,7 +999,8 @@ export function usePointerEvents({
     
         if (pointerCountBeforeUp > 1) {
             if (activePointers.current.size < 2) {
-                lastGestureState.current = null; 
+                lastGestureState.current = null;
+                gestureBaseRef.current = null;
                 setDragAction({ type: 'none' });
             }
             return; 

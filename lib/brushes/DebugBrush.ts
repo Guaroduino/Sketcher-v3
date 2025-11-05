@@ -7,9 +7,8 @@ export class DebugBrush extends BaseBrush {
     }
     
     protected drawStroke(ctx: CanvasRenderingContext2D, points: Point[], context: BrushContext): void {
-        ctx.fillStyle = 'red';
-        ctx.globalAlpha = 1;
-        ctx.globalCompositeOperation = 'source-over';
-        points.forEach(p => ctx.fillRect(p.x - 1, p.y - 1, 2, 2));
+        // Debug brush is intentionally a no-op in production so it doesn't paint visible marks.
+        // Keep the method here so the brush can be re-enabled later for debugging if needed.
+        return;
     }
 }

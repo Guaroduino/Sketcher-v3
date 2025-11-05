@@ -298,24 +298,7 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
 
         cursorCtx.clearRect(0, 0, cursorCtx.canvas.width, cursorCtx.canvas.height);
 
-        // Draw debug pointers if they exist
-        if (debugPointers.size > 0) {
-            cursorCtx.save();
-            // The points are in clientX/Y, which is the same coordinate space as the cursor canvas.
-            debugPointers.forEach((point, id) => {
-                cursorCtx.fillStyle = 'rgba(255, 0, 0, 0.7)';
-                cursorCtx.beginPath();
-                cursorCtx.arc(point.x, point.y, 20, 0, 2 * Math.PI);
-                cursorCtx.fill();
-
-                cursorCtx.fillStyle = 'white';
-                cursorCtx.font = '12px sans-serif';
-                cursorCtx.textAlign = 'center';
-                cursorCtx.textBaseline = 'middle';
-                cursorCtx.fillText(String(id), point.x, point.y);
-            });
-            cursorCtx.restore();
-        }
+        // Note: debug pointer rendering removed to avoid drawing red debug circles on the cursor canvas.
         
         // Only draw the brush cursor if there's no multi-touch gesture happening
         if (debugPointers.size <= 1 && isDrawingTool && pointerPosition && (!isDrawingRef.current || tool === 'eraser')) {
