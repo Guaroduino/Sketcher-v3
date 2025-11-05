@@ -51,7 +51,7 @@ export type BlendMode =
       | 'soft-light' | 'difference' | 'exclusion' | 'hue' | 'saturation'
       | 'color' | 'luminosity';
 
-export interface SolidMarkerSettings {
+export interface SimpleMarkerSettings {
   size: number;
   opacity: number;
   color: string;
@@ -62,68 +62,62 @@ export interface SolidMarkerSettings {
   };
 }
 
-export interface NaturalMarkerSettings {
+// FIX: Added AdvancedMarkerSettings for the new tool.
+export interface AdvancedMarkerSettings {
   size: number;
-  flow: number; // Build-up opacity, 0-1
   color: string;
+  tipShape: 'circle' | 'square';
+  tipAngle: number; // 0-360
   hardness: number; // 0-100
-  spacing: number; // 1-100 percent
-  tipShape: 'round' | 'square' | 'line';
+  flow: number; // 0-100, opacity build-up
+  wetness: number; // 0-100, color blending
+  spacing: number; // 1-100 (% of size)
   blendMode: BlendMode;
   pressureControl: {
-      size: boolean;
-      flow: boolean;
+    size: boolean;
+    flow: boolean;
   };
 }
 
+
+// FIX: Added missing brush setting types
+export interface NaturalMarkerSettings {
+  size: number;
+  opacity: number;
+  color: string;
+  pressureControl: {
+    size: boolean;
+    opacity: boolean;
+  };
+}
 
 export interface AirbrushSettings {
   size: number;
-  density: number; // 0-1
+  flow: number; // 0-1
   color: string;
-  softness: number; // 0-1
-  blendMode: BlendMode;
+  pressureControl: {
+    flow: boolean;
+  };
 }
 
 export interface FXBrushSettings {
-  // General
+  presetId: string | null;
   size: number;
   opacity: number;
-  flow: number; // Build-up
   color: string;
-  blendMode: BlendMode;
-  
-  // Tip
-  hardness: number; // 0-100
-  spacing: number; // 1-500 percent
-  angle: number; // 0-360
-  angleFollowsStroke: boolean;
-  tipShape: 'round' | 'square' | 'line';
-  
-  // Shape Dynamics
-  sizeJitter: number; // 0-1 percent
-  angleJitter: number; // 0-1 percent
-  
-  // Scatter
-  scatter: number; // 0-1 percent
-  
-  // Texture
-  texture: {
-    dataUrl: string | null;
-    name: string | null;
-  };
-  
-  // Color Dynamics
-  hueJitter: number; // 0-1 percent
-  saturationJitter: number; // 0-1 percent
-  brightnessJitter: number; // 0-1 percent
+}
 
-  // Pressure Dynamics
+export interface WatercolorSettings {
+  size: number;
+  flow: number; // 0-100, density of dabs
+  wetness: number; // 0-100, opacity of each dab
+  color: string;
   pressureControl: {
-      size: boolean;
-      opacity: boolean;
+    size: boolean;
+    flow: boolean;
   };
 }
+
 
 export interface TextSettings {
   content: string;
@@ -132,12 +126,6 @@ export interface TextSettings {
   color: string;
   textAlign: 'left' | 'center' | 'right';
   fontWeight: 'normal' | 'bold' | 'italic';
-}
-
-export interface BrushPreset {
-    id: string;
-    name: string;
-    settings: FXBrushSettings;
 }
 
 export interface MagicWandSettings {
@@ -159,8 +147,15 @@ export interface ClipboardData {
 
 // FIX: Removed 'annotation' tool.
 // FIX: Added 'debug-brush' to the Tool type to match its usage in the application.
-// Removed artistic-only tools (natural-marker, airbrush, fx-brush) to simplify the tool set.
-export type Tool = 'select' | 'transform' | 'brush' | 'eraser' | 'pan' | 'solid-marker' | 'crop' | 'free-transform' | 'enhance' | 'debug-brush' | 'marquee-rect' | 'lasso' | 'magic-wand' | 'text';
+// FIX: Added new brush tools to the Tool type.
+// FIX: Renamed 'solid-marker' to 'simple-marker' and added 'advanced-marker'.
+export type Tool = 'select' | 'transform' | 'brush' | 'eraser' | 'pan' | 'simple-marker' | 'crop' | 'free-transform' | 'enhance' | 'debug-brush' | 'marquee-rect' | 'lasso' | 'magic-wand' | 'text' | 'natural-marker' | 'airbrush' | 'fx-brush' | 'advanced-marker' | 'watercolor';
+
+// FIX: Added BrushPreset type for FX brushes.
+export interface BrushPreset {
+    id: string;
+    name: string;
+}
 
 export type RgbColor = { r: number; g: number; b: number };
 
@@ -308,9 +303,8 @@ export type FreeTransformState = {
 export type TransformState = AffineTransformState | FreeTransformState;
 
 // -- Quick Access Bar --
-export type QuickAccessTool = 
-  | { type: 'tool'; tool: Tool }
-  | { type: 'fx-preset'; id: string; name: string };
+// FIX: Converted QuickAccessTool to a union to support presets.
+export type QuickAccessTool = { type: 'tool'; tool: Tool } | { type: 'fx-preset'; id: string; name: string };
 
 export interface QuickAccessSettings {
   colors: string[];
@@ -341,12 +335,17 @@ export interface WorkspaceTemplate {
   toolSettings: {
     brushSettings: BrushSettings;
     eraserSettings: EraserSettings;
-    solidMarkerSettings: SolidMarkerSettings;
+// FIX: Cannot find name 'SolidMarkerSettings'. Changed to 'SimpleMarkerSettings' for backward compatibility.
+    solidMarkerSettings?: SimpleMarkerSettings; // For backwards compatibility
+    simpleMarkerSettings: SimpleMarkerSettings;
+    // FIX: Added new tool settings to WorkspaceTemplate
     naturalMarkerSettings: NaturalMarkerSettings;
     airbrushSettings: AirbrushSettings;
     fxBrushSettings: FXBrushSettings;
     magicWandSettings: MagicWandSettings;
     textSettings: TextSettings;
+    advancedMarkerSettings: AdvancedMarkerSettings;
+    watercolorSettings: WatercolorSettings;
   };
   quickAccessSettings: QuickAccessSettings;
 }

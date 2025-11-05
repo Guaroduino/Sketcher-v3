@@ -1,16 +1,18 @@
-import { useState, useEffect } from 'react';
-import type { BrushSettings, EraserSettings, SolidMarkerSettings, BrushPreset, MagicWandSettings, TextSettings } from '../types';
+import { useState, useCallback, useEffect } from 'react';
+// FIX: Added missing types for new brush tools
+import type { BrushSettings, EraserSettings, SimpleMarkerSettings, MagicWandSettings, TextSettings, NaturalMarkerSettings, AirbrushSettings, FXBrushSettings, BrushPreset, AdvancedMarkerSettings, WatercolorSettings } from '../types';
 
 const initialBrushSettings: BrushSettings = {
     size: 3,
     opacity: 1,
     color: '#000000',
+    // FIX: Corrected lineCap to be a valid value 'round' instead of an empty/truncated string.
     lineCap: 'round',
     lineJoin: 'round',
     hasStrokeCaps: true,
     pressureControl: {
         size: true,
-    }
+    },
 };
 
 const initialEraserSettings: EraserSettings = {
@@ -20,91 +22,165 @@ const initialEraserSettings: EraserSettings = {
     tipShape: 'round',
 };
 
-const initialSolidMarkerSettings: SolidMarkerSettings = {
-    size: 20,
-    opacity: 0.7,
-    color: '#ef4444',
-    tipShape: 'line',
+const initialSimpleMarkerSettings: SimpleMarkerSettings = {
+    size: 10,
+    opacity: 0.8,
+    color: '#facc15',
+    tipShape: 'square',
     blendMode: 'source-over',
     pressureControl: {
         opacity: true,
     },
 };
 
+const initialNaturalMarkerSettings: NaturalMarkerSettings = {
+    size: 20,
+    opacity: 0.7,
+    color: '#34d399',
+    pressureControl: {
+        size: true,
+        opacity: true,
+    },
+};
+
+const initialAirbrushSettings: AirbrushSettings = {
+    size: 60,
+    flow: 0.5,
+    color: '#60a5fa',
+    pressureControl: {
+        flow: true,
+    },
+};
+
+const initialFxBrushSettings: FXBrushSettings = {
+    presetId: null,
+    size: 50,
+    opacity: 1,
+    color: '#c084fc',
+};
+
+const initialAdvancedMarkerSettings: AdvancedMarkerSettings = {
+    size: 30,
+    color: '#f87171',
+    tipShape: 'circle',
+    tipAngle: 0,
+    hardness: 80,
+    flow: 90,
+    wetness: 10,
+    spacing: 25,
+    blendMode: 'source-over',
+    pressureControl: {
+        size: true,
+        flow: true,
+    },
+};
+
+const initialWatercolorSettings: WatercolorSettings = {
+    size: 40,
+    flow: 50,
+    wetness: 50,
+    color: '#3b82f6',
+    pressureControl: {
+        size: true,
+        flow: false,
+    },
+};
+
 const initialMagicWandSettings: MagicWandSettings = {
-    tolerance: 20,
+    tolerance: 30,
     contiguous: true,
 };
 
 const initialTextSettings: TextSettings = {
-  content: 'Texto de ejemplo',
-  fontFamily: 'Arial',
-  fontSize: 48,
-  color: '#000000',
-  textAlign: 'left',
-  fontWeight: 'normal',
+    content: 'Texto',
+    fontFamily: 'Arial',
+    fontSize: 48,
+    color: '#000000',
+    textAlign: 'left',
+    fontWeight: 'normal',
 };
 
+const FX_PRESETS_STORAGE_KEY = 'sketcher-fx-presets';
+
+// FIX: Export 'useToolSettings' to make it available for other modules.
 export function useToolSettings() {
     const [brushSettings, setBrushSettings] = useState<BrushSettings>(initialBrushSettings);
     const [eraserSettings, setEraserSettings] = useState<EraserSettings>(initialEraserSettings);
-    const [solidMarkerSettings, setSolidMarkerSettings] = useState<SolidMarkerSettings>(initialSolidMarkerSettings);
-    const [fxBrushSettings, setFxBrushSettings] = useState<any>({});
-    const [brushPresets, setBrushPresets] = useState<BrushPreset[]>([]);
+    const [simpleMarkerSettings, setSimpleMarkerSettings] = useState<SimpleMarkerSettings>(initialSimpleMarkerSettings);
+    const [naturalMarkerSettings, setNaturalMarkerSettings] = useState<NaturalMarkerSettings>(initialNaturalMarkerSettings);
+    const [airbrushSettings, setAirbrushSettings] = useState<AirbrushSettings>(initialAirbrushSettings);
+    const [fxBrushSettings, setFxBrushSettings] = useState<FXBrushSettings>(initialFxBrushSettings);
+    const [advancedMarkerSettings, setAdvancedMarkerSettings] = useState<AdvancedMarkerSettings>(initialAdvancedMarkerSettings);
+    const [watercolorSettings, setWatercolorSettings] = useState<WatercolorSettings>(initialWatercolorSettings);
     const [magicWandSettings, setMagicWandSettings] = useState<MagicWandSettings>(initialMagicWandSettings);
     const [textSettings, setTextSettings] = useState<TextSettings>(initialTextSettings);
 
+    const [brushPresets, setBrushPresets] = useState<BrushPreset[]>([]);
+
     useEffect(() => {
         try {
-            const savedPresets = localStorage.getItem('brushPresets');
-            if (savedPresets) {
-                setBrushPresets(JSON.parse(savedPresets));
+            const saved = localStorage.getItem(FX_PRESETS_STORAGE_KEY);
+            if (saved) {
+                setBrushPresets(JSON.parse(saved));
             }
         } catch (e) {
-            console.error("Failed to load brush presets from localStorage", e);
+            console.error("Failed to load FX presets from localStorage", e);
         }
     }, []);
 
-    const handleSavePreset = (name: string, settings: any): string => {
-        const newPreset: BrushPreset = { id: `preset-${Date.now()}`, name, settings };
-        const updatedPresets = [...brushPresets, newPreset];
-        setBrushPresets(updatedPresets);
-        localStorage.setItem('brushPresets', JSON.stringify(updatedPresets));
-        return newPreset.id;
-    };
-
-    const handleUpdatePreset = (id: string, updates: Partial<Omit<BrushPreset, 'id'>>) => {
-        const updatedPresets = brushPresets.map(p =>
-            p.id === id ? { ...p, ...updates } : p
-        );
-        setBrushPresets(updatedPresets);
-        localStorage.setItem('brushPresets', JSON.stringify(updatedPresets));
-    };
-
-    const handleLoadPreset = (id: string) => {
-        const preset = brushPresets.find(p => p.id === id);
-        if (preset) {
-            setFxBrushSettings(preset.settings);
+    const savePresetsToStorage = useCallback((presets: BrushPreset[]) => {
+        try {
+            localStorage.setItem(FX_PRESETS_STORAGE_KEY, JSON.stringify(presets));
+        } catch (e) {
+            console.error("Failed to save FX presets to localStorage", e);
         }
-    };
+    }, []);
 
-    const handleDeletePreset = (id: string) => {
-        const updatedPresets = brushPresets.filter(p => p.id !== id);
-        setBrushPresets(updatedPresets);
-        localStorage.setItem('brushPresets', JSON.stringify(updatedPresets));
-    };
-    
+    const onSavePreset = useCallback((name: string) => {
+        const newPreset: BrushPreset = { id: `fx-${Date.now()}`, name };
+        setBrushPresets(prev => {
+            const updated = [...prev, newPreset];
+            savePresetsToStorage(updated);
+            return updated;
+        });
+    }, [savePresetsToStorage]);
+
+    const onUpdatePreset = useCallback((id: string, updates: Partial<BrushPreset>) => {
+        setBrushPresets(prev => {
+            const updated = prev.map(p => p.id === id ? { ...p, ...updates } : p);
+            savePresetsToStorage(updated);
+            return updated;
+        });
+    }, [savePresetsToStorage]);
+
+    const onLoadPreset = useCallback((id: string) => {
+        setFxBrushSettings(s => ({ ...s, presetId: id }));
+    }, []);
+
+    const onDeletePreset = useCallback((id: string) => {
+        setBrushPresets(prev => {
+            const updated = prev.filter(p => p.id !== id);
+            savePresetsToStorage(updated);
+            return updated;
+        });
+    }, [savePresetsToStorage]);
+
+
     return {
         brushSettings, setBrushSettings,
         eraserSettings, setEraserSettings,
-        solidMarkerSettings, setSolidMarkerSettings,
+        simpleMarkerSettings, setSimpleMarkerSettings,
+        naturalMarkerSettings, setNaturalMarkerSettings,
+        airbrushSettings, setAirbrushSettings,
         fxBrushSettings, setFxBrushSettings,
+        advancedMarkerSettings, setAdvancedMarkerSettings,
+        watercolorSettings, setWatercolorSettings,
         magicWandSettings, setMagicWandSettings,
         textSettings, setTextSettings,
         brushPresets,
-        onSavePreset: handleSavePreset,
-        onUpdatePreset: handleUpdatePreset,
-        onLoadPreset: handleLoadPreset,
-        onDeletePreset: handleDeletePreset,
+        onSavePreset,
+        onUpdatePreset,
+        onLoadPreset,
+        onDeletePreset,
     };
 }

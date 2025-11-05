@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import type { QuickAccessSettings, WorkspaceTemplate, Tool } from '../types';
+import type { QuickAccessSettings, WorkspaceTemplate, Tool, QuickAccessTool } from '../types';
 
 const initialQuickAccessSettings: QuickAccessSettings = {
   colors: ['#ef4444', '#22c55e', '#3b82f6'],
@@ -46,7 +46,8 @@ export function useQuickAccess() {
     }
   }, []);
 
-  const updateTool = useCallback((index: number, newTool: { type: 'tool', tool: Tool } | { type: 'fx-preset', id: string, name: string } | null) => {
+  // FIX: Corrected type for newTool to match the QuickAccessTool union type.
+  const updateTool = useCallback((index: number, newTool: QuickAccessTool | null) => {
     setSettings(prev => {
       const newTools = [...prev.tools];
       newTools[index] = newTool;

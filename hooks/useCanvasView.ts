@@ -31,7 +31,9 @@ export function useCanvasView(
             setViewTransform(v => {
                 const newPanX = (viewWidth - canvasSize.width * v.zoom) / 2;
                 const newPanY = (viewHeight - canvasSize.height * v.zoom) / 2;
-                return {...v, pan: {x: newPanX, y: newPanY}};
+                // By explicitly constructing the object, we ensure `pan` is always
+                // present, fixing the race condition where `v` could be a partial state.
+                return {zoom: v.zoom, pan: {x: newPanX, y: newPanY}};
             });
           }
         };

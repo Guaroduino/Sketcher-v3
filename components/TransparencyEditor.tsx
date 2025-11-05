@@ -276,7 +276,8 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
     const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
         // FIX: The original check (e.button !== 0) prevented middle-click panning. 
         // This is updated to allow both left-click (0) and middle-click (1) to proceed.
-        if ((e.button !== 0 && e.button !== 1) || !currentHistoryState) return;
+        if (e.button !== 0 && e.button !== 1) return;
+        if (!currentHistoryState) return;
         e.currentTarget.setPointerCapture(e.pointerId);
         const point = getCanvasPoint(e.nativeEvent, viewTransform, previewCanvasRef.current!);
         dragState.current.lastPoint = point;

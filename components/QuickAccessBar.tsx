@@ -1,7 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react';
 import type { QuickAccessSettings, QuickAccessTool, Tool } from '../types';
 // FIX: Replaced MarkerIcon with SolidMarkerIcon and NaturalMarkerIcon
-import { SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, TransformIcon, FreeTransformIcon, SparklesIcon, CropIcon, PlusIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon, TextIcon } from './icons';
+// FIX: Added missing icons for new tool types.
+import { SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, NaturalMarkerIcon, AirbrushIcon, FXBrushIcon, TransformIcon, FreeTransformIcon, SparklesIcon, CropIcon, PlusIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon, TextIcon, AdvancedMarkerIcon, WatercolorIcon } from './icons';
 
 interface QuickAccessBarProps {
   settings: QuickAccessSettings;
@@ -19,13 +20,17 @@ interface QuickAccessBarProps {
   activeSize?: number;
 }
 
-// FIX: Replaced 'marker' with 'solid-marker' and 'natural-marker'
+// FIX: Replaced 'solid-marker' with 'simple-marker'
+// FIX: Added new tools to the icon map.
 const toolIconMap: Record<Tool, React.FC<{ className?: string }>> = {
     'select': SelectIcon,
     'brush': BrushIcon,
     'eraser': EraserIcon,
-    'solid-marker': SolidMarkerIcon,
-  // artistic tools removed: natural-marker, airbrush, fx-brush
+// FIX: Renamed 'solid-marker' to 'simple-marker' to match Tool type.
+    'simple-marker': SolidMarkerIcon,
+    'natural-marker': NaturalMarkerIcon,
+    'airbrush': AirbrushIcon,
+    'fx-brush': FXBrushIcon,
     'transform': TransformIcon,
     'free-transform': FreeTransformIcon,
     'enhance': SparklesIcon,
@@ -38,6 +43,9 @@ const toolIconMap: Record<Tool, React.FC<{ className?: string }>> = {
     'debug-brush': BrushIcon,
     // FIX: Add 'text' to the toolIconMap to satisfy the Tool type.
     'text': TextIcon,
+    'advanced-marker': AdvancedMarkerIcon,
+    // FIX: Added 'watercolor' to the tool icon map to satisfy the Record type.
+    'watercolor': WatercolorIcon,
 };
 
 const ColorEditorPopover = ({
@@ -204,16 +212,16 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
         const Icon = toolIconMap[tool.tool];
         return Icon ? <Icon className="w-5 h-5" /> : null;
     }
-  if (tool.type === 'fx-preset') {
-    // FX presets now use the general brush icon as a fallback
-    return <BrushIcon className="w-5 h-5" />;
-  }
+    if (tool.type === 'fx-preset') {
+        return <FXBrushIcon className="w-5 h-5" />;
+    }
     return null;
   };
   
   const getToolTitle = (tool: QuickAccessTool | null): string => {
       if (!tool) return "Seleccionar herramienta";
       if (tool.type === 'tool') return tool.tool;
+      // FIX: Check for type before accessing properties of a union member.
       if (tool.type === 'fx-preset') return `Preset: ${tool.name}`;
       return "";
   };
@@ -294,9 +302,10 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
         {/* Tool Shortcuts */}
         <div className="flex items-center gap-2">
           {settings.tools.map((tool, index) => {
+            // FIX: Correctly check active state for union type.
             const isActive = tool !== null && activeTool !== undefined && (
               (tool.type === 'tool' && tool.tool === activeTool) ||
-              (tool.type === 'fx-preset' && activeTool === 'brush')
+              (tool.type === 'fx-preset' && activeTool === 'fx-brush')
             );
             return (
               <button

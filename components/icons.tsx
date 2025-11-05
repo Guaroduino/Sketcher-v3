@@ -29,39 +29,6 @@ export const SolidMarkerIcon: React.FC<{ className?: string }> = ({ className })
   </svg>
 );
 
-export const NaturalMarkerIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 3l5 5L9 21H4v-5L17 3z" />
-      <path d="M15 5l5 5" />
-      <path d="M7 13l-2.5 2.5" />
-      <path d="M14 20h5" />
-      <circle cx="8" cy="15" r="0.5" fill="currentColor" stroke="none"/>
-      <circle cx="10" cy="12" r="0.5" fill="currentColor" stroke="none"/>
-      <circle cx="12" cy="9" r="0.5" fill="currentColor" stroke="none"/>
-    </svg>
-);
-
-
-export const AirbrushIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-        <path
-    d="M 15.00 25.00 L 90.00 25.00 L 90.00 35.00 L 15.00 35.00 Z  M 30.00 25.00 L 35.00 20.00 M 35.00 20.00 L 35.00 10.00 M 25.00 25.00 L 20.00 20.00 M 20.00 20.00 L 20.00 10.00 M 20.00 10.00 L 35.00 10.00 M 55.00 25.00 L 50.00 20.00 M 50.00 20.00 L 55.00 15.00 M 50.00 35.00 L 60.00 35.00 L 60.00 45.00 L 50.00 45.00 Z  M 45.00 45.00 L 65.00 45.00 L 65.00 60.00 L 45.00 60.00 Z  M 50.00 60.00 L 60.00 60.00 L 60.00 75.00 L 50.00 75.00 Z  M 55.00 75.00 L 55.00 90.00 M 15.00 35.00 L 5.00 30.00 M 15.00 25.00 L 5.00 30.00"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="4.1739"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  />
-    </svg>
-);
-
-export const FXBrushIcon: React.FC<{ className?: string }> = ({ className }) => (
-    // FIX: Replaced `class` with `className` and kebab-case attributes with camelCase.
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className={className}>
-  <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
-</svg>
-);
-
 export const TextIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M5 3h14" />
@@ -129,7 +96,7 @@ export const MagicWandIcon: React.FC<{ className?: string }> = ({ className }) =
         <path d="m9.88 2.88 1.42 1.42" />
         <path d="m14.12 2.88 1.42-1.42" />
         <path d="m12 6.88-1.42-1.42" />
-        <path d="m16 8 2 2" />
+        <path d="M16 8 2 2" />
         <path d="M12 22V10" />
         <path d="M7 10H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2" />
         <path d="m19 10 2 2" />
@@ -616,5 +583,60 @@ export const AddBelowIcon: React.FC<{ className?: string }> = ({ className }) =>
         <line x1="7" y1="6" x2="17" y2="6" />
         <line x1="12" y1="17" x2="12" y2="23"/>
         <polyline points="9 20 12 23 15 20"/>
+    </svg>
+);
+
+// FIX: Added missing icon components
+// FIX: Renamed NaturalMarkerIcon to AdvancedMarkerIcon to represent the new advanced marker tool.
+export const AdvancedMarkerIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20.7 7.3c-2-2.7-5.3-4.3-8.7-4.3-4.9 0-9 4-9 9 0 2.6.9 5 2.5 6.7" />
+        <path d="M12 21c-2.4 0-4.6-.9-6.3-2.5" />
+        <path d="m15.5 13.5-3.8 2.3" />
+        <path d="M18 10.2s-2.3 2.5-5.5 1.6" />
+        <path d="M13.2 5.3s3.1-1.1 5.4 1.1" />
+    </svg>
+);
+
+export const AirbrushIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 18h4"/>
+        <path d="M14 18h4"/>
+        <path d="M10 22h4"/>
+        <path d="M12 18v-4"/>
+        <path d="M12 14c-4.42 0-8-2.69-8-6s3.58-6 8-6 8 2.69 8 6"/>
+        <path d="M12 2a4 4 0 0 0-4 4"/>
+    </svg>
+);
+
+export const FXBrushIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m16.86 3.46 1.41-1.41a2 2 0 1 1 2.83 2.83l-1.41 1.41"/>
+        <path d="m3.46 16.86 1.41-1.41a2 2 0 1 1 2.83 2.83l-1.41 1.41"/>
+        <path d="M3 21v-3h3"/>
+        <path d="M21 3v3h-3"/>
+        <path d="M12 3v3"/>
+        <path d="M12 21v-3"/>
+        <path d="M3 12h3"/>
+        <path d="M21 12h-3"/>
+        <path d="m16.86 15.46.7-.7a2 2 0 1 0-2.83-2.83l-.7.7"/>
+        <path d="m8.54 7.14-.7.7a2 2 0 1 0 2.83 2.83l.7-.7"/>
+    </svg>
+);
+
+export const NaturalMarkerIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m16.86 3.46 1.41-1.41a2 2 0 1 1 2.83 2.83l-1.41 1.41m-12.02 12.02 1.41-1.41a2 2 0 1 1 2.83 2.83l-1.41 1.41"/>
+        <path d="m6.34 17.66 11.32-11.32"/>
+    </svg>
+);
+
+export const WatercolorIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m20.55 3.45-1.5 1.5" />
+      <path d="m16 6 3.19 3.19" />
+      <path d="M14.28 15.16 5.72 6.6a2.07 2.07 0 0 0-2.93 0L2.2 7.19a2.07 2.07 0 0 0 0 2.93l8.56 8.56" />
+      <path d="M18 11.45c0 3.22-2.1 5.5-5.34 5.5-1.7 0-3.32-.83-4.48-2.22" />
+      <path d="M18.01 19.38c.6-.57.99-1.37.99-2.25 0-1.77-1.43-3.2-3.2-3.2-1.29 0-2.4.76-2.93 1.84" />
     </svg>
 );

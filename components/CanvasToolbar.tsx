@@ -48,6 +48,8 @@ interface CanvasToolbarProps {
   scaleUnit: ScaleUnit;
   onPaste: () => void;
   hasClipboardContent: boolean;
+  strokeSmoothing: number;
+  setStrokeSmoothing: (value: number) => void;
 }
 
 export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
@@ -96,6 +98,8 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
   scaleUnit,
   onPaste,
   hasClipboardContent,
+  strokeSmoothing,
+  setStrokeSmoothing,
 }) => {
   const [customAngle, setCustomAngle] = useState('');
   const [gridSpacing, setGridSpacing] = useState('50');
@@ -248,6 +252,21 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
           <button onClick={onPaste} disabled={!hasClipboardContent} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Pegar">
             <PasteIcon className="w-5 h-5" />
           </button>
+
+          <div className="w-px h-6 bg-[--bg-hover] mx-1" />
+
+          {/* Stroke Smoothing Slider */}
+          <div className="flex items-center gap-2 group" title={`Suavizado: ${Math.round(strokeSmoothing * 100)}%`}>
+            <input
+                type="range"
+                min="0"
+                max="0.95"
+                step="0.05"
+                value={strokeSmoothing}
+                onChange={(e) => setStrokeSmoothing(parseFloat(e.target.value))}
+                className="w-24"
+            />
+          </div>
           
           <div className="w-px h-6 bg-[--bg-hover] mx-1" />
 

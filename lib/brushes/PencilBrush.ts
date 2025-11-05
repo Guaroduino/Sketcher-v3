@@ -1,59 +1,40 @@
-import { BaseBrush, BrushContext } from '../lib/brushes/BaseBrush';
-import type { AdvancedMarkerSettings, Point, StrokeStyle } from '../types';
+import { BaseBrush, BrushContext } from './BaseBrush';
+import type { BrushSettings, Point, StrokeStyle } from '../../types';
 
-export class AdvancedMarkerBrush extends BaseBrush {
-    private settings: AdvancedMarkerSettings;
+export class PencilBrush extends BaseBrush {
+    private settings: BrushSettings;
 
-    constructor(settings: AdvancedMarkerSettings) {
+    constructor(settings: BrushSettings) {
         super();
         this.settings = settings;
     }
 
-    updateSettings(settings: AdvancedMarkerSettings) {
+    updateSettings(settings: BrushSettings) {
         this.settings = settings;
     }
     
     protected drawStroke(ctx: CanvasRenderingContext2D, points: Point[], context: BrushContext): void {
-        const { color, size, hardness, flow, blendMode, pressureControl, spacing } = this.settings;
+        const { color, lineCap, lineJoin, opacity, size, pressureControl } = this.settings;
         const { strokeModifier } = context;
-
-        ctx.globalCompositeOperation = blendMode;
-
+        ctx.lineCap = lineCap;
+        ctx.lineJoin = lineJoin;
+        ctx.globalAlpha = opacity;
+        ctx.globalCompositeOperation = 'source-over';
+        
         if (points.length < 1) return;
+        
+        ctx.fillStyle = color;
 
-        const getRgba = (colorStr: string): [number, number, number] => {
-            const tempCtx = document.createElement('canvas').getContext('2d');
-            if (tempCtx) {
-                tempCtx.fillStyle = colorStr;
-                tempCtx.fillRect(0, 0, 1, 1);
-                const data = tempCtx.getImageData(0, 0, 1, 1).data;
-                return [data[0], data[1], data[2]];
-            }
-            return [0, 0, 0];
-        };
-        const [r, g, b] = getRgba(color);
-
-
+        // Draws a single "dab" of the brush
         const drawDab = (p: Point, pressure: number) => {
-            const currentSize = pressureControl.size ? pressure * size : size;
-            if (currentSize < 0.5) return;
-            
-            const currentFlow = pressureControl.flow ? pressure * (flow / 100) : (flow / 100);
-            
-            ctx.beginPath();
-            if (hardness >= 100) {
-                ctx.arc(p.x, p.y, currentSize / 2, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(${r},${g},${b},${currentFlow})`;
-            } else {
-                const gradient = ctx.createRadialGradient(p.x, p.y, (currentSize / 2) * (hardness / 100), p.x, p.y, currentSize / 2);
-                gradient.addColorStop(0, `rgba(${r},${g},${b},${currentFlow})`);
-                gradient.addColorStop(1, `rgba(${r},${g},${b},0)`);
-                ctx.fillStyle = gradient;
-                ctx.arc(p.x, p.y, currentSize / 2, 0, Math.PI * 2);
+            const width = (pressure && pressureControl.size) ? pressure * size : size;
+            if (width > 0.5) { // Avoid drawing invisible dabs
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, width / 2, 0, Math.PI * 2);
+                ctx.fill();
             }
-            ctx.fill();
         };
-
+        
         const getDashPattern = (style: StrokeStyle, scale: number) => {
             switch (style) {
                 case 'dashed': return [10 * scale, 5 * scale];
@@ -63,7 +44,7 @@ export class AdvancedMarkerBrush extends BaseBrush {
             }
         }
         const pattern = getDashPattern(strokeModifier.style, strokeModifier.scale);
-
+        
         if (points.length === 1) {
             if (!pattern) drawDab(points[0], points[0].pressure ?? 1.0);
             return;
@@ -74,6 +55,8 @@ export class AdvancedMarkerBrush extends BaseBrush {
         let patternIndex = 0;
         let isDrawingDash = true;
 
+
+        // To create a continuous line, we connect the points with interpolated dabs
         for (let i = 1; i < points.length; i++) {
             const currentPoint = points[i];
             const dist = Math.hypot(currentPoint.x - lastPoint.x, currentPoint.y - lastPoint.y);
@@ -82,13 +65,15 @@ export class AdvancedMarkerBrush extends BaseBrush {
             const lastPressure = lastPoint.pressure ?? 1.0;
             const currentPressure = currentPoint.pressure ?? 1.0;
             
-            const dabSpacing = Math.max(1, (size * (spacing / 100)));
+            // Determine the spacing based on the brush size to avoid gaps
+            const minWidth = size * Math.min(lastPressure, currentPressure) * 0.5;
+            const spacing = Math.max(0.25, minWidth * 0.2);
 
-            for (let d = 0; d < dist; d += dabSpacing) {
+            for (let d = 0; d < dist; d += spacing) {
                 const shouldDraw = !pattern || isDrawingDash;
-
+                
                 if (pattern) {
-                    patternPos += dabSpacing;
+                    patternPos += spacing;
                     if (patternPos >= pattern[patternIndex]) {
                         patternPos -= pattern[patternIndex];
                         patternIndex = (patternIndex + 1) % pattern.length;
@@ -100,6 +85,7 @@ export class AdvancedMarkerBrush extends BaseBrush {
                     const t = dist > 0 ? d / dist : 0;
                     const x = lastPoint.x + Math.cos(angle) * d;
                     const y = lastPoint.y + Math.sin(angle) * d;
+                    // Interpolate pressure between points
                     const interpolatedPressure = lastPressure + (currentPressure - lastPressure) * t;
                     drawDab({ x, y }, interpolatedPressure);
                 }

@@ -1,23 +1,34 @@
-import { BaseBrush, BrushContext } from '../lib/brushes/BaseBrush';
-import type { AdvancedMarkerSettings, Point, StrokeStyle } from '../types';
+import { BaseBrush, BrushContext } from './BaseBrush';
+import type { WatercolorSettings, Point, StrokeStyle } from '../../types';
 
-export class AdvancedMarkerBrush extends BaseBrush {
-    private settings: AdvancedMarkerSettings;
+// Mulberry32, a simple pseudo-random number generator.
+function mulberry32(a: number) {
+    return function() {
+      var t = a += 0x6D2B79F5;
+      t = Math.imul(t ^ t >>> 15, t | 1);
+      t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    }
+}
 
-    constructor(settings: AdvancedMarkerSettings) {
+export class WatercolorBrush extends BaseBrush {
+    private settings: WatercolorSettings;
+
+    constructor(settings: WatercolorSettings) {
         super();
         this.settings = settings;
     }
 
-    updateSettings(settings: AdvancedMarkerSettings) {
+    updateSettings(settings: WatercolorSettings) {
         this.settings = settings;
     }
     
     protected drawStroke(ctx: CanvasRenderingContext2D, points: Point[], context: BrushContext): void {
-        const { color, size, hardness, flow, blendMode, pressureControl, spacing } = this.settings;
+        const random = mulberry32(this.strokeSeed);
+        const { color, size, flow, wetness, pressureControl } = this.settings;
         const { strokeModifier } = context;
 
-        ctx.globalCompositeOperation = blendMode;
+        ctx.globalCompositeOperation = 'source-over';
 
         if (points.length < 1) return;
 
@@ -33,25 +44,31 @@ export class AdvancedMarkerBrush extends BaseBrush {
         };
         const [r, g, b] = getRgba(color);
 
-
         const drawDab = (p: Point, pressure: number) => {
             const currentSize = pressureControl.size ? pressure * size : size;
-            if (currentSize < 0.5) return;
+            if (currentSize < 1) return;
             
             const currentFlow = pressureControl.flow ? pressure * (flow / 100) : (flow / 100);
             
-            ctx.beginPath();
-            if (hardness >= 100) {
-                ctx.arc(p.x, p.y, currentSize / 2, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(${r},${g},${b},${currentFlow})`;
-            } else {
-                const gradient = ctx.createRadialGradient(p.x, p.y, (currentSize / 2) * (hardness / 100), p.x, p.y, currentSize / 2);
-                gradient.addColorStop(0, `rgba(${r},${g},${b},${currentFlow})`);
+            const dabCount = Math.max(1, Math.floor(currentFlow * 5));
+
+            for(let i = 0; i < dabCount; i++) {
+                const jitterX = (random() - 0.5) * currentSize * 0.4;
+                const jitterY = (random() - 0.5) * currentSize * 0.4;
+                const dabX = p.x + jitterX;
+                const dabY = p.y + jitterY;
+                const dabSize = currentSize * (0.8 + random() * 0.4);
+                const dabOpacity = (wetness / 100) * (0.5 + random() * 0.5);
+
+                const gradient = ctx.createRadialGradient(dabX, dabY, 0, dabX, dabY, dabSize / 2);
+                gradient.addColorStop(0, `rgba(${r},${g},${b},${dabOpacity})`);
                 gradient.addColorStop(1, `rgba(${r},${g},${b},0)`);
+                
                 ctx.fillStyle = gradient;
-                ctx.arc(p.x, p.y, currentSize / 2, 0, Math.PI * 2);
+                ctx.beginPath();
+                ctx.arc(dabX, dabY, dabSize / 2, 0, Math.PI * 2);
+                ctx.fill();
             }
-            ctx.fill();
         };
 
         const getDashPattern = (style: StrokeStyle, scale: number) => {
@@ -82,7 +99,7 @@ export class AdvancedMarkerBrush extends BaseBrush {
             const lastPressure = lastPoint.pressure ?? 1.0;
             const currentPressure = currentPoint.pressure ?? 1.0;
             
-            const dabSpacing = Math.max(1, (size * (spacing / 100)));
+            const dabSpacing = Math.max(1, (size * 0.2));
 
             for (let d = 0; d < dist; d += dabSpacing) {
                 const shouldDraw = !pattern || isDrawingDash;

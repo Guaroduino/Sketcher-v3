@@ -302,8 +302,8 @@ function useProjectManager(
             dispatch({ type: 'LOAD_PROJECT_STATE', payload: { newState } });
 
             if (projectFile.toolSettings) {
-                const { brushSettings, eraserSettings, solidMarkerSettings, naturalMarkerSettings, airbrushSettings, fxBrushSettings, magicWandSettings, textSettings } = projectFile.toolSettings;
-                loadToolSettings({ brushSettings, eraserSettings, solidMarkerSettings, naturalMarkerSettings, airbrushSettings, fxBrushSettings, magicWandSettings, textSettings });
+                const { brushSettings, eraserSettings, solidMarkerSettings, simpleMarkerSettings, naturalMarkerSettings, airbrushSettings, fxBrushSettings, magicWandSettings, textSettings, advancedMarkerSettings } = projectFile.toolSettings;
+                loadToolSettings({ brushSettings, eraserSettings, solidMarkerSettings, simpleMarkerSettings, naturalMarkerSettings, airbrushSettings, fxBrushSettings, magicWandSettings, textSettings, advancedMarkerSettings });
             }
             if (projectFile.guides) loadGuidesState(projectFile.guides);
             if (projectFile.quickAccessSettings) loadQuickAccessState(projectFile.quickAccessSettings);
@@ -685,6 +685,8 @@ export function App() {
 
   const [textEditState, setTextEditState] = useState<{ position: Point; value: string; activeItemId: string; } | null>(null);
 
+  const [strokeSmoothing, setStrokeSmoothing] = useState(0.5);
+
   const ui = useAppUI();
 
   // Custom Hooks
@@ -707,12 +709,14 @@ export function App() {
   const loadAllToolSettings = useCallback((settings: any) => {
     toolSettings.setBrushSettings(settings.brushSettings);
     toolSettings.setEraserSettings(settings.eraserSettings);
-    toolSettings.setSolidMarkerSettings(settings.solidMarkerSettings);
+// FIX: Use setSimpleMarkerSettings and check for both old 'solidMarkerSettings' and new 'simpleMarkerSettings' for backward compatibility.
+    toolSettings.setSimpleMarkerSettings(settings.solidMarkerSettings || settings.simpleMarkerSettings);
     toolSettings.setNaturalMarkerSettings(settings.naturalMarkerSettings);
     toolSettings.setAirbrushSettings(settings.airbrushSettings);
     toolSettings.setFxBrushSettings(settings.fxBrushSettings);
     if (settings.magicWandSettings) toolSettings.setMagicWandSettings(settings.magicWandSettings);
     if (settings.textSettings) toolSettings.setTextSettings(settings.textSettings);
+    if (settings.advancedMarkerSettings) toolSettings.setAdvancedMarkerSettings(settings.advancedMarkerSettings);
   }, [toolSettings]);
 
   const projects = useProjectManager(user, dispatch, ui.setProjectGalleryOpen, canvasView.onZoomExtents, loadAllToolSettings, guides.loadGuideState, quickAccess.loadState);
@@ -747,7 +751,8 @@ export function App() {
     let color: string | undefined, size: number | undefined;
     switch (tool) {
       case 'brush': color = toolSettings.brushSettings.color; size = toolSettings.brushSettings.size; break;
-      case 'solid-marker': color = toolSettings.solidMarkerSettings.color; size = toolSettings.solidMarkerSettings.size; break;
+// FIX: Renamed 'solid-marker' to 'simple-marker' and using simpleMarkerSettings.
+      case 'simple-marker': color = toolSettings.simpleMarkerSettings.color; size = toolSettings.simpleMarkerSettings.size; break;
       case 'natural-marker': color = toolSettings.naturalMarkerSettings.color; size = toolSettings.naturalMarkerSettings.size; break;
       case 'airbrush': color = toolSettings.airbrushSettings.color; size = toolSettings.airbrushSettings.size; break;
       case 'fx-brush': color = toolSettings.fxBrushSettings.color; size = toolSettings.fxBrushSettings.size; break;
@@ -759,7 +764,8 @@ export function App() {
   const handleSelectColor = useCallback((color: string) => {
     switch (tool) {
       case 'brush': toolSettings.setBrushSettings(s => ({ ...s, color })); break;
-      case 'solid-marker': toolSettings.setSolidMarkerSettings(s => ({ ...s, color })); break;
+// FIX: Renamed 'solid-marker' to 'simple-marker' and using setSimpleMarkerSettings.
+      case 'simple-marker': toolSettings.setSimpleMarkerSettings(s => ({ ...s, color })); break;
       case 'natural-marker': toolSettings.setNaturalMarkerSettings(s => ({ ...s, color })); break;
       case 'airbrush': toolSettings.setAirbrushSettings(s => ({ ...s, color })); break;
       case 'fx-brush': toolSettings.setFxBrushSettings(s => ({ ...s, color })); break;
@@ -770,7 +776,8 @@ export function App() {
     switch (tool) {
       case 'brush': toolSettings.setBrushSettings(s => ({ ...s, size })); break;
       case 'eraser': toolSettings.setEraserSettings(s => ({ ...s, size })); break;
-      case 'solid-marker': toolSettings.setSolidMarkerSettings(s => ({ ...s, size })); break;
+// FIX: Renamed 'solid-marker' to 'simple-marker' and using setSimpleMarkerSettings.
+      case 'simple-marker': toolSettings.setSimpleMarkerSettings(s => ({ ...s, size })); break;
       case 'natural-marker': toolSettings.setNaturalMarkerSettings(s => ({ ...s, size })); break;
       case 'airbrush': toolSettings.setAirbrushSettings(s => ({ ...s, size })); break;
       case 'fx-brush': toolSettings.setFxBrushSettings(s => ({ ...s, size })); break;
@@ -1029,26 +1036,67 @@ export function App() {
         if (!activeItemId) return { canMoveUp: false, canMoveDown: false, canMergeDown: false, canMergeUp: false };
         const currentIndex = visualList.findIndex(item => item.id === activeItemId);
         if (currentIndex === -1) return { canMoveUp: false, canMoveDown: false, canMergeDown: false, canMergeUp: false };
-        const canMoveUp = currentIndex > 0;
-        const canMoveDown = currentIndex < visualList.length - 1;
-        let canMergeDown = false, canMergeUp = false;
-        if (canMoveDown) { const currentItem = visualList[currentIndex]; const itemBelow = visualList[currentIndex + 1]; if (currentItem.type === 'object' && itemBelow.type === 'object' && currentItem.parentId === itemBelow.parentId) canMergeDown = true; }
-        if (canMoveUp) { const currentItem = visualList[currentIndex]; const itemAbove = visualList[currentIndex - 1]; if (currentItem.type === 'object' && itemAbove.type === 'object' && currentItem.parentId === itemAbove.parentId) canMergeUp = true; }
+
+        const canMoveUp = currentIndex < visualList.length - 1;
+        const canMoveDown = currentIndex > 0;
+
+        let canMergeUp = false;
+        let canMergeDown = false;
+        
+        const currentItem = visualList[currentIndex];
+
+        // Merge Up (with visually-above item). Icon is arrow pointing up.
+        if (canMoveUp) { 
+            const itemAbove = visualList[currentIndex + 1];
+            if (currentItem.type === 'object' && itemAbove.type === 'object' && currentItem.parentId === itemAbove.parentId) {
+                canMergeUp = true;
+            }
+        }
+        
+        // Merge Down (with visually-below item). Icon is arrow pointing down.
+        if (canMoveDown) {
+            const itemBelow = visualList[currentIndex - 1];
+            if (currentItem.type === 'object' && itemBelow.type === 'object' && currentItem.parentId === itemBelow.parentId) {
+                canMergeDown = true;
+            }
+        }
+
         return { canMoveUp, canMoveDown, canMergeDown, canMergeUp };
     }, [activeItemId, visualList]);
 
     const handleMoveItemUpDown = useCallback((id: string, direction: 'up' | 'down') => {
         const currentIndex = visualList.findIndex(item => item.id === id);
         if (currentIndex === -1) return;
-        const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+
+        // 'up' in UI means moving towards the top of the list, which corresponds to a higher index in the data array.
+        const targetIndex = direction === 'up' ? currentIndex + 1 : currentIndex - 1;
+        
         if (targetIndex < 0 || targetIndex >= visualList.length) return;
         const targetItem = visualList[targetIndex];
-        const position = direction === 'up' ? 'top' : 'bottom';
+        
+        // To move item UP in data array (and UI), place it AFTER its new upper neighbor.
+        // To move item DOWN in data array (and UI), place it BEFORE its new lower neighbor.
+        const position = direction === 'up' ? 'bottom' : 'top';
+        
         handleMoveItem(id, targetItem.id, position);
     }, [visualList, handleMoveItem]);
 
-    const handleMergeItemDown = useCallback((id: string) => { if (activeItemState.canMergeDown) { const currentIndex = visualList.findIndex(item => item.id === id); handleMergeItems(id, visualList[currentIndex + 1].id); } }, [activeItemState.canMergeDown, visualList, handleMergeItems]);
-    const handleMergeItemUp = useCallback((id: string) => { if (activeItemState.canMergeUp) { const currentIndex = visualList.findIndex(item => item.id === id); handleMergeItems(visualList[currentIndex - 1].id, id); } }, [activeItemState.canMergeUp, visualList, handleMergeItems]);
+    const handleMergeItemDown = useCallback((id: string) => { 
+        if (activeItemState.canMergeDown) { 
+            const currentIndex = visualList.findIndex(item => item.id === id);
+            // Merging down means merging the current item (top) into the one below it (bottom).
+            handleMergeItems(id, visualList[currentIndex - 1].id); 
+        } 
+    }, [activeItemState.canMergeDown, visualList, handleMergeItems]);
+
+    const handleMergeItemUp = useCallback((id: string) => { 
+        if (activeItemState.canMergeUp) { 
+            const currentIndex = visualList.findIndex(item => item.id === id);
+            // Merging up means merging the item above (top) into the current one (bottom).
+            handleMergeItems(visualList[currentIndex + 1].id, id);
+        } 
+    }, [activeItemState.canMergeUp, visualList, handleMergeItems]);
+
     const handleAddObjectAbove = useCallback((id: string) => { const newItemId = `object-${Date.now()}`; dispatch({ type: 'ADD_ITEM', payload: { type: 'object', activeItemId: id, canvasSize, newItemId } }); setSelectedItemIds([newItemId]); }, [canvasSize, dispatch]);
     const handleAddObjectBelow = useCallback((id: string) => { const newItemId = `object-${Date.now()}`; dispatch({ type: 'ADD_ITEM_BELOW', payload: { targetId: id, canvasSize, newItemId } }); setSelectedItemIds([newItemId]); }, [canvasSize, dispatch]);
 
@@ -1156,6 +1204,7 @@ export function App() {
                 onDeleteSelection={handleDeleteSelection} onDeselect={handleDeselect} getMinZoom={getMinZoom} MAX_ZOOM={MAX_ZOOM}
                 isAngleSnapEnabled={isAngleSnapEnabled} angleSnapValue={angleSnapValue} onAddItem={addItem}
                 textEditState={textEditState} setTextEditState={setTextEditState} onCommitText={handleCommitText}
+                strokeSmoothing={strokeSmoothing}
               />
               <div className="absolute top-2 left-2 flex items-center gap-2 z-10">
                 {dimensionDisplay && <button ref={scaleButtonRef} onClick={() => setIsScalePopoverOpen(p => !p)} className="bg-[--bg-primary]/80 backdrop-blur-sm text-[--text-secondary] text-xs rounded-md px-2 py-1 pointer-events-auto hover:bg-[--bg-secondary] transition-colors" title="Ajustar escala del lienzo">{dimensionDisplay}</button> }
@@ -1180,6 +1229,7 @@ export function App() {
                 onSetAreGuidesLocked={guides.setAreGuidesLocked} isPerspectiveStrokeLockEnabled={guides.isPerspectiveStrokeLockEnabled}
                 onSetIsPerspectiveStrokeLockEnabled={guides.setIsPerspectiveStrokeLockEnabled} scaleFactor={currentState.scaleFactor}
                 scaleUnit={currentState.scaleUnit} onPaste={handlePaste} hasClipboardContent={!!clipboard}
+                strokeSmoothing={strokeSmoothing} setStrokeSmoothing={setStrokeSmoothing}
               />
                <QuickAccessBar 
                   settings={quickAccess.quickAccessSettings} onUpdateColor={quickAccess.updateColor} onAddColor={quickAccess.addColor}

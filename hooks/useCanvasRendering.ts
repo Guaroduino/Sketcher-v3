@@ -13,6 +13,7 @@ import type {
     PerspectiveGuideLine,
     TransformState,
     GridGuide,
+    Tool,
 } from '../types';
 import { getLineIntersection } from '../utils/canvasUtils';
 
@@ -62,6 +63,89 @@ export function useCanvasRendering({
 
     const perspectiveVPs = useRef<PerspectiveVPs>({ vpGreen: null, vpRed: null, vpBlue: null });
 
+    const drawGridOnContext = useCallback((ctx: CanvasRenderingContext2D) => {
+        if (gridGuide.type === 'none' || gridGuide.spacing <= 0) {
+            return;
+        }
+        
+        const worldView = {
+            x: -viewTransform.pan.x / viewTransform.zoom,
+            y: -viewTransform.pan.y / viewTransform.zoom,
+            width: ctx.canvas.width / viewTransform.zoom,
+            height: ctx.canvas.height / viewTransform.zoom
+        };
+
+        const { spacing, majorLineFrequency, type, isoAngle, majorLineColor: majorLineColorFromProp, minorLineColor: minorLineColorFromProp } = gridGuide;
+
+        ctx.lineWidth = 0.5 / viewTransform.zoom;
+        const minorLineColor = minorLineColorFromProp;
+        const majorLineColor = majorLineColorFromProp;
+
+        if (type === 'cartesian') {
+            const startX = Math.floor(worldView.x / spacing) * spacing;
+            const endX = worldView.x + worldView.width;
+            const startY = Math.floor(worldView.y / spacing) * spacing;
+            const endY = worldView.y + worldView.height;
+            
+            let i_x = Math.round(startX / spacing);
+            for (let x = startX; x <= endX; x += spacing) {
+                ctx.strokeStyle = (i_x % majorLineFrequency === 0) ? majorLineColor : minorLineColor;
+                ctx.beginPath();
+                ctx.moveTo(x, worldView.y);
+                ctx.lineTo(x, endY);
+                ctx.stroke();
+                i_x++;
+            }
+
+            let i_y = Math.round(startY / spacing);
+            for (let y = startY; y <= endY; y += spacing) {
+                ctx.strokeStyle = (i_y % majorLineFrequency === 0) ? majorLineColor : minorLineColor;
+                ctx.beginPath();
+                ctx.moveTo(worldView.x, y);
+                ctx.lineTo(endX, y);
+                ctx.stroke();
+                i_y++;
+            }
+        } else if (type === 'isometric') {
+            const canvasDiagonal = Math.hypot(worldView.width, worldView.height) * 1.2;
+            const center = { x: worldView.x + worldView.width / 2, y: worldView.y + worldView.height / 2 };
+            
+            const angles = [
+                90 * (Math.PI / 180), // Vertical
+                (90 - isoAngle) * (Math.PI / 180),
+                (90 + isoAngle) * (Math.PI / 180),
+            ];
+
+            angles.forEach(angle => {
+                const cos = Math.cos(angle);
+                const sin = Math.sin(angle);
+                const perpCos = Math.cos(angle + Math.PI / 2);
+                const perpSin = Math.sin(angle + Math.PI / 2);
+
+                const centerProj = center.x * perpCos + center.y * perpSin;
+                const startI = Math.floor((centerProj - canvasDiagonal / 2) / spacing);
+                const endI = Math.ceil((centerProj + canvasDiagonal / 2) / spacing);
+
+                for (let i = startI; i <= endI; i++) {
+                    const offset = i * spacing;
+                    const lineCenter = {
+                        x: offset * perpCos,
+                        y: offset * perpSin
+                    };
+
+                    const start = { x: lineCenter.x - canvasDiagonal * cos, y: lineCenter.y - canvasDiagonal * sin };
+                    const end = { x: lineCenter.x + canvasDiagonal * cos, y: lineCenter.y + canvasDiagonal * sin };
+                    
+                    ctx.strokeStyle = (i % majorLineFrequency === 0) ? majorLineColor : minorLineColor;
+                    ctx.beginPath();
+                    ctx.moveTo(start.x, start.y);
+                    ctx.lineTo(end.x, end.y);
+                    ctx.stroke();
+                }
+            });
+        }
+    }, [gridGuide, viewTransform]);
+
     const redrawMainCanvas = useCallback(() => {
         const mainCtx = mainCanvasRef.current?.getContext('2d');
         if (!mainCtx) return;
@@ -73,31 +157,35 @@ export function useCanvasRendering({
         
         mainCtx.save();
         mainCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
-
-        const itemMap = new Map<string, CanvasItem>(items.map(i => [i.id, i]));
-        const isEffectivelyVisible = (item: CanvasItem): boolean => {
-            if (!item.isVisible) return false;
-            if (item.parentId) {
-                const parent = itemMap.get(item.parentId);
-                if (parent) return isEffectivelyVisible(parent);
-            }
-            return true;
-        };
         
-        const drawableItems = items.filter(isEffectivelyVisible);
+        const backgroundObject = items.find(item => item.type === 'object' && item.isBackground);
+        const foregroundObjects = items.filter(item => item.type === 'object' && !item.isBackground);
 
-        // Draw items in order
-        drawableItems.forEach(item => {
-            if ((isTransforming && item.id === activeItemId) || item.id === livePreviewLayerId) {
-                // Hide object being transformed or live-previewed from main canvas
-            } else if (item.type === 'object' && item.canvas) {
+        // 1. Draw background
+        if (backgroundObject && backgroundObject.canvas && backgroundObject.isVisible) {
+            mainCtx.globalAlpha = backgroundObject.opacity;
+            mainCtx.drawImage(backgroundObject.canvas, backgroundObject.offsetX || 0, backgroundObject.offsetY || 0);
+        }
+
+        // 2. Draw Grid on top of background
+        drawGridOnContext(mainCtx);
+
+        // 3. Draw foreground items
+        foregroundObjects.forEach(item => {
+            if (!item.isVisible) return;
+            
+            const isBeingErased = item.id === livePreviewLayerId;
+
+            if ((isTransforming && item.id === activeItemId) || isBeingErased) {
+                // This item is being transformed or erased. Skip it here.
+            } else if (item.canvas) {
                 mainCtx.globalAlpha = item.opacity;
                 mainCtx.drawImage(item.canvas, item.offsetX || 0, item.offsetY || 0);
             }
         });
         
         mainCtx.restore();
-    }, [items, viewTransform, activeItemId, isTransforming, livePreviewLayerId]);
+    }, [items, viewTransform, activeItemId, isTransforming, livePreviewLayerId, drawGridOnContext]);
 
     const redrawGuides = useCallback(() => {
         const guideCtx = guideCanvasRef.current?.getContext('2d');
@@ -120,80 +208,6 @@ export function useCanvasRendering({
             width: guideCtx.canvas.width / viewTransform.zoom,
             height: guideCtx.canvas.height / viewTransform.zoom
         };
-
-        // --- Grid Drawing Logic ---
-        if (gridGuide.type !== 'none' && gridGuide.spacing > 0) {
-            const { spacing, majorLineFrequency, type, isoAngle, majorLineColor: majorLineColorFromProp, minorLineColor: minorLineColorFromProp } = gridGuide;
-
-            guideCtx.lineWidth = 0.5 / viewTransform.zoom;
-            const minorLineColor = minorLineColorFromProp;
-            const majorLineColor = majorLineColorFromProp;
-
-            if (type === 'cartesian') {
-                const startX = Math.floor(worldView.x / spacing) * spacing;
-                const endX = worldView.x + worldView.width;
-                const startY = Math.floor(worldView.y / spacing) * spacing;
-                const endY = worldView.y + worldView.height;
-                
-                let i_x = Math.round(startX / spacing);
-                for (let x = startX; x <= endX; x += spacing) {
-                    guideCtx.strokeStyle = (i_x % majorLineFrequency === 0) ? majorLineColor : minorLineColor;
-                    guideCtx.beginPath();
-                    guideCtx.moveTo(x, worldView.y);
-                    guideCtx.lineTo(x, endY);
-                    guideCtx.stroke();
-                    i_x++;
-                }
-
-                let i_y = Math.round(startY / spacing);
-                for (let y = startY; y <= endY; y += spacing) {
-                    guideCtx.strokeStyle = (i_y % majorLineFrequency === 0) ? majorLineColor : minorLineColor;
-                    guideCtx.beginPath();
-                    guideCtx.moveTo(worldView.x, y);
-                    guideCtx.lineTo(endX, y);
-                    guideCtx.stroke();
-                    i_y++;
-                }
-            } else if (type === 'isometric') {
-                const canvasDiagonal = Math.hypot(worldView.width, worldView.height) * 1.2;
-                const center = { x: worldView.x + worldView.width / 2, y: worldView.y + worldView.height / 2 };
-                const lineCount = Math.ceil(canvasDiagonal / spacing);
-                
-                const angles = [
-                    90 * (Math.PI / 180), // Vertical
-                    (90 - isoAngle) * (Math.PI / 180),
-                    (90 + isoAngle) * (Math.PI / 180),
-                ];
-
-                angles.forEach(angle => {
-                    const cos = Math.cos(angle);
-                    const sin = Math.sin(angle);
-                    const perpCos = Math.cos(angle + Math.PI / 2);
-                    const perpSin = Math.sin(angle + Math.PI / 2);
-
-                    const centerProj = center.x * perpCos + center.y * perpSin;
-                    const startI = Math.floor((centerProj - canvasDiagonal / 2) / spacing);
-                    const endI = Math.ceil((centerProj + canvasDiagonal / 2) / spacing);
-
-                    for (let i = startI; i <= endI; i++) {
-                        const offset = i * spacing;
-                        const lineCenter = {
-                            x: offset * perpCos,
-                            y: offset * perpSin
-                        };
-
-                        const start = { x: lineCenter.x - canvasDiagonal * cos, y: lineCenter.y - canvasDiagonal * sin };
-                        const end = { x: lineCenter.x + canvasDiagonal * cos, y: lineCenter.y + canvasDiagonal * sin };
-                        
-                        guideCtx.strokeStyle = (i % majorLineFrequency === 0) ? majorLineColor : minorLineColor;
-                        guideCtx.beginPath();
-                        guideCtx.moveTo(start.x, start.y);
-                        guideCtx.lineTo(end.x, end.y);
-                        guideCtx.stroke();
-                    }
-                });
-            }
-        }
         
         // --- Guide Drawing Logic ---
 
@@ -393,7 +407,6 @@ export function useCanvasRendering({
         guideCtx.restore();
     }, [
         viewTransform,
-        gridGuide,
         activeGuide,
         rulerGuides,
         mirrorGuides,

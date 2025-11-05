@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useLayoutEffect, useReducer } from 'react';
+// FIX: Corrected relative import paths for modules outside the components directory.
 import type { 
     CanvasItem,
     SketchObject, 
@@ -13,7 +14,8 @@ import type {
     TransformState,
     BrushSettings,
     EraserSettings,
-    SolidMarkerSettings,
+    // FIX: Changed SolidMarkerSettings to SimpleMarkerSettings to match type definitions.
+    SimpleMarkerSettings,
     NaturalMarkerSettings,
     AirbrushSettings,
     FXBrushSettings,
@@ -24,12 +26,17 @@ import type {
     StrokeModifier,
     Selection,
     MagicWandSettings,
-    TextSettings
+    TextSettings,
+    AdvancedMarkerSettings,
+    WatercolorSettings
 } from './types';
-import { useCanvasDrawing } from './hooks/useCanvasDrawing';
+// FIX: Corrected relative import paths for hooks.
+import { useBrushManager } from './hooks/useBrushManager';
 import { useCanvasRendering } from './hooks/useCanvasRendering';
 import { usePointerEvents } from './hooks/usePointerEvents';
+// FIX: Corrected relative import path for canvasUtils.
 import { getCssMatrix3d, clearCanvas } from './utils/canvasUtils';
+// FIX: Corrected relative import path for SelectionToolbar component.
 import { SelectionToolbar } from './components/SelectionToolbar';
 
 interface CanvasContainerProps {
@@ -37,10 +44,15 @@ interface CanvasContainerProps {
   activeItemId: string | null;
   brushSettings: BrushSettings;
   eraserSettings: EraserSettings;
-  solidMarkerSettings: SolidMarkerSettings;
+  // FIX: Changed solidMarkerSettings to simpleMarkerSettings to match type definitions.
+  simpleMarkerSettings: SimpleMarkerSettings;
   naturalMarkerSettings: NaturalMarkerSettings;
   airbrushSettings: AirbrushSettings;
   fxBrushSettings: FXBrushSettings;
+  // FIX: Added advancedMarkerSettings to props to support the new tool.
+  advancedMarkerSettings: AdvancedMarkerSettings;
+  // FIX: Add watercolor settings to props
+  watercolorSettings: WatercolorSettings;
   magicWandSettings: MagicWandSettings;
   textSettings: TextSettings;
   tool: Tool;
@@ -77,7 +89,6 @@ interface CanvasContainerProps {
   strokeMode: StrokeMode;
   strokeState: StrokeState | null;
   setStrokeState: React.Dispatch<React.SetStateAction<StrokeState | null>>;
-  strokeModifier: StrokeModifier;
   selection: Selection | null;
   setSelection: React.Dispatch<React.SetStateAction<Selection | null>>;
   onCutSelection: () => void;
@@ -90,6 +101,9 @@ interface CanvasContainerProps {
   textEditState: { position: Point; value: string; activeItemId: string; } | null;
   setTextEditState: React.Dispatch<React.SetStateAction<{ position: Point; value: string; activeItemId: string; } | null>>;
   onCommitText: (textState: { position: Point; value: string; activeItemId: string; }) => void;
+// FIX: Add missing strokeSmoothing and strokeModifier props to fix type errors.
+  strokeSmoothing: number;
+  strokeModifier: StrokeModifier;
 }
 
 type GuideDragState =
@@ -113,7 +127,6 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         setIsPerspectiveStrokeLockEnabled,
         isSnapToGridEnabled,
         strokeMode, strokeState, setStrokeState,
-        strokeModifier,
         selection, setSelection,
         onCutSelection,
         onCopySelection,
@@ -126,6 +139,9 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         textEditState,
         setTextEditState,
         onCommitText,
+// FIX: Destructure missing strokeSmoothing and strokeModifier props.
+        strokeSmoothing,
+        strokeModifier,
     } = props;
 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -143,23 +159,23 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
     const [guideDragState, setGuideDragState] = useState<GuideDragState>(null);
     const [transformPreviewDataUrl, setTransformPreviewDataUrl] = useState<string | null>(null);
     const [livePreviewLayerId, setLivePreviewLayerId] = useState<string | null>(null);
+    const [debugPointers, setDebugPointers] = useState<Map<number, {x: number, y: number}>>(new Map());
 
     const activeItem = items.find(i => i.id === activeItemId);
-    const isDrawingTool = ['brush', 'eraser', 'solid-marker', 'natural-marker', 'airbrush', 'fx-brush', 'debug-brush'].includes(tool);
+    // FIX: Replaced 'solid-marker' with 'simple-marker' and added 'advanced-marker' and 'watercolor'.
+    const isDrawingTool = ['brush', 'eraser', 'simple-marker', 'natural-marker', 'airbrush', 'fx-brush', 'debug-brush', 'advanced-marker', 'watercolor'].includes(tool);
     const isSelectionTool = ['marquee-rect', 'lasso', 'magic-wand'].includes(tool);
 
-    const { drawStrokeWithMirroring } = useCanvasDrawing({
-        tool,
+    const { getBrushForTool } = useBrushManager({
         brushSettings: props.brushSettings,
         eraserSettings: props.eraserSettings,
-        solidMarkerSettings: props.solidMarkerSettings,
+        // FIX: Replaced 'solidMarkerSettings' with 'simpleMarkerSettings'.
+        simpleMarkerSettings: props.simpleMarkerSettings,
         naturalMarkerSettings: props.naturalMarkerSettings,
         airbrushSettings: props.airbrushSettings,
         fxBrushSettings: props.fxBrushSettings,
-        activeGuide,
-        mirrorGuides,
-        strokeMode,
-        strokeModifier,
+        advancedMarkerSettings: props.advancedMarkerSettings,
+        watercolorSettings: props.watercolorSettings,
     });
 
     const { 
@@ -174,6 +190,7 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         rulerGuides, mirrorGuides, perspectiveGuide, orthogonalGuide,
         gridGuide,
         isCropping, cropRect, transformState, transformSourceBbox, 
+        // FIX: Removed isDrawing and tool props which are not expected. Added livePreviewLayerId.
         livePreviewLayerId,
     });
 
@@ -181,7 +198,7 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         items,
         uiCanvasRef, previewCanvasRef, viewTransform, setViewTransform, activeItem, tool, isDrawingTool, isSelectionTool,
         onDrawCommit, onSelectItem, onUpdateItem,
-        drawStrokeWithMirroring, areGuidesLocked, activeGuide, 
+        getBrushForTool, areGuidesLocked, activeGuide, 
         isOrthogonalVisible, 
         rulerGuides,
         setRulerGuides, mirrorGuides, setMirrorGuides, perspectiveGuide, setPerspectiveGuide,
@@ -189,19 +206,15 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         setCropRect, 
         transformState, setTransformState, isAspectRatioLocked,
         isAngleSnapEnabled, angleSnapValue,
-        livePreviewLayerId, setLivePreviewLayerId,
+        // FIX: Pass missing livePreviewLayerId and setLivePreviewLayerId props.
+        livePreviewLayerId,
+        setLivePreviewLayerId,
         isPerspectiveStrokeLockEnabled,
         isSnapToGridEnabled,
         gridGuide,
         strokeMode,
         strokeState,
         setStrokeState,
-        brushSettings: props.brushSettings,
-        eraserSettings: props.eraserSettings,
-        solidMarkerSettings: props.solidMarkerSettings,
-        naturalMarkerSettings: props.naturalMarkerSettings,
-        airbrushSettings: props.airbrushSettings,
-        fxBrushSettings: props.fxBrushSettings,
         magicWandSettings: props.magicWandSettings,
         selection, setSelection,
         forceRender,
@@ -211,6 +224,11 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         textEditState,
         setTextEditState,
         onCommitText,
+// FIX: Pass missing strokeSmoothing and strokeModifier props to usePointerEvents.
+        strokeSmoothing,
+        strokeModifier,
+        // FIX: Pass the setDebugPointers function to the usePointerEvents hook.
+        setDebugPointers,
     });
     
     const pointerHandlers = {
@@ -280,16 +298,39 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
 
         cursorCtx.clearRect(0, 0, cursorCtx.canvas.width, cursorCtx.canvas.height);
 
-        if (isDrawingTool && pointerPosition && (!isDrawingRef.current || tool === 'eraser')) {
+        // Draw debug pointers if they exist
+        if (debugPointers.size > 0) {
+            cursorCtx.save();
+            // The points are in clientX/Y, which is the same coordinate space as the cursor canvas.
+            debugPointers.forEach((point, id) => {
+                cursorCtx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+                cursorCtx.beginPath();
+                cursorCtx.arc(point.x, point.y, 20, 0, 2 * Math.PI);
+                cursorCtx.fill();
+
+                cursorCtx.fillStyle = 'white';
+                cursorCtx.font = '12px sans-serif';
+                cursorCtx.textAlign = 'center';
+                cursorCtx.textBaseline = 'middle';
+                cursorCtx.fillText(String(id), point.x, point.y);
+            });
+            cursorCtx.restore();
+        }
+        
+        // Only draw the brush cursor if there's no multi-touch gesture happening
+        if (debugPointers.size <= 1 && isDrawingTool && pointerPosition && (!isDrawingRef.current || tool === 'eraser')) {
             let size = 0;
             switch (tool) {
                 case 'brush': size = props.brushSettings.size; break;
                 case 'eraser': size = props.eraserSettings.size; break;
-                case 'solid-marker': size = props.solidMarkerSettings.size; break;
+                // FIX: Replaced 'solid-marker' with 'simple-marker' and added other tools.
+                case 'simple-marker': size = props.simpleMarkerSettings.size; break;
                 case 'natural-marker': size = props.naturalMarkerSettings.size; break;
                 case 'airbrush': size = props.airbrushSettings.size; break;
                 case 'fx-brush': size = props.fxBrushSettings.size; break;
                 case 'debug-brush': size = 2; break;
+                case 'advanced-marker': size = props.advancedMarkerSettings.size; break;
+                case 'watercolor': size = props.watercolorSettings.size; break;
             }
 
             if (size > 0) {
@@ -319,11 +360,12 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
                     cursorCtx.setLineDash([]);
                 };
 
-                const shapeToDraw = (tool === 'eraser' && props.eraserSettings.tipShape === 'square') || (tool === 'solid-marker' && props.solidMarkerSettings.tipShape !== 'line') ? 'square' : 'circle';
+                // FIX: Replaced 'solid-marker' with 'simple-marker'.
+                const shapeToDraw = (tool === 'eraser' && props.eraserSettings.tipShape === 'square') || (tool === 'simple-marker' && props.simpleMarkerSettings.tipShape !== 'line') ? 'square' : 'circle';
                 drawOutline(shapeToDraw);
             }
         }
-    }, [isDrawingTool, tool, pointerPosition, viewTransform.zoom, props.brushSettings, props.eraserSettings, props.solidMarkerSettings, props.naturalMarkerSettings, props.airbrushSettings, props.fxBrushSettings, isDrawingRef.current]);
+    }, [isDrawingTool, tool, pointerPosition, viewTransform.zoom, props.brushSettings, props.eraserSettings, props.simpleMarkerSettings, props.naturalMarkerSettings, props.airbrushSettings, props.fxBrushSettings, props.advancedMarkerSettings, props.watercolorSettings, isDrawingRef.current, debugPointers]);
 
     useEffect(() => {
         const selectionCtx = selectionCanvasRef.current?.getContext('2d');
@@ -369,7 +411,7 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         redrawMainCanvas();
         redrawGuides();
         redrawUI();
-    }, [redrawMainCanvas, redrawGuides, redrawUI, isTransforming, transformState, activeItem, transformSourceBbox, viewTransform, renderTrigger]);
+    }, [redrawMainCanvas, redrawGuides, redrawUI, isTransforming, transformState, activeItem, transformSourceBbox, viewTransform, renderTrigger, livePreviewLayerId]);
     
     useEffect(() => {
         const container = containerRef.current;

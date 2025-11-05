@@ -1,6 +1,5 @@
 import type { AppState, SketchObject, ItemType, CropRect, TransformState, Point, WorkspaceTemplate, QuickAccessSettings, CanvasItem, ScaleUnit, ClipboardData } from '../types';
-import { getHomographyMatrix, createNewCanvas } from '../utils/canvasUtils';
-import { cloneCanvas } from '../utils/canvasUtils';
+import { getHomographyMatrix, createNewCanvas, cloneCanvasWithContext } from '../utils/canvasUtils';
 
 const MAX_HISTORY_SIZE = 50;
 
@@ -666,32 +665,38 @@ export function historyReducer(state: HistoryState, action: Action): HistoryStat
             future: [],
         };
     }
-
-    // Special, highly optimized handling for the most frequent history action.
+    
     if (action.type === 'COMMIT_DRAWING') {
         const { activeItemId, beforeCanvas } = action.payload;
 
+        const beforeContext = beforeCanvas.getContext('2d', { willReadFrequently: true });
+        if (!beforeContext) {
+            console.error("Could not get context for beforeCanvas in COMMIT_DRAWING");
+            return state;
+        }
+
+        // Create a full snapshot of the state BEFORE the draw.
         const previousState = {
             ...present,
             objects: present.objects.map(obj => {
                 if (obj.id === activeItemId && obj.type === 'object') {
-                    // Create a new object with the old canvas for the history
-                    return { ...obj, canvas: beforeCanvas };
+                    // For the active item, use the canvas from before the draw.
+                    return { ...obj, canvas: beforeCanvas, context: beforeContext };
+                }
+                // For all OTHER items, clone their current canvas to prevent future mutations from affecting this snapshot.
+                if (obj.type === 'object' && obj.canvas) {
+                    const { canvas, context } = cloneCanvasWithContext(obj.canvas);
+                    return { ...obj, canvas, context };
                 }
                 return obj;
             })
         };
         
-        const newPast = [...past, previousState];
-        if (newPast.length > MAX_HISTORY_SIZE) {
-            newPast.shift();
-        }
+        const newPast = [...past, previousState].slice(-MAX_HISTORY_SIZE);
 
-        // The 'present' state's canvas was mutated. To make React detect the change,
-        // we need to create a new state object and a new `objects` array.
         const newPresent = {
             ...present,
-            objects: [...present.objects] // shallow copy of array is enough to trigger downstream useMemo/useEffect
+            objects: [...present.objects] 
         };
 
         return {
@@ -709,23 +714,19 @@ export function historyReducer(state: HistoryState, action: Action): HistoryStat
         return state;
     }
     
-    // A change was made. Add the *old* present state to the past.
-    // Crucially, we must clone the canvases in the old state before adding it
-    // to history, to prevent future drawing mutations from affecting it.
+    // Create a snapshot of the state BEFORE the change.
     const presentSnapshot = {
         ...present,
         objects: present.objects.map(obj => {
             if (obj.type === 'object' && obj.canvas) {
-                return { ...obj, canvas: cloneCanvas(obj.canvas) };
+                const { canvas, context } = cloneCanvasWithContext(obj.canvas);
+                return { ...obj, canvas, context };
             }
             return obj;
         })
     };
 
-    const newPast = [...past, presentSnapshot];
-    if (newPast.length > MAX_HISTORY_SIZE) {
-        newPast.shift();
-    }
+    const newPast = [...past, presentSnapshot].slice(-MAX_HISTORY_SIZE);
     
     return {
         past: newPast,

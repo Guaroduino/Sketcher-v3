@@ -1,25 +1,33 @@
 import React from 'react';
+// FIX: Added BrushPreset to imports
 import type { Tool, BrushPreset, QuickAccessTool } from '../../types';
 // FIX: Replaced MarkerIcon with SolidMarkerIcon and NaturalMarkerIcon.
-import { XIcon, SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, TransformIcon, FreeTransformIcon, SparklesIcon, CropIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon } from '../icons';
+// FIX: Imported missing icons.
+import { XIcon, SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, NaturalMarkerIcon, AirbrushIcon, FXBrushIcon, TransformIcon, FreeTransformIcon, SparklesIcon, CropIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon, TextIcon, AdvancedMarkerIcon, WatercolorIcon } from '../icons';
 
 interface ToolSelectorModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSelectTool: (tool: QuickAccessTool) => void;
+    // FIX: Updated type to allow for presets
+    onSelectTool: (tool: QuickAccessTool | { type: 'fx-preset', id: string, name: string }) => void;
     fxPresets: BrushPreset[];
 }
 
-// FIX: Replaced 'marker' with 'solid-marker' and 'natural-marker'.
+// FIX: Added new tools to the standard tools list.
 const standardTools: { name: Tool, icon: React.FC<{className?: string}> }[] = [
     { name: 'select', icon: SelectIcon },
     { name: 'marquee-rect', icon: MarqueeRectIcon },
     { name: 'lasso', icon: LassoIcon },
     { name: 'magic-wand', icon: MagicWandIcon },
+    { name: 'text', icon: TextIcon },
     { name: 'brush', icon: BrushIcon },
     { name: 'eraser', icon: EraserIcon },
-    { name: 'solid-marker', icon: SolidMarkerIcon },
-    // artistic tools removed: natural-marker, airbrush, fx-brush
+    { name: 'simple-marker', icon: SolidMarkerIcon },
+    { name: 'advanced-marker', icon: AdvancedMarkerIcon },
+    { name: 'natural-marker', icon: NaturalMarkerIcon },
+    { name: 'watercolor', icon: WatercolorIcon },
+    { name: 'airbrush', icon: AirbrushIcon },
+    { name: 'fx-brush', icon: FXBrushIcon },
     { name: 'transform', icon: TransformIcon },
     { name: 'free-transform', icon: FreeTransformIcon },
     { name: 'enhance', icon: SparklesIcon },
@@ -29,7 +37,7 @@ const standardTools: { name: Tool, icon: React.FC<{className?: string}> }[] = [
 export const ToolSelectorModal: React.FC<ToolSelectorModalProps> = ({ isOpen, onClose, onSelectTool, fxPresets }) => {
     if (!isOpen) return null;
 
-    const handleSelect = (tool: QuickAccessTool) => {
+    const handleSelect = (tool: QuickAccessTool | { type: 'fx-preset', id: string, name: string }) => {
         onSelectTool(tool);
         onClose();
     };
@@ -69,11 +77,12 @@ export const ToolSelectorModal: React.FC<ToolSelectorModalProps> = ({ isOpen, on
                                 {fxPresets.map(preset => (
                                     <button
                                         key={preset.id}
+                                        // FIX: Correctly form the preset object for selection.
                                         onClick={() => handleSelect({ type: 'fx-preset', id: preset.id, name: preset.name })}
                                         className="p-3 rounded-lg bg-[--bg-tertiary] hover:bg-[--bg-hover] transition-colors text-left"
                                     >
                                         <div className="flex items-center gap-2">
-                                            <BrushIcon className="w-6 h-6 flex-shrink-0" />
+                                            <FXBrushIcon className="w-6 h-6 flex-shrink-0" />
                                             <span className="text-sm truncate">{preset.name}</span>
                                         </div>
                                     </button>

@@ -234,6 +234,16 @@ export const cloneCanvas = (oldCanvas: HTMLCanvasElement): HTMLCanvasElement => 
     return newCanvas;
 };
 
+export const cloneCanvasWithContext = (oldCanvas: HTMLCanvasElement): { canvas: HTMLCanvasElement, context: CanvasRenderingContext2D } => {
+    const newCanvas = document.createElement('canvas');
+    newCanvas.width = oldCanvas.width;
+    newCanvas.height = oldCanvas.height;
+    const newCtx = newCanvas.getContext('2d', { willReadFrequently: true });
+    if (!newCtx) throw new Error("Failed to get 2D context for cloned canvas");
+    newCtx.drawImage(oldCanvas, 0, 0);
+    return { canvas: newCanvas, context: newCtx };
+};
+
 export const createNewCanvas = (width: number, height: number): { canvas: HTMLCanvasElement, context: CanvasRenderingContext2D } => {
     const canvas = document.createElement('canvas');
     canvas.width = width;
@@ -274,3 +284,85 @@ export const createThumbnail = (sourceCanvas: HTMLCanvasElement, maxWidth: numbe
         }, 'image/png', 0.9);
     });
 };
+
+function colorMatch(r1: number, g1: number, b1: number, a1: number, r2: number, g2: number, b2: number, a2: number, tolerance: number): boolean {
+    if (a1 < 128 && a2 < 128) return true; // Both transparent enough
+    if (a1 < 128 || a2 < 128) return false; // One is transparent, one is not
+    const toleranceSq = (tolerance / 100 * 255) ** 2 * 3;
+    const distSq = (r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2;
+    return distSq <= toleranceSq;
+}
+
+export function createMagicWandSelection(imageData: ImageData, startX: number, startY: number, tolerance: number, contiguous: boolean): { path: Path2D, bbox: CropRect } | null {
+    const { width, height, data } = imageData;
+    if (startX < 0 || startX >= width || startY < 0 || startY >= height) return null;
+
+    const startIndex = (startY * width + startX) * 4;
+    const startR = data[startIndex];
+    const startG = data[startIndex + 1];
+    const startB = data[startIndex + 2];
+    const startA = data[startIndex + 3];
+    
+    const selectionMask = new Uint8Array(width * height);
+    let minX = width, minY = height, maxX = -1, maxY = -1;
+
+    if (contiguous) {
+        if (startA < 128) return null; // Don't select transparent areas
+
+        const queue: [number, number][] = [[startX, startY]];
+        selectionMask[startY * width + startX] = 1;
+        let head = 0;
+
+        while(head < queue.length) {
+            const [x, y] = queue[head++];
+            minX = Math.min(minX, x); minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+            
+            const neighbors: [number, number][] = [ [x, y - 1], [x + 1, y], [x, y + 1], [x - 1, y] ];
+
+            for (const [nx, ny] of neighbors) {
+                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                    const nIndex = ny * width + nx;
+                    if (selectionMask[nIndex] === 0) {
+                        const nDataIndex = nIndex * 4;
+                        if (colorMatch(startR, startG, startB, startA, data[nDataIndex], data[nDataIndex+1], data[nDataIndex+2], data[nDataIndex+3], tolerance)) {
+                            selectionMask[nIndex] = 1;
+                            queue.push([nx, ny]);
+                        }
+                    }
+                }
+            }
+        }
+    } else { // non-contiguous
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const index = (y * width + x) * 4;
+                if (colorMatch(startR, startG, startB, startA, data[index], data[index+1], data[index+2], data[index+3], tolerance)) {
+                    selectionMask[y * width + x] = 1;
+                    minX = Math.min(minX, x); minY = Math.min(minY, y);
+                    maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+                }
+            }
+        }
+    }
+    
+    if (maxX === -1) return null; // Nothing selected
+
+    const path = new Path2D();
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (selectionMask[y * width + x] === 1) {
+                let startX = x;
+                while (x + 1 < width && selectionMask[y * width + (x + 1)] === 1) {
+                    x++;
+                }
+                path.rect(startX, y, x - startX + 1, 1);
+            }
+        }
+    }
+
+    return {
+        path,
+        bbox: { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 }
+    };
+}

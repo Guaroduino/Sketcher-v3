@@ -2,9 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 // FIX: Add TransformIcon and re-enable transform tool.
 // FIX: Corrected import path for MagicWandIcon.
 // FIX: Replaced MarkerIcon with SolidMarkerIcon and NaturalMarkerIcon
-import { SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, NaturalMarkerIcon, AirbrushIcon, FXBrushIcon, TransformIcon, ChevronDownIcon, TrashIcon, ExportIcon, CropIcon, RulerIcon, PerspectiveIcon, OrthogonalIcon, MirrorIcon, FreeTransformIcon, SparklesIcon, XIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon, UploadIcon, MoreVerticalIcon, TextIcon } from './icons';
-// FIX: Replaced MarkerSettings with SolidMarkerSettings and NaturalMarkerSettings
-import type { Tool, BrushSettings, EraserSettings, SolidMarkerSettings, NaturalMarkerSettings, AirbrushSettings, FXBrushSettings, BrushPreset, Guide, CropRect, BlendMode, CanvasItem, LibraryItem, StrokeMode, StrokeModifier, StrokeStyle, MagicWandSettings, TextSettings } from '../types';
+// FIX: Added WatercolorIcon to support the new watercolor tool.
+import { SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, TransformIcon, ChevronDownIcon, TrashIcon, ExportIcon, CropIcon, RulerIcon, PerspectiveIcon, OrthogonalIcon, MirrorIcon, FreeTransformIcon, SparklesIcon, XIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon, UploadIcon, MoreVerticalIcon, TextIcon, NaturalMarkerIcon, AirbrushIcon, FXBrushIcon, AdvancedMarkerIcon, WatercolorIcon } from './icons';
+// FIX: Replaced SolidMarkerSettings with SimpleMarkerSettings
+// FIX: Added missing tool setting and BrushPreset types.
+// FIX: Added WatercolorSettings to support the new watercolor tool.
+import type { Tool, BrushSettings, EraserSettings, SimpleMarkerSettings, Guide, CropRect, BlendMode, CanvasItem, LibraryItem, StrokeMode, StrokeModifier, StrokeStyle, MagicWandSettings, TextSettings, NaturalMarkerSettings, AirbrushSettings, FXBrushSettings, BrushPreset, AdvancedMarkerSettings, WatercolorSettings } from '../types';
 
 interface ToolbarProps {
   tool: Tool;
@@ -13,24 +16,25 @@ interface ToolbarProps {
   setBrushSettings: React.Dispatch<React.SetStateAction<BrushSettings>>;
   eraserSettings: EraserSettings;
   setEraserSettings: React.Dispatch<React.SetStateAction<EraserSettings>>;
-  // FIX: Replaced markerSettings with specific solid and natural marker settings
-  solidMarkerSettings: SolidMarkerSettings;
-  setSolidMarkerSettings: React.Dispatch<React.SetStateAction<SolidMarkerSettings>>;
+  // FIX: Replaced solidMarkerSettings with simpleMarkerSettings
+  simpleMarkerSettings: SimpleMarkerSettings;
+  setSimpleMarkerSettings: React.Dispatch<React.SetStateAction<SimpleMarkerSettings>>;
+  // FIX: Added missing props for new tool settings
   naturalMarkerSettings: NaturalMarkerSettings;
   setNaturalMarkerSettings: React.Dispatch<React.SetStateAction<NaturalMarkerSettings>>;
   airbrushSettings: AirbrushSettings;
   setAirbrushSettings: React.Dispatch<React.SetStateAction<AirbrushSettings>>;
   fxBrushSettings: FXBrushSettings;
   setFxBrushSettings: React.Dispatch<React.SetStateAction<FXBrushSettings>>;
+  advancedMarkerSettings: AdvancedMarkerSettings;
+  setAdvancedMarkerSettings: React.Dispatch<React.SetStateAction<AdvancedMarkerSettings>>;
+  // FIX: Added missing props for new tool settings for watercolor
+  watercolorSettings: WatercolorSettings;
+  setWatercolorSettings: React.Dispatch<React.SetStateAction<WatercolorSettings>>;
   magicWandSettings: MagicWandSettings;
   setMagicWandSettings: React.Dispatch<React.SetStateAction<MagicWandSettings>>;
   textSettings: TextSettings;
   setTextSettings: React.Dispatch<React.SetStateAction<TextSettings>>;
-  brushPresets: BrushPreset[];
-  onSavePreset: (name: string, settings: FXBrushSettings) => string;
-  onUpdatePreset: (id: string, updates: Partial<Omit<BrushPreset, 'id'>>) => void;
-  onLoadPreset: (id: string) => void;
-  onDeletePreset: (id: string) => void;
   activeGuide: Guide;
   setActiveGuide: (guide: 'ruler' | 'perspective' | 'mirror') => void;
   isOrthogonalVisible: boolean;
@@ -48,6 +52,12 @@ interface ToolbarProps {
   setStrokeMode: (mode: StrokeMode) => void;
   strokeModifier: StrokeModifier;
   setStrokeModifier: React.Dispatch<React.SetStateAction<StrokeModifier>>;
+  // FIX: Added missing preset-related props
+  brushPresets: BrushPreset[];
+  onSavePreset: (name: string) => void;
+  onUpdatePreset: (id: string, updates: Partial<BrushPreset>) => void;
+  onLoadPreset: (id: string) => void;
+  onDeletePreset: (id: string) => void;
 }
 
 type SavedPrompts = {
@@ -97,17 +107,18 @@ const selectionToolsGroup: { tool: Tool; name: string; icon: React.FC<{className
     { tool: 'magic-wand', name: 'Varita Mágica', icon: MagicWandIcon },
 ];
 
-const solidToolsGroup: { tool: Tool; name: string; icon: React.FC<{className?: string}> }[] = [
+// FIX: Added 'watercolor' to the drawing tools group.
+const drawingToolsGroup: { tool: Tool; name: string; icon: React.FC<{className?: string}> }[] = [
     { tool: 'brush', name: 'Rapidograph Solido', icon: BrushIcon },
-    { tool: 'solid-marker', name: 'Marcador Sólido', icon: SolidMarkerIcon },
-];
-
-const artisticToolsGroup: { tool: Tool; name: string; icon: React.FC<{className?: string}> }[] = [
+    { tool: 'simple-marker', name: 'Marcador Sólido', icon: SolidMarkerIcon },
+    { tool: 'advanced-marker', name: 'Marcador Avanzado', icon: AdvancedMarkerIcon },
     { tool: 'natural-marker', name: 'Marcador Natural', icon: NaturalMarkerIcon },
     { tool: 'airbrush', name: 'Aerógrafo', icon: AirbrushIcon },
-    { tool: 'fx-brush', name: 'Pincel FX', icon: FXBrushIcon },
+    { tool: 'fx-brush', name: 'Pincel de Efectos', icon: FXBrushIcon },
+    { tool: 'watercolor', name: 'Acuarela', icon: WatercolorIcon },
 ];
 
+// FIX: Added 'watercolor' to the tool icon map to satisfy the Record type.
 const toolIconMap: Record<Tool, React.FC<{ className?: string }>> = {
     'select': SelectIcon,
     'marquee-rect': MarqueeRectIcon,
@@ -115,10 +126,7 @@ const toolIconMap: Record<Tool, React.FC<{ className?: string }>> = {
     'magic-wand': MagicWandIcon,
     'brush': BrushIcon,
     'eraser': EraserIcon,
-    'solid-marker': SolidMarkerIcon,
-    'natural-marker': NaturalMarkerIcon,
-    'airbrush': AirbrushIcon,
-    'fx-brush': FXBrushIcon,
+    'simple-marker': SolidMarkerIcon,
     'transform': TransformIcon,
     'free-transform': FreeTransformIcon,
     'enhance': SparklesIcon,
@@ -126,6 +134,11 @@ const toolIconMap: Record<Tool, React.FC<{ className?: string }>> = {
     'pan': () => null,
     'debug-brush': BrushIcon,
     'text': TextIcon,
+    'natural-marker': NaturalMarkerIcon,
+    'airbrush': AirbrushIcon,
+    'fx-brush': FXBrushIcon,
+    'advanced-marker': AdvancedMarkerIcon,
+    'watercolor': WatercolorIcon,
 };
 
 
@@ -136,24 +149,22 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   setBrushSettings,
   eraserSettings,
   setEraserSettings,
-  // FIX: Destructure solid and natural marker settings
-  solidMarkerSettings,
-  setSolidMarkerSettings,
+  simpleMarkerSettings,
+  setSimpleMarkerSettings,
   naturalMarkerSettings,
   setNaturalMarkerSettings,
   airbrushSettings,
   setAirbrushSettings,
   fxBrushSettings,
   setFxBrushSettings,
+  advancedMarkerSettings,
+  setAdvancedMarkerSettings,
+  watercolorSettings,
+  setWatercolorSettings,
   magicWandSettings,
   setMagicWandSettings,
   textSettings,
   setTextSettings,
-  brushPresets,
-  onSavePreset,
-  onUpdatePreset,
-  onLoadPreset,
-  onDeletePreset,
   activeGuide,
   setActiveGuide,
   isOrthogonalVisible,
@@ -171,16 +182,15 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   setStrokeMode,
   strokeModifier,
   setStrokeModifier,
+  brushPresets,
+  ...props
 }) => {
   const [openSettings, setOpenSettings] = useState<Tool | null>(null);
   const [settingsPanelAnchor, setSettingsPanelAnchor] = useState<HTMLElement | null>(null);
   const [settingsPanelPosition, setSettingsPanelPosition] = useState<{ top: number; left: number } | null>(null);
   const settingsPanelRef = useRef<HTMLDivElement>(null);
   const toolbarWrapperRef = useRef<HTMLDivElement>(null);
-  const [selectedPresetId, setSelectedPresetId] = useState<string>('custom');
-  const [presetName, setPresetName] = useState('');
   const [isChromaKeyEnabled, setIsChromaKeyEnabled] = useState(false);
-  const textureInputRef = useRef<HTMLInputElement>(null);
   const [isStrokeModeMenuOpen, setIsStrokeModeMenuOpen] = useState(false);
   const strokeModeMenuRef = useRef<HTMLDivElement>(null);
   const [isStrokeModifierMenuOpen, setIsStrokeModifierMenuOpen] = useState(false);
@@ -189,13 +199,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   // Tool Group States
   const [isSelectionToolsMenuOpen, setIsSelectionToolsMenuOpen] = useState(false);
   const selectionToolsMenuRef = useRef<HTMLDivElement>(null);
-  const [isSolidToolsMenuOpen, setIsSolidToolsMenuOpen] = useState(false);
-  const solidToolsMenuRef = useRef<HTMLDivElement>(null);
-  const [isArtisticToolsMenuOpen, setIsArtisticToolsMenuOpen] = useState(false);
-  const artisticToolsMenuRef = useRef<HTMLDivElement>(null);
+  const [isDrawingToolsMenuOpen, setIsDrawingToolsMenuOpen] = useState(false);
+  const drawingToolsMenuRef = useRef<HTMLDivElement>(null);
   const [lastActiveSelectionTool, setLastActiveSelectionTool] = useState<Tool>('marquee-rect');
-  const [lastActiveSolidTool, setLastActiveSolidTool] = useState<Tool>('brush');
-  const [lastActiveArtisticTool, setLastActiveArtisticTool] = useState<Tool>('natural-marker');
+  const [lastActiveDrawingTool, setLastActiveDrawingTool] = useState<Tool>('brush');
 
   // AI Panel State
   const [activeAiTab, setActiveAiTab] = useState<'object' | 'composition' | 'free'>('object');
@@ -256,11 +263,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       if (selectionToolsMenuRef.current && !selectionToolsMenuRef.current.contains(event.target as Node)) {
         setIsSelectionToolsMenuOpen(false);
       }
-      if (solidToolsMenuRef.current && !solidToolsMenuRef.current.contains(event.target as Node)) {
-        setIsSolidToolsMenuOpen(false);
-      }
-      if (artisticToolsMenuRef.current && !artisticToolsMenuRef.current.contains(event.target as Node)) {
-        setIsArtisticToolsMenuOpen(false);
+      if (drawingToolsMenuRef.current && !drawingToolsMenuRef.current.contains(event.target as Node)) {
+        setIsDrawingToolsMenuOpen(false);
       }
       if (
           openSettings !== 'enhance' && // This effect is only for popovers now
@@ -278,16 +282,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [settingsPanelAnchor, openSettings]);
 
-  // Effect to detect when settings are modified from a loaded preset
-  useEffect(() => {
-    if (selectedPresetId !== 'custom') {
-      const currentPreset = brushPresets.find(p => p.id === selectedPresetId);
-      if (currentPreset && JSON.stringify(currentPreset.settings) !== JSON.stringify(fxBrushSettings)) {
-        setSelectedPresetId('custom');
-      }
-    }
-  }, [fxBrushSettings, brushPresets, selectedPresetId]);
-  
   // Link Chroma Key state to parent toggles and its own state
   useEffect(() => {
     if (isChromaKeyEnabled) {
@@ -303,10 +297,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   useEffect(() => {
       if (selectionToolsGroup.some(t => t.tool === tool)) {
           setLastActiveSelectionTool(tool);
-      } else if (solidToolsGroup.some(t => t.tool === tool)) {
-          setLastActiveSolidTool(tool);
-      } else if (artisticToolsGroup.some(t => t.tool === tool)) {
-          setLastActiveArtisticTool(tool);
+      } else if (drawingToolsGroup.some(t => t.tool === tool)) {
+          setLastActiveDrawingTool(tool);
       }
   }, [tool]);
 
@@ -336,8 +328,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             setIsStrokeModeMenuOpen(false);
             setIsStrokeModifierMenuOpen(false);
             setIsSelectionToolsMenuOpen(false);
-            setIsSolidToolsMenuOpen(false);
-            setIsArtisticToolsMenuOpen(false);
+            setIsDrawingToolsMenuOpen(false);
             return t;
         }
     });
@@ -352,8 +343,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     
     // Close all dropdowns
     setIsSelectionToolsMenuOpen(false);
-    setIsSolidToolsMenuOpen(false);
-    setIsArtisticToolsMenuOpen(false);
+    setIsDrawingToolsMenuOpen(false);
     setIsStrokeModeMenuOpen(false);
     setIsStrokeModifierMenuOpen(false);
     
@@ -371,53 +361,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     `p-3 rounded-lg transition-colors ${
       tool === t ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'
     }`;
-
-  const handleLoadPreset = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const id = e.target.value;
-    setSelectedPresetId(id);
-    if (id !== 'custom') {
-        onLoadPreset(id);
-        const preset = brushPresets.find(p => p.id === id);
-        setPresetName(preset ? preset.name : '');
-    } else {
-        setPresetName('');
-    }
-  }
-  
-  const handleDeletePreset = () => {
-      if (selectedPresetId !== 'custom' && confirm("Are you sure you want to delete this preset?")) {
-          onDeletePreset(selectedPresetId);
-          setSelectedPresetId('custom');
-          setPresetName('');
-      }
-  }
-  
-  const handleSave = () => {
-      if (selectedPresetId !== 'custom' && presetName.trim()) {
-          onUpdatePreset(selectedPresetId, { name: presetName.trim(), settings: fxBrushSettings });
-      }
-  };
-
-  const handleSaveAs = () => {
-      if (presetName.trim()) {
-          const newId = onSavePreset(presetName.trim(), fxBrushSettings);
-          setSelectedPresetId(newId);
-      }
-  };
-
-  const handleTextureFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files[0]) {
-          const file = e.target.files[0];
-          const reader = new FileReader();
-          reader.onload = (event) => {
-              setFxBrushSettings(s => ({
-                  ...s,
-                  texture: { dataUrl: event.target?.result as string, name: file.name }
-              }));
-          };
-          reader.readAsDataURL(file);
-      }
-  };
 
   const handleStyleRefDrop = (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
@@ -1106,8 +1049,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             </Accordion>
           </div>
         );
-      // FIX: Changed 'marker' to 'solid-marker' and updated to use solidMarkerSettings
-      case 'solid-marker':
+      case 'simple-marker':
          return (
           <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
              <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
@@ -1115,94 +1057,175 @@ export const Toolbar: React.FC<ToolbarProps> = ({
              </div>
             <Accordion title="General" defaultOpen>
                 <div>
-                  <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {solidMarkerSettings.size}px</label>
-                  <input type="range" min="1" max="200" value={solidMarkerSettings.size} onChange={(e) => setSolidMarkerSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
+                  <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {simpleMarkerSettings.size}px</label>
+                  <input type="range" min="1" max="200" value={simpleMarkerSettings.size} onChange={(e) => setSimpleMarkerSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
                 </div>
                 <div>
-                  <label className="text-xs text-[--text-secondary] block mb-1">Opacidad: {Math.round(solidMarkerSettings.opacity * 100)}%</label>
-                  <input type="range" min="1" max="100" value={solidMarkerSettings.opacity * 100} onChange={(e) => setSolidMarkerSettings(s => ({ ...s, opacity: parseInt(e.target.value) / 100 }))} className="w-full" />
+                  <label className="text-xs text-[--text-secondary] block mb-1">Opacidad: {Math.round(simpleMarkerSettings.opacity * 100)}%</label>
+                  <input type="range" min="1" max="100" value={simpleMarkerSettings.opacity * 100} onChange={(e) => setSimpleMarkerSettings(s => ({ ...s, opacity: parseInt(e.target.value) / 100 }))} className="w-full" />
                 </div>
                  <div>
                   <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
-                  <input type="color" value={solidMarkerSettings.color} onChange={(e) => setSolidMarkerSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                  <input type="color" value={simpleMarkerSettings.color} onChange={(e) => setSimpleMarkerSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
                 </div>
                 <BlendModeSelector
-                    value={solidMarkerSettings.blendMode}
-                    onChange={(value) => setSolidMarkerSettings(s => ({ ...s, blendMode: value }))}
+                    value={simpleMarkerSettings.blendMode}
+                    onChange={(value) => setSimpleMarkerSettings(s => ({ ...s, blendMode: value }))}
                 />
             </Accordion>
             <Accordion title="Punta">
                  <div>
                     <label className="text-xs text-[--text-secondary] block mb-1">Forma de la punta</label>
                     <div className="flex gap-2">
-                        <button onClick={() => setSolidMarkerSettings(s => ({ ...s, tipShape: 'square' }))} className={`flex-1 text-xs p-2 rounded ${solidMarkerSettings.tipShape === 'square' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Cuadrada</button>
-                        <button onClick={() => setSolidMarkerSettings(s => ({ ...s, tipShape: 'line' }))} className={`flex-1 text-xs p-2 rounded ${solidMarkerSettings.tipShape === 'line' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Línea</button>
+                        <button onClick={() => setSimpleMarkerSettings(s => ({ ...s, tipShape: 'square' }))} className={`flex-1 text-xs p-2 rounded ${simpleMarkerSettings.tipShape === 'square' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Cuadrada</button>
+                        <button onClick={() => setSimpleMarkerSettings(s => ({ ...s, tipShape: 'line' }))} className={`flex-1 text-xs p-2 rounded ${simpleMarkerSettings.tipShape === 'line' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Línea</button>
                     </div>
                 </div>
             </Accordion>
             <Accordion title="Dinámica de Presión">
                 <div className="flex items-center justify-between py-1">
                     <label htmlFor="pressure-opacity-marker" className="text-xs text-[--text-secondary]">Controlar Opacidad</label>
-                    <input id="pressure-opacity-marker" type="checkbox" checked={solidMarkerSettings.pressureControl.opacity} onChange={(e) => setSolidMarkerSettings(s => ({ ...s, pressureControl: {...s.pressureControl, opacity: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+                    <input id="pressure-opacity-marker" type="checkbox" checked={simpleMarkerSettings.pressureControl.opacity} onChange={(e) => setSimpleMarkerSettings(s => ({ ...s, pressureControl: {...s.pressureControl, opacity: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
                 </div>
             </Accordion>
           </div>
         );
-      // FIX: Add settings panel for 'natural-marker'
-      case 'natural-marker':
+    case 'advanced-marker':
         return (
          <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
             <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
-               <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Marcador Natural</h4>
+               <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Marcador Avanzado</h4>
             </div>
            <Accordion title="General" defaultOpen>
                <div>
-                 <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {naturalMarkerSettings.size}px</label>
-                 <input type="range" min="1" max="200" value={naturalMarkerSettings.size} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
+                 <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {advancedMarkerSettings.size}px</label>
+                 <input type="range" min="1" max="300" value={advancedMarkerSettings.size} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
                </div>
                <div>
-                 <label className="text-xs text-[--text-secondary] block mb-1">Flujo: {Math.round(naturalMarkerSettings.flow * 100)}%</label>
-                 <input type="range" min="1" max="100" value={naturalMarkerSettings.flow * 100} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, flow: parseInt(e.target.value) / 100 }))} className="w-full" />
+                 <label className="text-xs text-[--text-secondary] block mb-1">Flujo: {advancedMarkerSettings.flow}%</label>
+                 <input type="range" min="1" max="100" value={advancedMarkerSettings.flow} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, flow: parseInt(e.target.value) }))} className="w-full" />
                </div>
                 <div>
                  <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
-                 <input type="color" value={naturalMarkerSettings.color} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                 <input type="color" value={advancedMarkerSettings.color} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
                </div>
-                <BlendModeSelector
-                    value={naturalMarkerSettings.blendMode}
-                    onChange={(value) => setNaturalMarkerSettings(s => ({ ...s, blendMode: value }))}
-                />
+               <BlendModeSelector
+                   value={advancedMarkerSettings.blendMode}
+                   onChange={(value) => setAdvancedMarkerSettings(s => ({ ...s, blendMode: value }))}
+               />
            </Accordion>
            <Accordion title="Punta">
                 <div>
-                 <label className="text-xs text-[--text-secondary] block mb-1">Dureza: {naturalMarkerSettings.hardness}%</label>
-                 <input type="range" min="0" max="100" value={naturalMarkerSettings.hardness} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, hardness: parseInt(e.target.value) }))} className="w-full" />
-               </div>
-               <div>
-                 <label className="text-xs text-[--text-secondary] block mb-1">Espaciado: {naturalMarkerSettings.spacing}%</label>
-                 <input type="range" min="1" max="100" value={naturalMarkerSettings.spacing} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, spacing: parseInt(e.target.value) }))} className="w-full" />
-               </div>
-               <div>
-                    <label className="text-xs text-[--text-secondary] block mb-1">Forma de la punta</label>
-                    <div className="grid grid-cols-3 gap-2">
-                        <button onClick={() => setNaturalMarkerSettings(s => ({ ...s, tipShape: 'round' }))} className={`text-xs p-2 rounded ${naturalMarkerSettings.tipShape === 'round' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Redonda</button>
-                        <button onClick={() => setNaturalMarkerSettings(s => ({ ...s, tipShape: 'square' }))} className={`text-xs p-2 rounded ${naturalMarkerSettings.tipShape === 'square' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Cuadrada</button>
-                        <button onClick={() => setNaturalMarkerSettings(s => ({ ...s, tipShape: 'line' }))} className={`text-xs p-2 rounded ${naturalMarkerSettings.tipShape === 'line' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Línea</button>
-                    </div>
+                   <label className="text-xs text-[--text-secondary] block mb-1">Dureza: {advancedMarkerSettings.hardness}%</label>
+                   <input type="range" min="0" max="100" value={advancedMarkerSettings.hardness} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, hardness: parseInt(e.target.value) }))} className="w-full" />
+                </div>
+                <div>
+                   <label className="text-xs text-[--text-secondary] block mb-1">Espaciado: {advancedMarkerSettings.spacing}%</label>
+                   <input type="range" min="1" max="100" value={advancedMarkerSettings.spacing} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, spacing: parseInt(e.target.value) }))} className="w-full" />
                 </div>
            </Accordion>
            <Accordion title="Dinámica de Presión">
                <div className="flex items-center justify-between py-1">
-                   <label htmlFor="pressure-size-natural-marker" className="text-xs text-[--text-secondary]">Controlar Tamaño</label>
-                   <input id="pressure-size-natural-marker" type="checkbox" checked={naturalMarkerSettings.pressureControl.size} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, pressureControl: {...s.pressureControl, size: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+                   <label htmlFor="pressure-size-adv" className="text-xs text-[--text-secondary]">Controlar Tamaño</label>
+                   <input id="pressure-size-adv" type="checkbox" checked={advancedMarkerSettings.pressureControl.size} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, pressureControl: {...s.pressureControl, size: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
                </div>
                 <div className="flex items-center justify-between py-1">
-                   <label htmlFor="pressure-flow-natural-marker" className="text-xs text-[--text-secondary]">Controlar Flujo</label>
-                   <input id="pressure-flow-natural-marker" type="checkbox" checked={naturalMarkerSettings.pressureControl.flow} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, pressureControl: {...s.pressureControl, flow: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+                   <label htmlFor="pressure-flow-adv" className="text-xs text-[--text-secondary]">Controlar Flujo</label>
+                   <input id="pressure-flow-adv" type="checkbox" checked={advancedMarkerSettings.pressureControl.flow} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, pressureControl: {...s.pressureControl, flow: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
                </div>
            </Accordion>
          </div>
        );
+    // FIX: Added settings panel for watercolor tool.
+    case 'watercolor':
+        return (
+         <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
+            <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
+               <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Acuarela</h4>
+            </div>
+           <Accordion title="General" defaultOpen>
+               <div>
+                 <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {watercolorSettings.size}px</label>
+                 <input type="range" min="1" max="300" value={watercolorSettings.size} onChange={(e) => setWatercolorSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
+               </div>
+               <div>
+                 <label className="text-xs text-[--text-secondary] block mb-1">Flujo (Densidad): {watercolorSettings.flow}%</label>
+                 <input type="range" min="1" max="100" value={watercolorSettings.flow} onChange={(e) => setWatercolorSettings(s => ({ ...s, flow: parseInt(e.target.value) }))} className="w-full" />
+               </div>
+                <div>
+                 <label className="text-xs text-[--text-secondary] block mb-1">Humedad (Opacidad): {watercolorSettings.wetness}%</label>
+                 <input type="range" min="1" max="100" value={watercolorSettings.wetness} onChange={(e) => setWatercolorSettings(s => ({ ...s, wetness: parseInt(e.target.value) }))} className="w-full" />
+               </div>
+                <div>
+                 <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
+                 <input type="color" value={watercolorSettings.color} onChange={(e) => setWatercolorSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+               </div>
+           </Accordion>
+           <Accordion title="Dinámica de Presión">
+               <div className="flex items-center justify-between py-1">
+                   <label htmlFor="pressure-size-wc" className="text-xs text-[--text-secondary]">Controlar Tamaño</label>
+                   <input id="pressure-size-wc" type="checkbox" checked={watercolorSettings.pressureControl.size} onChange={(e) => setWatercolorSettings(s => ({ ...s, pressureControl: {...s.pressureControl, size: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+               </div>
+                <div className="flex items-center justify-between py-1">
+                   <label htmlFor="pressure-flow-wc" className="text-xs text-[--text-secondary]">Controlar Flujo</label>
+                   <input id="pressure-flow-wc" type="checkbox" checked={watercolorSettings.pressureControl.flow} onChange={(e) => setWatercolorSettings(s => ({ ...s, pressureControl: {...s.pressureControl, flow: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+               </div>
+           </Accordion>
+         </div>
+       );
+    case 'natural-marker':
+        return (
+            <div className="p-4 space-y-4">
+                <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Marcador Natural</h4>
+                <div>
+                  <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {naturalMarkerSettings.size}px</label>
+                  <input type="range" min="1" max="200" value={naturalMarkerSettings.size} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
+                </div>
+                <div>
+                  <label className="text-xs text-[--text-secondary] block mb-1">Opacidad: {Math.round(naturalMarkerSettings.opacity * 100)}%</label>
+                  <input type="range" min="1" max="100" value={naturalMarkerSettings.opacity * 100} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, opacity: parseInt(e.target.value) / 100 }))} className="w-full" />
+                </div>
+                 <div>
+                  <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
+                  <input type="color" value={naturalMarkerSettings.color} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                </div>
+            </div>
+        );
+    case 'airbrush':
+         return (
+            <div className="p-4 space-y-4">
+                <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Aerógrafo</h4>
+                <div>
+                  <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {airbrushSettings.size}px</label>
+                  <input type="range" min="1" max="500" value={airbrushSettings.size} onChange={(e) => setAirbrushSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
+                </div>
+                <div>
+                  <label className="text-xs text-[--text-secondary] block mb-1">Flujo: {Math.round(airbrushSettings.flow * 100)}%</label>
+                  <input type="range" min="1" max="100" value={airbrushSettings.flow * 100} onChange={(e) => setAirbrushSettings(s => ({ ...s, flow: parseInt(e.target.value) / 100 }))} className="w-full" />
+                </div>
+                 <div>
+                  <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
+                  <input type="color" value={airbrushSettings.color} onChange={(e) => setAirbrushSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                </div>
+            </div>
+        );
+    case 'fx-brush':
+         return (
+            <div className="p-4 space-y-4">
+                <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Pincel de Efectos</h4>
+                <div>
+                    <label className="text-xs text-[--text-secondary] block mb-1">Preset</label>
+                    <select
+                        value={fxBrushSettings.presetId || ''}
+                        onChange={(e) => setFxBrushSettings(s => ({ ...s, presetId: e.target.value || null }))}
+                        className="w-full bg-[--bg-tertiary] text-[--text-primary] text-xs rounded-md p-2"
+                    >
+                        <option value="">Ninguno</option>
+                        {brushPresets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                </div>
+            </div>
+        );
       case 'eraser':
         return (
             <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
@@ -1233,190 +1256,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                     </div>
                 </Accordion>
             </div>
-        );
-       case 'airbrush':
-        return (
-          <div className="p-4 space-y-4">
-            <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Aerógrafo</h4>
-            <div>
-              <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {airbrushSettings.size}px</label>
-              <input type="range" min="1" max="300" value={airbrushSettings.size} onChange={(e) => setAirbrushSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
-            </div>
-            <div>
-              <label className="text-xs text-[--text-secondary] block mb-1">Flujo (Density): {Math.round(airbrushSettings.density * 100)}%</label>
-              <input type="range" min="1" max="100" value={airbrushSettings.density * 100} onChange={(e) => setAirbrushSettings(s => ({ ...s, density: parseInt(e.target.value) / 100 }))} className="w-full" />
-            </div>
-             <div>
-              <label className="text-xs text-[--text-secondary] block mb-1">Suavidad: {Math.round(airbrushSettings.softness * 100)}%</label>
-              <input type="range" min="0" max="100" value={airbrushSettings.softness * 100} onChange={(e) => setAirbrushSettings(s => ({ ...s, softness: parseInt(e.target.value) / 100 }))} className="w-full" />
-            </div>
-            <div>
-              <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
-              <input type="color" value={airbrushSettings.color} onChange={(e) => setAirbrushSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
-            </div>
-            <BlendModeSelector
-                value={airbrushSettings.blendMode}
-                onChange={(value) => setAirbrushSettings(s => ({ ...s, blendMode: value }))}
-            />
-          </div>
-        );
-      case 'fx-brush':
-        return (
-          <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
-            <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
-                <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Pincel FX</h4>
-                 <div className="flex items-center gap-2">
-                    <select value={selectedPresetId} onChange={handleLoadPreset} className="bg-[--bg-tertiary] text-[--text-primary] text-xs rounded-md p-2 flex-grow">
-                        <option value="custom">Personalizado</option>
-                        {brushPresets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                    {selectedPresetId !== 'custom' && (
-                       <button onClick={handleDeletePreset} className="p-2 bg-[--bg-tertiary] hover:bg-red-600 rounded-md" title="Eliminar preset">
-                           <TrashIcon className="w-4 h-4" />
-                       </button>
-                    )}
-                 </div>
-                 <div className="space-y-2">
-                    <input 
-                      type="text" 
-                      placeholder="Nombre del Preset"
-                      value={presetName}
-                      onChange={(e) => setPresetName(e.target.value)}
-                      className="bg-[--bg-tertiary] text-[--text-primary] text-xs rounded-md p-2 w-full"
-                    />
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={handleSave} 
-                        disabled={selectedPresetId === 'custom' || !presetName.trim()}
-                        className="flex-1 bg-red-700 hover:bg-red-600 text-white text-xs font-bold p-2 rounded-md disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Guardar cambios en el preset actual">
-                          Guardar
-                      </button>
-                      <button 
-                        onClick={handleSaveAs}
-                        disabled={!presetName.trim()}
-                        className="flex-1 bg-red-600 hover:bg-red-500 text-white text-xs font-bold p-2 rounded-md disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Guardar como un nuevo preset">
-                          Guardar Como...
-                      </button>
-                    </div>
-                  </div>
-            </div>
-            <Accordion title="General" defaultOpen>
-              <div>
-                  <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {fxBrushSettings.size}px</label>
-                  <input type="range" min="1" max="500" value={fxBrushSettings.size} onChange={(e) => setFxBrushSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
-              </div>
-              <div>
-                  <label className="text-xs text-[--text-secondary] block mb-1">Opacidad: {Math.round(fxBrushSettings.opacity * 100)}%</label>
-                  <input type="range" min="0" max="100" value={fxBrushSettings.opacity * 100} onChange={(e) => setFxBrushSettings(s => ({ ...s, opacity: parseInt(e.target.value) / 100 }))} className="w-full" />
-              </div>
-               <div>
-                  <label className="text-xs text-[--text-secondary] block mb-1">Acumulación (Flow): {Math.round(fxBrushSettings.flow * 100)}%</label>
-                  <input type="range" min="1" max="100" value={fxBrushSettings.flow * 100} onChange={(e) => setFxBrushSettings(s => ({ ...s, flow: parseInt(e.target.value) / 100 }))} className="w-full" />
-              </div>
-              <div>
-                  <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
-                  <input type="color" value={fxBrushSettings.color} onChange={(e) => setFxBrushSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
-              </div>
-               <BlendModeSelector
-                    value={fxBrushSettings.blendMode}
-                    onChange={(value) => setFxBrushSettings(s => ({ ...s, blendMode: value }))}
-                />
-            </Accordion>
-             <Accordion title="Forma de la Punta">
-                <div>
-                  <label className="text-xs text-[--text-secondary] block mb-1">Dureza: {fxBrushSettings.hardness}%</label>
-                  <input type="range" min="0" max="100" value={fxBrushSettings.hardness} onChange={(e) => setFxBrushSettings(s => ({ ...s, hardness: parseInt(e.target.value) }))} className="w-full" />
-                </div>
-                <div>
-                  <label className="text-xs text-[--text-secondary] block mb-1">Espaciado: {fxBrushSettings.spacing}%</label>
-                  <input type="range" min="1" max="500" value={fxBrushSettings.spacing} onChange={(e) => setFxBrushSettings(s => ({ ...s, spacing: parseInt(e.target.value) }))} className="w-full" />
-                </div>
-                 <div>
-                  <label className="text-xs text-[--text-secondary] block mb-1">Ángulo: {fxBrushSettings.angle}°</label>
-                  <input 
-                    type="range"
-                    min="0"
-                    max="360"
-                    value={fxBrushSettings.angle}
-                    onChange={(e) => setFxBrushSettings(s => ({ ...s, angle: parseInt(e.target.value) }))}
-                    className="w-full"
-                  />
-                </div>
-                <div className="flex items-center justify-between py-1">
-                    <label htmlFor="angle-follows-stroke" className="text-xs text-[--text-secondary]">Seguir dirección del trazo</label>
-                    <input 
-                      id="angle-follows-stroke" 
-                      type="checkbox" 
-                      checked={fxBrushSettings.angleFollowsStroke} 
-                      onChange={(e) => setFxBrushSettings(s => ({ ...s, angleFollowsStroke: e.target.checked }))} 
-                      className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" 
-                    />
-                </div>
-                <div>
-                    <label className="text-xs text-[--text-secondary] block mb-1">Forma</label>
-                    <div className="grid grid-cols-3 gap-2">
-                        <button onClick={() => setFxBrushSettings(s => ({ ...s, tipShape: 'round' }))} className={`text-xs p-2 rounded ${fxBrushSettings.tipShape === 'round' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Redonda</button>
-                        <button onClick={() => setFxBrushSettings(s => ({ ...s, tipShape: 'square' }))} className={`text-xs p-2 rounded ${fxBrushSettings.tipShape === 'square' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Cuadrada</button>
-                        <button onClick={() => setFxBrushSettings(s => ({ ...s, tipShape: 'line' }))} className={`text-xs p-2 rounded ${fxBrushSettings.tipShape === 'line' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Línea</button>
-                    </div>
-                </div>
-            </Accordion>
-            <Accordion title="Dinámica de Forma">
-                <div>
-                  <label className="text-xs text-[--text-secondary] block mb-1">Var. Tamaño: {Math.round(fxBrushSettings.sizeJitter * 100)}%</label>
-                  <input type="range" min="0" max="100" value={fxBrushSettings.sizeJitter * 100} onChange={(e) => setFxBrushSettings(s => ({ ...s, sizeJitter: parseInt(e.target.value) / 100 }))} className="w-full" />
-                </div>
-                 <div>
-                  <label className="text-xs text-[--text-secondary] block mb-1">Var. Ángulo: {Math.round(fxBrushSettings.angleJitter * 100)}%</label>
-                  <input type="range" min="0" max="100" value={fxBrushSettings.angleJitter * 100} onChange={(e) => setFxBrushSettings(s => ({ ...s, angleJitter: parseInt(e.target.value) / 100 }))} className="w-full" />
-                </div>
-            </Accordion>
-            <Accordion title="Dispersión">
-                <div>
-                    <label className="text-xs text-[--text-secondary] block mb-1">Dispersión: {Math.round(fxBrushSettings.scatter * 100)}%</label>
-                    <input type="range" min="0" max="100" value={fxBrushSettings.scatter * 100} onChange={(e) => setFxBrushSettings(s => ({ ...s, scatter: parseInt(e.target.value) / 100 }))} className="w-full" />
-                </div>
-            </Accordion>
-            <Accordion title="Textura">
-                <div className="space-y-2">
-                    <input type="file" accept="image/*" className="hidden" ref={textureInputRef} onChange={handleTextureFileChange} />
-                    <button onClick={() => textureInputRef.current?.click()} className="w-full bg-[--bg-tertiary] hover:bg-[--bg-hover] text-[--text-primary] text-xs p-2 rounded-md">Seleccionar Textura</button>
-                </div>
-                {fxBrushSettings.texture.dataUrl && (
-                    <div className="mt-4 text-center">
-                        <img src={fxBrushSettings.texture.dataUrl} className="w-16 h-16 object-contain inline-block bg-white rounded-sm" alt="Textura seleccionada"/>
-                        <p className="text-xs text-gray-500 truncate">{fxBrushSettings.texture.name}</p>
-                        <button onClick={() => setFxBrushSettings(s => ({ ...s, texture: { dataUrl: null, name: null } }))} className="text-red-500 hover:text-red-400 text-xs mt-1">Eliminar</button>
-                    </div>
-                )}
-            </Accordion>
-            <Accordion title="Dinámica de Color">
-                 <div>
-                    <label className="text-xs text-[--text-secondary] block mb-1">Var. Tono: {Math.round(fxBrushSettings.hueJitter * 100)}%</label>
-                    <input type="range" min="0" max="100" value={fxBrushSettings.hueJitter * 100} onChange={(e) => setFxBrushSettings(s => ({ ...s, hueJitter: parseInt(e.target.value) / 100 }))} className="w-full" />
-                </div>
-                <div>
-                    <label className="text-xs text-[--text-secondary] block mb-1">Var. Saturación: {Math.round(fxBrushSettings.saturationJitter * 100)}%</label>
-                    <input type="range" min="0" max="100" value={fxBrushSettings.saturationJitter * 100} onChange={(e) => setFxBrushSettings(s => ({ ...s, saturationJitter: parseInt(e.target.value) / 100 }))} className="w-full" />
-                </div>
-                <div>
-                    <label className="text-xs text-[--text-secondary] block mb-1">Var. Brillo: {Math.round(fxBrushSettings.brightnessJitter * 100)}%</label>
-                    <input type="range" min="0" max="100" value={fxBrushSettings.brightnessJitter * 100} onChange={(e) => setFxBrushSettings(s => ({ ...s, brightnessJitter: parseInt(e.target.value) / 100 }))} className="w-full" />
-                </div>
-            </Accordion>
-            <Accordion title="Dinámica de Presión">
-                <div className="flex items-center justify-between py-1">
-                    <label htmlFor="pressure-size" className="text-xs text-[--text-secondary]">Controlar Tamaño</label>
-                    <input id="pressure-size" type="checkbox" checked={fxBrushSettings.pressureControl.size} onChange={(e) => setFxBrushSettings(s => ({ ...s, pressureControl: {...s.pressureControl, size: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
-                </div>
-                 <div className="flex items-center justify-between py-1">
-                    <label htmlFor="pressure-opacity" className="text-xs text-[--text-secondary]">Controlar Opacidad</label>
-                    <input id="pressure-opacity" type="checkbox" checked={fxBrushSettings.pressureControl.opacity} onChange={(e) => setFxBrushSettings(s => ({ ...s, pressureControl: {...s.pressureControl, opacity: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
-                </div>
-            </Accordion>
-          </div>
         );
       default:
         return null;
@@ -1453,21 +1292,20 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       { style: 'dash-dot', label: 'Línea y punto', icon: DashDotLineIcon },
   ];
 
-  const isPaintTool = ['brush', 'solid-marker', 'natural-marker', 'airbrush', 'fx-brush', 'eraser'].includes(tool);
+  // FIX: Added 'watercolor' to the list of paint tools.
+  const isPaintTool = ['brush', 'simple-marker', 'eraser', 'natural-marker', 'advanced-marker', 'airbrush', 'fx-brush', 'watercolor'].includes(tool);
   const strokeModeButtonClasses = `p-3 rounded-lg transition-colors ${isPaintTool ? 'bg-[--accent-primary] text-white hover:bg-[--accent-hover]' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`;
   const isStrokeModifierActive = strokeModifier.style !== 'solid';
   const strokeModifierButtonClasses = `p-3 rounded-lg transition-colors ${isStrokeModifierActive ? 'bg-[--accent-primary] text-white hover:bg-[--accent-hover]' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`;
 
   // Grouped Tools Logic
   const selectionToolTools: Tool[] = ['marquee-rect', 'lasso', 'magic-wand'];
-  const solidToolTools: Tool[] = ['brush', 'solid-marker'];
-  const artisticToolTools: Tool[] = ['natural-marker', 'airbrush', 'fx-brush'];
+  // FIX: Added 'watercolor' to the list of drawing tools.
+  const drawingToolTools: Tool[] = ['brush', 'simple-marker', 'natural-marker', 'advanced-marker', 'airbrush', 'fx-brush', 'watercolor'];
   const isSelectionGroupActive = selectionToolTools.includes(tool);
-  const isSolidGroupActive = solidToolTools.includes(tool);
-  const isArtisticGroupActive = artisticToolTools.includes(tool);
-    const ActiveSelectionIcon = toolIconMap[isSelectionGroupActive ? tool : lastActiveSelectionTool];
-    const ActiveSolidIcon = toolIconMap[isSolidGroupActive ? tool : lastActiveSolidTool];
-    const ActiveArtisticIcon = toolIconMap[isArtisticGroupActive ? tool : lastActiveArtisticTool];
+  const isDrawingGroupActive = drawingToolTools.includes(tool);
+  const ActiveSelectionIcon = toolIconMap[isSelectionGroupActive ? tool : lastActiveSelectionTool];
+  const ActiveDrawingIcon = toolIconMap[isDrawingGroupActive ? tool : lastActiveDrawingTool];
 
   const getSettingsPanelStyle = (): React.CSSProperties => {
     if (!openSettings) {
@@ -1513,8 +1351,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 <div className="relative" ref={selectionToolsMenuRef}>
                     <button
                         onClick={() => {
-                            setIsSolidToolsMenuOpen(false);
-                            setIsArtisticToolsMenuOpen(false);
+                            setIsDrawingToolsMenuOpen(false);
                             setIsStrokeModeMenuOpen(false);
                             setIsStrokeModifierMenuOpen(false);
                             setIsSelectionToolsMenuOpen(prev => !prev);
@@ -1547,8 +1384,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                     onClick={() => {
                         setIsStrokeModifierMenuOpen(false);
                         setIsSelectionToolsMenuOpen(false);
-                        setIsSolidToolsMenuOpen(false);
-                        setIsArtisticToolsMenuOpen(false);
+                        setIsDrawingToolsMenuOpen(false);
                         setIsStrokeModeMenuOpen(prev => !prev);
                     }}
                     className={strokeModeButtonClasses}
@@ -1582,8 +1418,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                     onClick={() => {
                         setIsStrokeModeMenuOpen(false);
                         setIsSelectionToolsMenuOpen(false);
-                        setIsSolidToolsMenuOpen(false);
-                        setIsArtisticToolsMenuOpen(false);
+                        setIsDrawingToolsMenuOpen(false);
                         setIsStrokeModifierMenuOpen(prev => !prev);
                     }}
                     className={strokeModifierButtonClasses}
@@ -1628,60 +1463,26 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
               <div className="w-10/12 h-px bg-[--bg-tertiary] my-2 self-center" />
               
-              {/* Solid Tools Group */}
-              <div className="relative" ref={solidToolsMenuRef}>
+              {/* Drawing Tools Group */}
+              <div className="relative" ref={drawingToolsMenuRef}>
                 <button
                     onClick={() => {
                         setIsSelectionToolsMenuOpen(false);
-                        setIsArtisticToolsMenuOpen(false);
                         setIsStrokeModeMenuOpen(false);
                         setIsStrokeModifierMenuOpen(false);
-                        setIsSolidToolsMenuOpen(prev => !prev);
+                        setIsDrawingToolsMenuOpen(prev => !prev);
                     }}
-                    onDoubleClick={(e) => handleToolDoubleClick(isSolidGroupActive ? tool : lastActiveSolidTool, e)}
-                    className={`p-3 rounded-lg transition-colors ${isSolidGroupActive ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}
-                    title="Herramientas de Tinta Sólida (doble clic para opciones)"
+                    onDoubleClick={(e) => handleToolDoubleClick(isDrawingGroupActive ? tool : lastActiveDrawingTool, e)}
+                    className={`p-3 rounded-lg transition-colors ${isDrawingGroupActive ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}
+                    title="Herramientas de Dibujo (doble clic para opciones)"
                 >
-                    <ActiveSolidIcon className="w-6 h-6" />
+                    <ActiveDrawingIcon className="w-6 h-6" />
                 </button>
-                 {isSolidToolsMenuOpen && (
+                 {isDrawingToolsMenuOpen && (
                     <div className="absolute left-full top-0 ml-2 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-60 z-20 p-2 space-y-1">
-                        {solidToolsGroup.map(({ tool: t, name, icon: Icon }) => (
+                        {drawingToolsGroup.map(({ tool: t, name, icon: Icon }) => (
                             <div key={t} className={`flex items-center justify-between rounded-md text-sm ${tool === t ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}>
-                                <button onClick={() => { handleToolClick(t); setIsSolidToolsMenuOpen(false); }} className="flex items-center gap-3 p-2 flex-grow text-left">
-                                    <Icon className="w-5 h-5" />
-                                    <span>{name}</span>
-                                </button>
-                                <button onClick={(e) => { handleSettingsClick(e, t); }} className="p-2 mr-1 rounded-full hover:bg-black/10 flex-shrink-0" title="Configuración de la herramienta">
-                                    <MoreVerticalIcon className="w-4 h-4" />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-              </div>
-
-              {/* Artistic Tools Group */}
-               <div className="relative" ref={artisticToolsMenuRef}>
-                <button
-                    onClick={() => {
-                        setIsStrokeModeMenuOpen(false);
-                        setIsStrokeModifierMenuOpen(false);
-                        setIsSelectionToolsMenuOpen(false);
-                        setIsSolidToolsMenuOpen(false);
-                        setIsArtisticToolsMenuOpen(prev => !prev);
-                    }}
-                    onDoubleClick={(e) => handleToolDoubleClick(isArtisticGroupActive ? tool : lastActiveArtisticTool, e)}
-                    className={`p-3 rounded-lg transition-colors ${isArtisticGroupActive ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}
-                    title="Herramientas Artísticas (doble clic para opciones)"
-                >
-                    <ActiveArtisticIcon className="w-6 h-6" />
-                </button>
-                 {isArtisticToolsMenuOpen && (
-                    <div className="absolute left-full top-0 ml-2 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-60 z-20 p-2 space-y-1">
-                        {artisticToolsGroup.map(({ tool: t, name, icon: Icon }) => (
-                            <div key={t} className={`flex items-center justify-between rounded-md text-sm ${tool === t ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}>
-                                <button onClick={() => { handleToolClick(t); setIsArtisticToolsMenuOpen(false); }} className="flex items-center gap-3 p-2 flex-grow text-left">
+                                <button onClick={() => { handleToolClick(t); setIsDrawingToolsMenuOpen(false); }} className="flex items-center gap-3 p-2 flex-grow text-left">
                                     <Icon className="w-5 h-5" />
                                     <span>{name}</span>
                                 </button>
