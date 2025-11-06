@@ -4,10 +4,18 @@ import ReactDOM from 'react-dom/client';
 import { App } from './App';
 // Register service worker for PWA (injected by vite-plugin-pwa)
 try {
-  // virtual:pwa-register is provided by vite-plugin-pwa at build/dev time
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { registerSW } = require('virtual:pwa-register');
-  if (registerSW) registerSW();
+  // virtual:pwa-register is provided by vite-plugin-pwa at build/dev time.
+  // Use a dynamic ESM import so this only runs in the browser and avoids
+  // relying on CommonJS `require` (which can be problematic in some setups).
+  // If you plan to publish the PWA, add the referenced icons (pwa-192.png,
+  // pwa-512.png) into a `public/` folder so the manifest can find them.
+  void import('virtual:pwa-register')
+    .then(({ registerSW }) => {
+      if (typeof registerSW === 'function') registerSW();
+    })
+    .catch(() => {
+      // plugin not installed or running in an environment without the virtual module
+    });
 } catch (e) {
   // plugin not installed or running in an environment without the virtual module
 }

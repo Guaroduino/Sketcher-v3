@@ -64,7 +64,12 @@ export const ToolSelectorModal: React.FC<ToolSelectorModalProps> = ({ isOpen, on
                                     title={name}
                                 >
                                     <Icon className="w-8 h-8" />
-                                    <span className="text-xs mt-2 capitalize">{name.replace('-', ' ')}</span>
+                                    <span className="text-xs mt-2 capitalize">{
+                                        // Provide friendlier display names for specific tools
+                                        name === 'advanced-marker' ? 'Lápiz de color'
+                                        : name === 'natural-marker' ? 'Marcador sólido'
+                                        : name.replace('-', ' ')
+                                    }</span>
                                 </button>
                             ))}
                         </div>

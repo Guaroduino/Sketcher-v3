@@ -17,9 +17,10 @@ export class SimpleMarkerBrush extends BaseBrush {
         const { color, tipShape, size, blendMode, opacity, pressureControl } = this.settings;
         const { strokeModifier } = context;
 
-        ctx.strokeStyle = color;
-        ctx.lineCap = tipShape === 'line' ? 'butt' : 'square';
-        ctx.lineJoin = 'miter';
+    ctx.strokeStyle = color;
+    // Map logical tip shapes to canvas line cap / join values.
+    ctx.lineCap = tipShape === 'line' ? 'butt' : (tipShape === 'circle' ? 'round' : 'square');
+    ctx.lineJoin = tipShape === 'circle' ? 'round' : 'miter';
         ctx.lineWidth = size;
         ctx.globalCompositeOperation = blendMode;
 

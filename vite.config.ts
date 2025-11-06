@@ -4,8 +4,9 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(({ mode }) => {
-    const env = loadEnv(mode, '.', '');
-    const repoBase = env.VITE_BASE || '/Sketcher-v3/';
+  const env = loadEnv(mode, '.', '');
+  // Default to root so builds work when deployed to Firebase Hosting root
+  const repoBase = env.VITE_BASE || '/';
     return {
       base: repoBase,
       server: {
@@ -25,8 +26,8 @@ export default defineConfig(({ mode }) => {
             background_color: '#ffffff',
             theme_color: '#ffffff',
             icons: [
-              { src: '/pwa-192.png', sizes: '192x192', type: 'image/png' },
-              { src: '/pwa-512.png', sizes: '512x512', type: 'image/png' }
+              { src: '/pwa-192.svg', sizes: '192x192', type: 'image/svg+xml' },
+              { src: '/pwa-512.svg', sizes: '512x512', type: 'image/svg+xml' }
             ]
           }
         })

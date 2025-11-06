@@ -110,9 +110,10 @@ const selectionToolsGroup: { tool: Tool; name: string; icon: React.FC<{className
 // FIX: Added 'watercolor' to the drawing tools group.
 const drawingToolsGroup: { tool: Tool; name: string; icon: React.FC<{className?: string}> }[] = [
     { tool: 'brush', name: 'Rapidograph Solido', icon: BrushIcon },
-    { tool: 'simple-marker', name: 'Marcador Sólido', icon: SolidMarkerIcon },
-    { tool: 'advanced-marker', name: 'Marcador Avanzado', icon: AdvancedMarkerIcon },
-    { tool: 'natural-marker', name: 'Marcador Natural', icon: NaturalMarkerIcon },
+    // Renamed "Marcador Sólido" -> "Marcador"
+    { tool: 'simple-marker', name: 'Marcador', icon: SolidMarkerIcon },
+    { tool: 'advanced-marker', name: 'Lápiz de color', icon: AdvancedMarkerIcon },
+    { tool: 'natural-marker', name: 'Marcador sólido', icon: NaturalMarkerIcon },
     { tool: 'airbrush', name: 'Aerógrafo', icon: AirbrushIcon },
     { tool: 'fx-brush', name: 'Pincel de Efectos', icon: FXBrushIcon },
     { tool: 'watercolor', name: 'Acuarela', icon: WatercolorIcon },
@@ -1052,9 +1053,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       case 'simple-marker':
          return (
           <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
-             <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
-                <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Marcador Sólido</h4>
-             </div>
+                 <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
+                     <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Marcador</h4>
+                 </div>
             <Accordion title="General" defaultOpen>
                 <div>
                   <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {simpleMarkerSettings.size}px</label>
@@ -1079,6 +1080,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                     <div className="flex gap-2">
                         <button onClick={() => setSimpleMarkerSettings(s => ({ ...s, tipShape: 'square' }))} className={`flex-1 text-xs p-2 rounded ${simpleMarkerSettings.tipShape === 'square' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Cuadrada</button>
                         <button onClick={() => setSimpleMarkerSettings(s => ({ ...s, tipShape: 'line' }))} className={`flex-1 text-xs p-2 rounded ${simpleMarkerSettings.tipShape === 'line' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Línea</button>
+                        <button onClick={() => setSimpleMarkerSettings(s => ({ ...s, tipShape: 'circle' }))} className={`flex-1 text-xs p-2 rounded ${simpleMarkerSettings.tipShape === 'circle' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Redonda</button>
                     </div>
                 </div>
             </Accordion>
@@ -1093,9 +1095,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     case 'advanced-marker':
         return (
          <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
-            <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
-               <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Marcador Avanzado</h4>
-            </div>
+               <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
+                   <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Lápiz de color</h4>
+                </div>
            <Accordion title="General" defaultOpen>
                <div>
                  <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {advancedMarkerSettings.size}px</label>
@@ -1153,9 +1155,13 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                  <input type="range" min="1" max="100" value={watercolorSettings.flow} onChange={(e) => setWatercolorSettings(s => ({ ...s, flow: parseInt(e.target.value) }))} className="w-full" />
                </div>
                 <div>
-                 <label className="text-xs text-[--text-secondary] block mb-1">Humedad (Opacidad): {watercolorSettings.wetness}%</label>
-                 <input type="range" min="1" max="100" value={watercolorSettings.wetness} onChange={(e) => setWatercolorSettings(s => ({ ...s, wetness: parseInt(e.target.value) }))} className="w-full" />
+                                     <label className="text-xs text-[--text-secondary] block mb-1">Humedad (Opacidad por dab): {watercolorSettings.wetness}%</label>
+                                     <input type="range" min="1" max="100" value={watercolorSettings.wetness} onChange={(e) => setWatercolorSettings(s => ({ ...s, wetness: parseInt(e.target.value) }))} className="w-full" />
                </div>
+                                 <div>
+                                     <label className="text-xs text-[--text-secondary] block mb-1">Opacidad (General): {Math.round(watercolorSettings.opacity * 100)}%</label>
+                                     <input type="range" min="0" max="100" value={watercolorSettings.opacity * 100} onChange={(e) => setWatercolorSettings(s => ({ ...s, opacity: parseInt(e.target.value) / 100 }))} className="w-full" />
+                                 </div>
                 <div>
                  <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
                  <input type="color" value={watercolorSettings.color} onChange={(e) => setWatercolorSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
@@ -1170,6 +1176,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                    <label htmlFor="pressure-flow-wc" className="text-xs text-[--text-secondary]">Controlar Flujo</label>
                    <input id="pressure-flow-wc" type="checkbox" checked={watercolorSettings.pressureControl.flow} onChange={(e) => setWatercolorSettings(s => ({ ...s, pressureControl: {...s.pressureControl, flow: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
                </div>
+                   <div className="flex items-center justify-between py-1">
+                       <label htmlFor="pressure-opacity-wc" className="text-xs text-[--text-secondary]">Controlar Opacidad</label>
+                       <input id="pressure-opacity-wc" type="checkbox" checked={watercolorSettings.pressureControl.opacity} onChange={(e) => setWatercolorSettings(s => ({ ...s, pressureControl: {...s.pressureControl, opacity: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+                   </div>
            </Accordion>
          </div>
        );

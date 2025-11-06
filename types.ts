@@ -55,7 +55,8 @@ export interface SimpleMarkerSettings {
   size: number;
   opacity: number;
   color: string;
-  tipShape: 'square' | 'line';
+  // Added 'circle' as a valid tip shape for simple markers
+  tipShape: 'square' | 'line' | 'circle';
   blendMode: BlendMode;
   pressureControl: {
     opacity: boolean;
@@ -111,10 +112,12 @@ export interface WatercolorSettings {
   size: number;
   flow: number; // 0-100, density of dabs
   wetness: number; // 0-100, opacity of each dab
+  opacity: number; // 0-1 overall brush opacity (slider)
   color: string;
   pressureControl: {
     size: boolean;
-    flow: boolean;
+      flow: boolean;
+      opacity: boolean;
   };
 }
 

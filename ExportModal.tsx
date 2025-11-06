@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { SketchObject, CropRect } from '../types';
-import { getContentBoundingBox } from '../utils/canvasUtils';
+import type { SketchObject, CropRect } from './types';
+import { getContentBoundingBox } from './utils/canvasUtils';
 
 interface ExportModalProps {
   isOpen: boolean;
