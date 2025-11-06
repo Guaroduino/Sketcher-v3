@@ -35,33 +35,50 @@ export function useLibrary(user: User | null) {
         if (user) {
             const q = query(collection(db, `users/${user.uid}/libraryItems`), orderBy('createdAt', 'desc'));
             const unsubscribe = onSnapshot(q, async (querySnapshot) => {
-                const itemPromises = querySnapshot.docs.map(async (doc) => {
-                    const data = doc.data();
-                    if (data.type === 'folder') {
-                        return {
-                            id: doc.id,
-                            name: data.name,
-                            type: 'folder' as const,
-                            parentId: data.parentId || null,
-                        };
-                    }
+                // Build items defensively so a single Storage error (e.g. quota exceeded)
+                // doesn't break the entire library list
+                const itemPromises = querySnapshot.docs.map(async (docSnap) => {
+                    try {
+                        const data = docSnap.data();
+                        if (data.type === 'folder') {
+                            return {
+                                id: docSnap.id,
+                                name: data.name,
+                                type: 'folder' as const,
+                                parentId: data.parentId || null,
+                            };
+                        }
 
-                    // It's an image
-                    if (!data.storagePath) return null;
-                    const downloadURL = await getDownloadURL(ref(storage, data.storagePath));
-                    return {
-                        id: doc.id,
-                        name: data.name,
-                        type: 'image' as const,
-                        storagePath: data.storagePath,
-                        transparentColors: data.transparentColors || [],
-                        scaleFactor: data.scaleFactor || 5,
-                        tolerance: data.tolerance,
-                        dataUrl: downloadURL,
-                        parentId: data.parentId || null,
-                        scaleUnit: data.scaleUnit || 'mm',
-                    };
+                        // It's an image
+                        if (!data.storagePath) return null;
+
+                        let downloadURL: string | undefined = undefined;
+                        try {
+                            downloadURL = await getDownloadURL(ref(storage, data.storagePath));
+                        } catch (e) {
+                            // Common case: Firebase Storage quota exceeded (HTTP 402)
+                            console.warn(`Could not get thumbnail for ${data.name}`, e);
+                        }
+
+                        return {
+                            id: docSnap.id,
+                            name: data.name,
+                            type: 'image' as const,
+                            storagePath: data.storagePath,
+                            transparentColors: data.transparentColors || [],
+                            scaleFactor: data.scaleFactor || 5,
+                            tolerance: data.tolerance,
+                            dataUrl: downloadURL, // may be undefined, UI shows placeholder
+                            parentId: data.parentId || null,
+                            scaleUnit: data.scaleUnit || 'mm',
+                        };
+                    } catch (e) {
+                        console.error('Error building library item', e);
+                        return null;
+                    }
                 });
+
+                // Use allSettled semantics via try/catch inside each promise
                 const items = (await Promise.all(itemPromises)).filter(Boolean) as LibraryItem[];
                 setLibraryItems(items);
             }, (error) => {
