@@ -344,7 +344,8 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
                 };
 
                 // FIX: Replaced 'solid-marker' with 'simple-marker'.
-                const shapeToDraw = (tool === 'eraser' && props.eraserSettings.tipShape === 'square') || (tool === 'simple-marker' && props.simpleMarkerSettings.tipShape !== 'line') ? 'square' : 'circle';
+                // Draw a square cursor only when the eraser tip is square or the simple-marker tip is square.
+                const shapeToDraw = (tool === 'eraser' && props.eraserSettings.tipShape === 'square') || (tool === 'simple-marker' && props.simpleMarkerSettings.tipShape === 'square') ? 'square' : 'circle';
                 drawOutline(shapeToDraw);
             }
         }

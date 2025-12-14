@@ -27,6 +27,26 @@ export class NaturalMarkerBrush extends BaseBrush {
         });
     }
     
+    // Override preview updating to draw the full stroke on the preview canvas.
+    // The BaseBrush draws incremental segments which can cause a "bead"/dotted
+    // appearance for brushes that depend on continuous rendering. Drawing the
+    // whole stroke each frame ensures the preview exactly matches the final
+    // committed stroke.
+    protected updatePreview(context: BrushContext): void {
+        const { previewCtx, viewTransform } = context;
+        if (!previewCtx) return;
+
+        // Clear and draw the entire stroke so preview matches committed result
+        this.clearPreview(context);
+
+        previewCtx.save();
+        previewCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
+        // Draw the full set of points (not just incremental) so there are no gaps
+        this.drawWithMirroring(previewCtx, this.points, context);
+        previewCtx.restore();
+
+        this.lastPreviewPointCount = this.points.length;
+    }
     protected drawStroke(ctx: CanvasRenderingContext2D, points: Point[], context: BrushContext): void {
         // Placeholder: Currently uses the same logic as the Pencil brush.
         // This can be replaced with a more advanced, texture-based algorithm later.

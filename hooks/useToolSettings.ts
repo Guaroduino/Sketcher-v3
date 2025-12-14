@@ -26,7 +26,8 @@ const initialSimpleMarkerSettings: SimpleMarkerSettings = {
     size: 10,
     opacity: 0.8,
     color: '#facc15',
-    tipShape: 'square',
+    // Default tip is now a line
+    tipShape: 'line',
     blendMode: 'source-over',
     pressureControl: {
         opacity: true,
@@ -60,12 +61,13 @@ const initialFxBrushSettings: FXBrushSettings = {
 };
 
 const initialAdvancedMarkerSettings: AdvancedMarkerSettings = {
-    size: 30,
+    // Defaults adjusted: smaller pencil-like size and light flow
+    size: 5,
     color: '#f87171',
     tipShape: 'circle',
     tipAngle: 0,
     hardness: 80,
-    flow: 90,
+    flow: 5,
     wetness: 10,
     spacing: 25,
     blendMode: 'source-over',
@@ -79,10 +81,12 @@ const initialWatercolorSettings: WatercolorSettings = {
     size: 40,
     flow: 50,
     wetness: 50,
+    opacity: 0.9,
     color: '#3b82f6',
     pressureControl: {
         size: true,
         flow: false,
+        opacity: false,
     },
 };
 

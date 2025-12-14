@@ -6,8 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+<<<<<<< HEAD
     "build:firebase": "vite build --base=/ --outDir=dist",
     "preview": "vite preview"
+=======
+    "preview": "vite preview",
+    "deploy": "npm run build && firebase deploy --only hosting"
+>>>>>>> 0f3b7194c559580e5d40fa0e0803e62a6ac4e706
   },
   "dependencies": {
     "@google/genai": "^1.24.0",
@@ -17,9 +22,14 @@
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
+    "@vitejs/plugin-react": "^4.0.0",
     "typescript": "~5.8.2",
+<<<<<<< HEAD
     "vite": "^6.2.0",
     "vite-plugin-pwa": "^1.2.0"
+=======
+    "vite-plugin-pwa": "^0.14.3",
+    "vite": "^4.4.9"
+>>>>>>> 0f3b7194c559580e5d40fa0e0803e62a6ac4e706
   }
 }

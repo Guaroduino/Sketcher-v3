@@ -98,9 +98,10 @@ const selectionToolsGroup: { tool: Tool; name: string; icon: React.FC<{ classNam
 // FIX: Added 'watercolor' to the drawing tools group.
 const drawingToolsGroup: { tool: Tool; name: string; icon: React.FC<{ className?: string }> }[] = [
     { tool: 'brush', name: 'Rapidograph Solido', icon: BrushIcon },
-    { tool: 'simple-marker', name: 'Marcador Sólido', icon: SolidMarkerIcon },
-    { tool: 'advanced-marker', name: 'Marcador Avanzado', icon: AdvancedMarkerIcon },
-    { tool: 'natural-marker', name: 'Marcador Natural', icon: NaturalMarkerIcon },
+    // Renamed "Marcador Sólido" -> "Marcador"
+    { tool: 'simple-marker', name: 'Marcador', icon: SolidMarkerIcon },
+    { tool: 'advanced-marker', name: 'Lápiz de color', icon: AdvancedMarkerIcon },
+    { tool: 'natural-marker', name: 'Marcador sólido', icon: NaturalMarkerIcon },
     { tool: 'airbrush', name: 'Aerógrafo', icon: AirbrushIcon },
     { tool: 'fx-brush', name: 'Pincel de Efectos', icon: FXBrushIcon },
     { tool: 'watercolor', name: 'Acuarela', icon: WatercolorIcon },
@@ -766,8 +767,282 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                     </div>
                                 ))}
                             </div>
+<<<<<<< HEAD
                         )}
                     </div>
+=======
+                        </div>
+                    </Accordion>
+                )}
+            </div>
+        );
+      case 'brush':
+        return (
+          <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
+             <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
+                <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Rapidograph Solido</h4>
+            </div>
+            <Accordion title="General" defaultOpen>
+                <div>
+                  <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {brushSettings.size}px</label>
+                  <input type="range" min="1" max="200" value={brushSettings.size} onChange={(e) => setBrushSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
+                </div>
+                <div className="pt-2">
+                  <div className="grid grid-cols-3 gap-2">
+                    {[1, 3, 5, 10, 20, 40].map(size => (
+                      <button 
+                        key={size}
+                        onClick={() => setBrushSettings(s => ({ ...s, size }))}
+                        className={`text-xs p-2 rounded ${brushSettings.size === size ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}
+                      >
+                        {size}px
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
+                  <input type="color" value={brushSettings.color} onChange={(e) => setBrushSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                </div>
+            </Accordion>
+            <Accordion title="Dinámica de Presión">
+                <div className="flex items-center justify-between py-1">
+                    <label htmlFor="pressure-size-brush" className="text-xs text-[--text-secondary]">Controlar Tamaño</label>
+                    <input id="pressure-size-brush" type="checkbox" checked={brushSettings.pressureControl.size} onChange={(e) => setBrushSettings(s => ({ ...s, pressureControl: {...s.pressureControl, size: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+                </div>
+            </Accordion>
+          </div>
+        );
+      case 'simple-marker':
+         return (
+          <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
+                 <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
+                     <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Marcador</h4>
+                 </div>
+            <Accordion title="General" defaultOpen>
+                <div>
+                  <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {simpleMarkerSettings.size}px</label>
+                  <input type="range" min="1" max="200" value={simpleMarkerSettings.size} onChange={(e) => setSimpleMarkerSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
+                </div>
+                <div>
+                  <label className="text-xs text-[--text-secondary] block mb-1">Opacidad: {Math.round(simpleMarkerSettings.opacity * 100)}%</label>
+                  <input type="range" min="1" max="100" value={simpleMarkerSettings.opacity * 100} onChange={(e) => setSimpleMarkerSettings(s => ({ ...s, opacity: parseInt(e.target.value) / 100 }))} className="w-full" />
+                </div>
+                 <div>
+                  <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
+                  <input type="color" value={simpleMarkerSettings.color} onChange={(e) => setSimpleMarkerSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                </div>
+                <BlendModeSelector
+                    value={simpleMarkerSettings.blendMode}
+                    onChange={(value) => setSimpleMarkerSettings(s => ({ ...s, blendMode: value }))}
+                />
+            </Accordion>
+            <Accordion title="Punta">
+                 <div>
+                    <label className="text-xs text-[--text-secondary] block mb-1">Forma de la punta</label>
+                    <div className="flex gap-2">
+                        <button onClick={() => setSimpleMarkerSettings(s => ({ ...s, tipShape: 'square' }))} className={`flex-1 text-xs p-2 rounded ${simpleMarkerSettings.tipShape === 'square' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Cuadrada</button>
+                        <button onClick={() => setSimpleMarkerSettings(s => ({ ...s, tipShape: 'line' }))} className={`flex-1 text-xs p-2 rounded ${simpleMarkerSettings.tipShape === 'line' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Línea</button>
+                        <button onClick={() => setSimpleMarkerSettings(s => ({ ...s, tipShape: 'circle' }))} className={`flex-1 text-xs p-2 rounded ${simpleMarkerSettings.tipShape === 'circle' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Redonda</button>
+                    </div>
+                </div>
+            </Accordion>
+            <Accordion title="Dinámica de Presión">
+                <div className="flex items-center justify-between py-1">
+                    <label htmlFor="pressure-opacity-marker" className="text-xs text-[--text-secondary]">Controlar Opacidad</label>
+                    <input id="pressure-opacity-marker" type="checkbox" checked={simpleMarkerSettings.pressureControl.opacity} onChange={(e) => setSimpleMarkerSettings(s => ({ ...s, pressureControl: {...s.pressureControl, opacity: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+                </div>
+            </Accordion>
+          </div>
+        );
+    case 'advanced-marker':
+        return (
+         <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
+               <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
+                   <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Lápiz de color</h4>
+                </div>
+           <Accordion title="General" defaultOpen>
+               <div>
+                 <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {advancedMarkerSettings.size}px</label>
+                 <input type="range" min="1" max="300" value={advancedMarkerSettings.size} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
+               </div>
+               <div>
+                 <label className="text-xs text-[--text-secondary] block mb-1">Flujo: {advancedMarkerSettings.flow}%</label>
+                 <input type="range" min="1" max="100" value={advancedMarkerSettings.flow} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, flow: parseInt(e.target.value) }))} className="w-full" />
+               </div>
+                <div>
+                 <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
+                 <input type="color" value={advancedMarkerSettings.color} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+               </div>
+               <BlendModeSelector
+                   value={advancedMarkerSettings.blendMode}
+                   onChange={(value) => setAdvancedMarkerSettings(s => ({ ...s, blendMode: value }))}
+               />
+           </Accordion>
+           <Accordion title="Punta">
+                <div>
+                   <label className="text-xs text-[--text-secondary] block mb-1">Dureza: {advancedMarkerSettings.hardness}%</label>
+                   <input type="range" min="0" max="100" value={advancedMarkerSettings.hardness} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, hardness: parseInt(e.target.value) }))} className="w-full" />
+                </div>
+                <div>
+                   <label className="text-xs text-[--text-secondary] block mb-1">Espaciado: {advancedMarkerSettings.spacing}%</label>
+                   <input type="range" min="1" max="100" value={advancedMarkerSettings.spacing} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, spacing: parseInt(e.target.value) }))} className="w-full" />
+                </div>
+           </Accordion>
+           <Accordion title="Dinámica de Presión">
+               <div className="flex items-center justify-between py-1">
+                   <label htmlFor="pressure-size-adv" className="text-xs text-[--text-secondary]">Controlar Tamaño</label>
+                   <input id="pressure-size-adv" type="checkbox" checked={advancedMarkerSettings.pressureControl.size} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, pressureControl: {...s.pressureControl, size: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+               </div>
+                <div className="flex items-center justify-between py-1">
+                   <label htmlFor="pressure-flow-adv" className="text-xs text-[--text-secondary]">Controlar Flujo</label>
+                   <input id="pressure-flow-adv" type="checkbox" checked={advancedMarkerSettings.pressureControl.flow} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, pressureControl: {...s.pressureControl, flow: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+               </div>
+           </Accordion>
+         </div>
+       );
+    // FIX: Added settings panel for watercolor tool.
+    case 'watercolor':
+        return (
+         <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
+            <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
+               <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Acuarela</h4>
+            </div>
+           <Accordion title="General" defaultOpen>
+               <div>
+                 <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {watercolorSettings.size}px</label>
+                 <input type="range" min="1" max="300" value={watercolorSettings.size} onChange={(e) => setWatercolorSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
+               </div>
+               <div>
+                 <label className="text-xs text-[--text-secondary] block mb-1">Flujo (Densidad): {watercolorSettings.flow}%</label>
+                 <input type="range" min="1" max="100" value={watercolorSettings.flow} onChange={(e) => setWatercolorSettings(s => ({ ...s, flow: parseInt(e.target.value) }))} className="w-full" />
+               </div>
+                <div>
+                                     <label className="text-xs text-[--text-secondary] block mb-1">Humedad (Opacidad por dab): {watercolorSettings.wetness}%</label>
+                                     <input type="range" min="1" max="100" value={watercolorSettings.wetness} onChange={(e) => setWatercolorSettings(s => ({ ...s, wetness: parseInt(e.target.value) }))} className="w-full" />
+               </div>
+                                 <div>
+                                     <label className="text-xs text-[--text-secondary] block mb-1">Opacidad (General): {Math.round(watercolorSettings.opacity * 100)}%</label>
+                                     <input type="range" min="0" max="100" value={watercolorSettings.opacity * 100} onChange={(e) => setWatercolorSettings(s => ({ ...s, opacity: parseInt(e.target.value) / 100 }))} className="w-full" />
+                                 </div>
+                <div>
+                 <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
+                 <input type="color" value={watercolorSettings.color} onChange={(e) => setWatercolorSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+               </div>
+           </Accordion>
+           <Accordion title="Dinámica de Presión">
+               <div className="flex items-center justify-between py-1">
+                   <label htmlFor="pressure-size-wc" className="text-xs text-[--text-secondary]">Controlar Tamaño</label>
+                   <input id="pressure-size-wc" type="checkbox" checked={watercolorSettings.pressureControl.size} onChange={(e) => setWatercolorSettings(s => ({ ...s, pressureControl: {...s.pressureControl, size: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+               </div>
+                <div className="flex items-center justify-between py-1">
+                   <label htmlFor="pressure-flow-wc" className="text-xs text-[--text-secondary]">Controlar Flujo</label>
+                   <input id="pressure-flow-wc" type="checkbox" checked={watercolorSettings.pressureControl.flow} onChange={(e) => setWatercolorSettings(s => ({ ...s, pressureControl: {...s.pressureControl, flow: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+               </div>
+                   <div className="flex items-center justify-between py-1">
+                       <label htmlFor="pressure-opacity-wc" className="text-xs text-[--text-secondary]">Controlar Opacidad</label>
+                       <input id="pressure-opacity-wc" type="checkbox" checked={watercolorSettings.pressureControl.opacity} onChange={(e) => setWatercolorSettings(s => ({ ...s, pressureControl: {...s.pressureControl, opacity: e.target.checked} }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+                   </div>
+           </Accordion>
+         </div>
+       );
+    case 'natural-marker':
+        return (
+            <div className="p-4 space-y-4">
+                <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Marcador Natural</h4>
+                <div>
+                  <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {naturalMarkerSettings.size}px</label>
+                  <input type="range" min="1" max="200" value={naturalMarkerSettings.size} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
+                </div>
+                <div>
+                  <label className="text-xs text-[--text-secondary] block mb-1">Opacidad: {Math.round(naturalMarkerSettings.opacity * 100)}%</label>
+                  <input type="range" min="1" max="100" value={naturalMarkerSettings.opacity * 100} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, opacity: parseInt(e.target.value) / 100 }))} className="w-full" />
+                </div>
+                 <div>
+                  <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
+                  <input type="color" value={naturalMarkerSettings.color} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                </div>
+            </div>
+        );
+    case 'airbrush':
+         return (
+            <div className="p-4 space-y-4">
+                <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Aerógrafo</h4>
+                <div>
+                  <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {airbrushSettings.size}px</label>
+                  <input type="range" min="1" max="500" value={airbrushSettings.size} onChange={(e) => setAirbrushSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
+                </div>
+                <div>
+                  <label className="text-xs text-[--text-secondary] block mb-1">Flujo: {Math.round(airbrushSettings.flow * 100)}%</label>
+                  <input type="range" min="1" max="100" value={airbrushSettings.flow * 100} onChange={(e) => setAirbrushSettings(s => ({ ...s, flow: parseInt(e.target.value) / 100 }))} className="w-full" />
+                </div>
+                 <div>
+                  <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
+                  <input type="color" value={airbrushSettings.color} onChange={(e) => setAirbrushSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                </div>
+            </div>
+        );
+    case 'fx-brush':
+         return (
+            <div className="p-4 space-y-4">
+                <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Pincel de Efectos</h4>
+                <div>
+                    <label className="text-xs text-[--text-secondary] block mb-1">Preset</label>
+                    <select
+                        value={fxBrushSettings.presetId || ''}
+                        onChange={(e) => setFxBrushSettings(s => ({ ...s, presetId: e.target.value || null }))}
+                        className="w-full bg-[--bg-tertiary] text-[--text-primary] text-xs rounded-md p-2"
+                    >
+                        <option value="">Ninguno</option>
+                        {brushPresets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                </div>
+            </div>
+        );
+      case 'eraser':
+        return (
+            <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
+                <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
+                    <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Goma de Borrar</h4>
+                </div>
+                <Accordion title="General" defaultOpen>
+                    <div>
+                        <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {eraserSettings.size}px</label>
+                        <input type="range" min="1" max="500" value={eraserSettings.size} onChange={(e) => setEraserSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
+                    </div>
+                    <div>
+                        <label className="text-xs text-[--text-secondary] block mb-1">Opacidad: {Math.round(eraserSettings.opacity * 100)}%</label>
+                        <input type="range" min="1" max="100" value={eraserSettings.opacity * 100} onChange={(e) => setEraserSettings(s => ({ ...s, opacity: parseInt(e.target.value) / 100 }))} className="w-full" />
+                    </div>
+                </Accordion>
+                <Accordion title="Punta" defaultOpen>
+                    <div>
+                        <label className="text-xs text-[--text-secondary] block mb-1">Dureza: {eraserSettings.hardness}%</label>
+                        <input type="range" min="0" max="100" value={eraserSettings.hardness} onChange={(e) => setEraserSettings(s => ({ ...s, hardness: parseInt(e.target.value) }))} className="w-full" />
+                    </div>
+                    <div>
+                        <label className="text-xs text-[--text-secondary] block mb-1">Forma</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button onClick={() => setEraserSettings(s => ({ ...s, tipShape: 'round' }))} className={`text-xs p-2 rounded ${eraserSettings.tipShape === 'round' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Redonda</button>
+                            <button onClick={() => setEraserSettings(s => ({ ...s, tipShape: 'square' }))} className={`text-xs p-2 rounded ${eraserSettings.tipShape === 'square' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Cuadrada</button>
+                        </div>
+                    </div>
+                </Accordion>
+            </div>
+        );
+      default:
+        return null;
+    }
+  };
+  
+  const ActiveStrokeIcon = {
+      freehand: FreehandIcon,
+      line: LineIcon,
+      polyline: PolylineIcon,
+      curve: BezierIcon,
+      arc: ArcIcon,
+  }[strokeMode];
+>>>>>>> 0f3b7194c559580e5d40fa0e0803e62a6ac4e706
 
                     <div className="relative" ref={strokeModeMenuRef}>
                         <button

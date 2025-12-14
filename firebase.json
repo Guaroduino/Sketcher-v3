@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
     "hosting": {
         "public": "dist",
         "ignore": [
@@ -20,3 +21,20 @@
         "rules": "storage.rules"
     }
 }
+=======
+  "hosting": {
+    "public": "docs",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
+>>>>>>> 0f3b7194c559580e5d40fa0e0803e62a6ac4e706
