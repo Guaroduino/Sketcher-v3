@@ -1,29 +1,6 @@
 {
-<<<<<<< HEAD
-    "hosting": {
-        "public": "dist",
-        "ignore": [
-            "firebase.json",
-            "**/.*",
-            "**/node_modules/**"
-        ],
-        "rewrites": [
-            {
-                "source": "**",
-                "destination": "/index.html"
-            }
-        ]
-    },
-    "firestore": {
-        "rules": "firestore.rules"
-    },
-    "storage": {
-        "rules": "storage.rules"
-    }
-}
-=======
   "hosting": {
-    "public": "docs",
+    "public": "dist",
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -35,6 +12,11 @@
         "destination": "/index.html"
       }
     ]
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "storage": {
+    "rules": "storage.rules"
   }
 }
->>>>>>> 0f3b7194c559580e5d40fa0e0803e62a6ac4e706

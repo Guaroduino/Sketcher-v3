@@ -233,7 +233,7 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
 
   return (
     <>
-      <div className="absolute top-4 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:w-auto md:right-auto bg-[--bg-primary]/80 backdrop-blur-sm rounded-lg p-1 flex flex-wrap items-center justify-center gap-2 shadow-lg z-10">
+      <div className="absolute top-4 left-2 right-2 md:left-1/2 md:-translate-x-1/2 md:w-auto md:right-auto bg-[--bg-primary]/80 backdrop-blur-sm rounded-lg p-1 flex flex-nowrap md:flex-wrap overflow-x-auto md:overflow-visible items-center justify-start md:justify-center gap-2 shadow-lg z-10 scrollbar-hide">
         {/* Header Toggle */}
         <button
           onClick={onToggleHeader}

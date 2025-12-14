@@ -1,5 +1,0 @@
-<<<<<<< HEAD
-{"name":"Sketcher","short_name":"Sketcher","start_url":"/","display":"standalone","background_color":"#ffffff","theme_color":"#ffffff","lang":"en","scope":"/Sketcher-v3/","icons":[{"src":"/icon.svg","sizes":"any","type":"image/svg+xml"},{"src":"/icon.svg","sizes":"192x192","type":"image/svg+xml"},{"src":"/icon.svg","sizes":"512x512","type":"image/svg+xml"}]}
-=======
-{"name":"Sketcher","short_name":"Sketcher","start_url":"/","display":"standalone","background_color":"#ffffff","lang":"en","scope":"/","theme_color":"#ffffff","icons":[{"src":"/pwa-192.svg","sizes":"192x192","type":"image/svg+xml"},{"src":"/pwa-512.svg","sizes":"512x512","type":"image/svg+xml"}]}
->>>>>>> 0f3b7194c559580e5d40fa0e0803e62a6ac4e706

@@ -8,8 +8,8 @@ export function useCanvasView(
     mainAreaRef: React.RefObject<HTMLDivElement>,
     canvasSize: { width: number, height: number }
 ) {
-    const [viewTransform, setViewTransform] = useState<ViewTransform>({ zoom: 1, pan: { x: 0, y: 0 } });
-    
+    const [viewTransform, setViewTransform] = useState<ViewTransform>({ zoom: window.innerWidth < 640 ? 0.6 : 1, pan: { x: 0, y: 0 } });
+
     const getMinZoom = useCallback(() => {
         if (!mainAreaRef.current || !canvasSize.width || !canvasSize.height) {
             return 0.01;
@@ -21,21 +21,21 @@ export function useCanvasView(
         const scaleY = viewHeight / canvasSize.height;
         return Math.max(0.01, Math.min(scaleX, scaleY) * padding);
     }, [mainAreaRef, canvasSize.width, canvasSize.height]);
-    
+
     useEffect(() => {
         const updateSizeAndCenter = () => {
-          if (mainAreaRef.current) {
-            const viewWidth = mainAreaRef.current.offsetWidth;
-            const viewHeight = mainAreaRef.current.offsetHeight;
-            
-            setViewTransform(v => {
-                const newPanX = (viewWidth - canvasSize.width * v.zoom) / 2;
-                const newPanY = (viewHeight - canvasSize.height * v.zoom) / 2;
-                // By explicitly constructing the object, we ensure `pan` is always
-                // present, fixing the race condition where `v` could be a partial state.
-                return {zoom: v.zoom, pan: {x: newPanX, y: newPanY}};
-            });
-          }
+            if (mainAreaRef.current) {
+                const viewWidth = mainAreaRef.current.offsetWidth;
+                const viewHeight = mainAreaRef.current.offsetHeight;
+
+                setViewTransform(v => {
+                    const newPanX = (viewWidth - canvasSize.width * v.zoom) / 2;
+                    const newPanY = (viewHeight - canvasSize.height * v.zoom) / 2;
+                    // By explicitly constructing the object, we ensure `pan` is always
+                    // present, fixing the race condition where `v` could be a partial state.
+                    return { zoom: v.zoom, pan: { x: newPanX, y: newPanY } };
+                });
+            }
         };
         window.addEventListener('resize', updateSizeAndCenter);
         updateSizeAndCenter();

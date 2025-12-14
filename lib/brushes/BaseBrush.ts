@@ -39,14 +39,10 @@ export abstract class BaseBrush {
         this.strokeSeed = point.x * 1337 + point.y * 31337 + Date.now();
         this.isDrawing = true;
         this.points = [point];
-<<<<<<< HEAD
-
-=======
         this.lastPreviewPointCount = 0;
         // Ensure preview is cleared at the start of a new stroke
         try { this.clearPreview(context); } catch (e) { /* noop if context unavailable */ }
-        
->>>>>>> 0f3b7194c559580e5d40fa0e0803e62a6ac4e706
+
         // Create a snapshot of the canvas *only for the undo history*.
         this.beforeCanvas = document.createElement('canvas');
         this.beforeCanvas.width = context.mainCtx.canvas.width;
@@ -112,22 +108,6 @@ export abstract class BaseBrush {
 
     protected updatePreview(context: BrushContext): void {
         const { previewCtx, viewTransform } = context;
-<<<<<<< HEAD
-        // The preview canvas should ONLY contain the new stroke. It's a transparent layer on top.
-        // Incremental rendering optimization
-        if (this.drawSegment && this.points.length > 1) {
-            const p1 = this.points[this.points.length - 2];
-            const p2 = this.points[this.points.length - 1];
-            this.drawWithMirroringSegment(previewCtx, p1, p2, context);
-        } else {
-            // Fallback: Clear and redraw everything (O(N^2))
-            this.clearPreview(context);
-            previewCtx.save();
-            previewCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
-            this.drawWithMirroring(previewCtx, this.points, context);
-            previewCtx.restore();
-        }
-=======
         if (!previewCtx) return;
 
         // If no previous preview has been drawn, clear the preview canvas to start fresh
@@ -149,20 +129,12 @@ export abstract class BaseBrush {
         previewCtx.restore();
 
         this.lastPreviewPointCount = this.points.length;
->>>>>>> 0f3b7194c559580e5d40fa0e0803e62a6ac4e706
     }
 
     protected clearPreview(context: BrushContext): void {
         const { previewCtx } = context;
-<<<<<<< HEAD
-        // Only clear if we are NOT using incremental rendering or if explicitly requested (e.g. end of stroke)
-        if (!this.drawSegment || !this.isDrawing) {
-            clearCanvas(previewCtx);
-        }
-=======
         clearCanvas(previewCtx);
         this.lastPreviewPointCount = 0;
->>>>>>> 0f3b7194c559580e5d40fa0e0803e62a6ac4e706
     }
 
     protected reset(): void {

@@ -1309,9 +1309,9 @@ export function App() {
 
                 <button
                     onClick={() => aiPanelState.setIsOpen(true)}
-                    className="absolute bottom-6 left-6 p-4 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-2xl hover:scale-110 transition-transform z-40 flex items-center justify-center border-2 border-white/20"
+                    className="absolute bottom-24 left-4 md:bottom-6 md:left-6 p-4 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-2xl hover:scale-110 transition-transform z-40 flex items-center justify-center border-2 border-white/20"
                     title="Mejorar con IA"
-                    style={{ left: ui.isLeftSidebarVisible ? '6.5rem' : '1.5rem' }}
+                    style={{ left: ui.isLeftSidebarVisible ? '6.5rem' : '' }}
                 >
                     <SparklesIcon className="w-8 h-8" />
                 </button>
@@ -1329,7 +1329,7 @@ export function App() {
                         textEditState={textEditState} setTextEditState={setTextEditState} onCommitText={handleCommitText}
                         strokeSmoothing={strokeSmoothing}
                     />
-                    <div className="absolute top-2 left-2 flex items-center gap-2 z-10">
+                    <div className="absolute top-36 left-4 md:top-2 md:left-2 flex items-center gap-2 z-10">
                         {dimensionDisplay && <button ref={scaleButtonRef} onClick={() => setIsScalePopoverOpen(p => !p)} className="bg-[--bg-primary]/80 backdrop-blur-sm text-[--text-secondary] text-xs rounded-md px-2 py-1 pointer-events-auto hover:bg-[--bg-secondary] transition-colors" title="Ajustar escala del lienzo">{dimensionDisplay}</button>}
                     </div>
                     <button onClick={ui.handleToggleFullscreen} className="absolute top-2 right-2 p-2 rounded-md bg-[--bg-primary]/80 backdrop-blur-sm hover:bg-[--bg-secondary] text-[--text-primary] transition-colors z-10" title={ui.isFullscreen ? "Salir de Pantalla Completa" : "Entrar en Pantalla Completa"}>

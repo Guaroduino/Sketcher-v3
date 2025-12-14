@@ -50,19 +50,25 @@ export const WorkspaceTemplatesPopover: React.FC<WorkspaceTemplatesPopoverProps>
     return (
         <div
             ref={popoverRef}
-            className="absolute top-full right-0 mt-2 w-72 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg z-30 py-2 flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+            className="absolute top-full left-0 mt-2 w-96 max-w-[90vw] bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg z-30 py-2 flex flex-col"
             style={{ maxHeight: 'calc(100vh - 100px)' }}
         >
-            <div className="flex justify-between items-center px-3 pb-2 border-b border-[--bg-tertiary]">
-                <h3 className="text-sm font-bold uppercase text-[--text-secondary] flex items-center gap-2">
-                    <BookmarkIcon className="w-4 h-4" />
-                    <span>Plantillas de Espacio de Trabajo</span>
-                </h3>
-                <button onClick={onClose} className="p-1 rounded-full hover:bg-[--bg-hover]">
-                    <XIcon className="w-5 h-5" />
-                </button>
+            <div className="flex flex-col px-3 pb-2 border-b border-[--bg-tertiary]">
+                <div className="flex justify-between items-center">
+                    <h3 className="text-sm font-bold uppercase text-[--text-secondary] flex items-center gap-2">
+                        <BookmarkIcon className="w-4 h-4" />
+                        <span>Plantillas de Espacio de Trabajo</span>
+                    </h3>
+                    <button onClick={onClose} className="p-1 rounded-full hover:bg-[--bg-hover]">
+                        <XIcon className="w-5 h-5" />
+                    </button>
+                </div>
+                <p className="text-[10px] text-[--text-secondary] mt-1 opacity-75">
+                    Guarda: Tamaño, Fondo, Escala, Guías y Herramientas
+                </p>
             </div>
-            
+
             <div className="flex-grow overflow-y-auto p-2 space-y-1">
                 {templates.length > 0 ? (
                     templates.map(template => (
