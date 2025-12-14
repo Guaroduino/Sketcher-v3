@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/Sketcher-v3/sw.js', { scope: '/Sketcher-v3/' })})}

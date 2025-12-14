@@ -28,7 +28,7 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
     const [scaleUnit, setScaleUnit] = useState<ScaleUnit>('mm');
     const [scaleInputValue, setScaleInputValue] = useState('5');
     const [imageElement, setImageElement] = useState<HTMLImageElement | null>(null);
-    
+
     const [history, setHistory] = useState<HistoryState[]>([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
 
@@ -80,7 +80,7 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
         previewCtx.save();
         previewCtx.translate(viewTransform.pan.x, viewTransform.pan.y);
         previewCtx.scale(viewTransform.zoom, viewTransform.zoom);
-        
+
         if (transparentCanvas.width > 0) {
             previewCtx.imageSmoothingEnabled = viewTransform.zoom < 3;
             previewCtx.drawImage(transparentCanvas, 0, 0);
@@ -92,11 +92,11 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
         previewCtx.save();
         const barScreenY = previewCanvas.height - 30;
         const barScreenX = 20;
-        
+
         const targetScreenLength = 100;
         const mmPerScreenPixel = 1 / (scaleFactor * viewTransform.zoom);
         const targetMmLength = targetScreenLength * mmPerScreenPixel;
-        
+
         const niceMmSteps = [0.1, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
         let bestStepMm = niceMmSteps[0];
         for (const step of niceMmSteps) {
@@ -134,7 +134,7 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
         previewCtx.lineTo(barScreenX + finalScreenLength, barScreenY);
         previewCtx.lineTo(barScreenX + finalScreenLength, barScreenY - 5);
         previewCtx.stroke();
-        
+
         // Label
         previewCtx.fillStyle = 'rgba(0, 0, 0, 0.8)';
         previewCtx.textAlign = 'center';
@@ -160,10 +160,10 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
         transparentCtx.globalCompositeOperation = 'destination-out';
         transparentCtx.drawImage(eraserMaskCanvas, 0, 0);
         transparentCtx.globalCompositeOperation = 'source-over';
-        
+
         redraw();
     }, [redraw]);
-    
+
     // This single effect now handles updating ALL masks and composing the final image.
     // This fixes the race condition between color mask and eraser mask updates.
     useEffect(() => {
@@ -195,18 +195,18 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
             let isTransparent = false;
             if (colors.length > 0) {
                 const r = originalData[i];
-                const g = originalData[i+1];
-                const b = originalData[i+2];
-                
+                const g = originalData[i + 1];
+                const b = originalData[i + 2];
+
                 for (const color of colors) {
-                    const distSq = (r - color.r)**2 + (g - color.g)**2 + (b - color.b)**2;
+                    const distSq = (r - color.r) ** 2 + (g - color.g) ** 2 + (b - color.b) ** 2;
                     if (distSq <= toleranceSq) {
                         isTransparent = true;
                         break;
                     }
                 }
             }
-            maskData[i] = 255; maskData[i+1] = 255; maskData[i+2] = 255;
+            maskData[i] = 255; maskData[i + 1] = 255; maskData[i + 2] = 255;
             maskData[i + 3] = isTransparent ? 0 : 255;
         }
         colorMaskCtx.putImageData(maskImageData, 0, 0);
@@ -227,9 +227,9 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
                 canvas.height = height;
             }
         });
-        
+
         originalCanvasRef.current.getContext('2d')?.drawImage(imageElement, 0, 0);
-        
+
         const eraserCtx = eraserMaskCanvasRef.current.getContext('2d');
         if (!eraserCtx) return;
         eraserCtx.clearRect(0, 0, width, height);
@@ -240,7 +240,7 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
             eraserMaskData: initialEraserMaskData
         }]);
         setHistoryIndex(0);
-        
+
     }, [imageElement, item]);
 
 
@@ -308,13 +308,13 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
             }
         }
     };
-    
+
     const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
         const point = getCanvasPoint(e.nativeEvent, viewTransform, previewCanvasRef.current!);
         const { isPanning, isErasing, lastPoint } = dragState.current;
 
         if (isPanning) {
-            setViewTransform(v => ({ ...v, pan: { x: v.pan.x + e.movementX, y: v.pan.y + e.movementY }}));
+            setViewTransform(v => ({ ...v, pan: { x: v.pan.x + e.movementX, y: v.pan.y + e.movementY } }));
         } else if (isErasing && lastPoint && eraserMaskCanvasRef.current) {
             const eraserMaskCtx = eraserMaskCanvasRef.current.getContext('2d');
             if (eraserMaskCtx) {
@@ -347,7 +347,7 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
         }
         dragState.current = { isPanning: false, isErasing: false, lastPoint: null };
     };
-    
+
     const handleApply = () => {
         if (transparentCanvasRef.current) {
             onApply(transparentCanvasRef.current.toDataURL(), currentColors, scaleFactor, tolerance, scaleUnit);
@@ -357,14 +357,14 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
     const handleUndo = () => canUndo && setHistoryIndex(i => i - 1);
     const handleRedo = () => canRedo && setHistoryIndex(i => i + 1);
     const handleReset = () => (history.length > 0) && setHistoryIndex(0);
-    
+
     const handleFullReset = () => {
         // This is a destructive action that clears history to a fully opaque state.
         if (!imageElement || !eraserMaskCanvasRef.current) return;
-        
+
         const eraserCtx = eraserMaskCanvasRef.current.getContext('2d');
         if (!eraserCtx) return;
-        
+
         const { width, height } = imageElement;
         eraserCtx.clearRect(0, 0, width, height);
         const initialEraserMaskData = eraserCtx.getImageData(0, 0, width, height);
@@ -397,13 +397,13 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
     const toolButtonClasses = (tool: Tool) => `p-2 rounded-md transition-colors ${activeTool === tool ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'}`;
 
     return (
-         <div className="fixed inset-0 bg-black/75 z-40 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/75 z-40 flex items-center justify-center p-4">
             <div className="bg-[--bg-secondary] rounded-lg shadow-xl w-full h-full max-w-6xl max-h-[90vh] flex flex-col">
                 <div className="flex-shrink-0 flex items-center justify-between p-2 border-b border-[--bg-tertiary]">
                     <h2 className="text-lg font-bold">Editar Transparencia: {item.name}</h2>
                     <div className="flex items-center gap-4">
                         <button onClick={handleApply} className="px-4 py-2 rounded-md bg-green-600 hover:bg-green-500 text-white font-semibold">Aplicar</button>
-                        <button onClick={onCancel} className="p-2 rounded-full hover:bg-[--bg-tertiary]"><XIcon className="w-6 h-6"/></button>
+                        <button onClick={onCancel} className="p-2 rounded-full hover:bg-[--bg-tertiary]"><XIcon className="w-6 h-6" /></button>
                     </div>
                 </div>
                 <div className="flex-grow flex min-h-0">
@@ -414,19 +414,22 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
                                 <button onClick={() => setActiveTool('picker')} className={toolButtonClasses('picker')} title="Cuentagotas"><CrosshairIcon className="w-5 h-5" /></button>
                                 <button onClick={() => setActiveTool('eraser')} className={toolButtonClasses('eraser')} title="Borrador"><EraserIcon className="w-5 h-5" /></button>
                                 <button onClick={() => setActiveTool('pan')} className={toolButtonClasses('pan')} title="Mover"><HandIcon className="w-5 h-5" /></button>
-                                <button onClick={() => setViewTransform(v => ({...v, zoom: v.zoom * 1.2}))} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Acercar"><ZoomInIcon className="w-5 h-5" /></button>
-                                <button onClick={() => setViewTransform(v => ({...v, zoom: v.zoom / 1.2}))} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Alejar"><ZoomOutIcon className="w-5 h-5" /></button>
+                                <button onClick={() => setViewTransform(v => ({ ...v, zoom: v.zoom * 1.2 }))} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Acercar"><ZoomInIcon className="w-5 h-5" /></button>
+                                <button onClick={() => setViewTransform(v => ({ ...v, zoom: v.zoom / 1.2 }))} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Alejar"><ZoomOutIcon className="w-5 h-5" /></button>
                             </div>
                         </div>
-                        
+
                         <div>
                             <h3 className="text-sm font-bold uppercase text-[--text-secondary] mb-2">Historial</h3>
-                             <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2">
                                 <button onClick={handleUndo} disabled={!canUndo} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Deshacer"><UndoIcon className="w-5 h-5" /></button>
                                 <button onClick={handleRedo} disabled={!canRedo} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Rehacer"><RedoIcon className="w-5 h-5" /></button>
-                                <button onClick={handleReset} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Restablecer Sesión"><HistoryIcon className="w-5 h-5" /></button>
-                                <button onClick={handleFullReset} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Restaurar Original (sin transparencia)"><RefreshCwIcon className="w-5 h-5" /></button>
+                                <button onClick={handleReset} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Volver al inicio de sesión"><HistoryIcon className="w-5 h-5" /></button>
                             </div>
+                            <button onClick={handleFullReset} className="w-full mt-2 flex items-center justify-center gap-2 px-3 py-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-md transition-colors text-xs font-bold uppercase" title="Eliminar toda transparencia y cambios">
+                                <RefreshCwIcon className="w-4 h-4" />
+                                Restaurar Original
+                            </button>
                         </div>
 
                         {activeTool === 'eraser' && (
@@ -488,8 +491,8 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
                                 <label className="text-xs text-[--text-secondary]">Factor de Escala</label>
                                 <div className="flex items-center gap-2 mt-1">
                                     <span className="text-sm">1</span>
-                                    <select 
-                                        value={scaleUnit} 
+                                    <select
+                                        value={scaleUnit}
                                         onChange={handleUnitChange}
                                         className="bg-[--bg-tertiary] text-sm rounded-md p-1 border border-[--bg-hover]"
                                     >
@@ -498,8 +501,8 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
                                         <option value="m">m</option>
                                     </select>
                                     <span className="text-sm">=</span>
-                                    <input 
-                                        type="number" 
+                                    <input
+                                        type="number"
                                         value={scaleInputValue}
                                         onChange={handleScaleInputChange}
                                         className="w-20 bg-[--bg-secondary] text-sm rounded-md p-1 border border-[--bg-tertiary]"
@@ -509,8 +512,8 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
                             </div>
                         </div>
                     </div>
-                    <div 
-                        ref={containerRef} 
+                    <div
+                        ref={containerRef}
                         className="flex-grow bg-gray-500"
                         onPointerDown={handlePointerDown}
                         onPointerMove={handlePointerMove}

@@ -30,7 +30,7 @@ import { CanvasSizeModal } from './components/modals/CanvasSizeModal';
 import { ConfirmClearModal } from './components/modals/ConfirmClearModal';
 import { ConfirmDeleteLibraryItemModal } from './components/modals/ConfirmDeleteLibraryItemModal';
 import { ConfirmResetModal } from './components/modals/ConfirmResetModal';
-import { SunIcon, MoonIcon, ChevronLeftIcon, ChevronRightIcon, BookmarkIcon, GalleryIcon, XIcon, UserIcon, TrashIcon, FolderOpenIcon, SaveIcon, ExpandIcon, MinimizeIcon } from './components/icons';
+import { SunIcon, MoonIcon, ChevronLeftIcon, ChevronRightIcon, BookmarkIcon, GalleryIcon, XIcon, UserIcon, TrashIcon, FolderOpenIcon, SaveIcon, ExpandIcon, MinimizeIcon, DownloadIcon } from './components/icons';
 import type { SketchObject, ItemType, Tool, CropRect, TransformState, WorkspaceTemplate, QuickAccessTool, ProjectFile, Project, StrokeMode, StrokeState, CanvasItem, StrokeModifier, ScaleUnit, Selection, ClipboardData, AppState, Point } from './types';
 import { getContentBoundingBox, createNewCanvas, createThumbnail, cloneCanvas } from './utils/canvasUtils';
 
@@ -57,10 +57,55 @@ function useAppUI() {
     const [isRightSidebarVisible, setIsRightSidebarVisible] = useState(window.innerWidth > 1024);
     const [rightSidebarTopHeight, setRightSidebarTopHeight] = useState<number | undefined>(undefined);
     const [isFullscreen, setIsFullscreen] = useState(false);
+
     const [showSplash, setShowSplash] = useState(true);
+    const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+    useEffect(() => {
+        const handler = (e: any) => {
+            e.preventDefault();
+            setDeferredPrompt(e);
+        };
+        window.addEventListener('beforeinstallprompt', handler);
+        return () => window.removeEventListener('beforeinstallprompt', handler);
+    }, []);
+
+    const handleInstallClick = async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+            setDeferredPrompt(null);
+        }
+    };
 
     const rightSidebarRef = useRef<HTMLElement>(null);
     const resizeDataRef = useRef({ isResizing: false, startY: 0, startHeight: 0 });
+
+    // UI Scaling
+    const [uiScale, setUiScale] = useState(1);
+
+    useEffect(() => {
+        const storedScale = localStorage.getItem('sketcher-ui-scale');
+        if (storedScale) {
+            const scale = parseFloat(storedScale);
+            setUiScale(scale);
+            document.documentElement.style.fontSize = `${16 * scale}px`;
+        }
+    }, []);
+
+    const handleUiScaleChange = (newScale: number) => {
+        // Clamp scale between 0.5 (small) and 1.5 (large)
+        const scale = Math.max(0.5, Math.min(1.5, newScale));
+        setUiScale(scale);
+        document.documentElement.style.fontSize = `${16 * scale}px`;
+        // Removed automatic saving to localStorage
+    };
+
+    const handleSaveUiScale = () => {
+        localStorage.setItem('sketcher-ui-scale', String(uiScale));
+        alert("Configuración de tamaño guardada correctamente para futuros inicios.");
+    };
 
     useEffect(() => {
         if (rightSidebarRef.current && rightSidebarTopHeight === undefined) {
@@ -154,6 +199,11 @@ function useAppUI() {
         showSplash,
         handleStart,
         handleToggleFullscreen,
+        uiScale,
+        setUiScale: handleUiScaleChange,
+        handleSaveUiScale,
+        deferredPrompt,
+        handleInstallClick,
     };
 }
 
@@ -211,7 +261,7 @@ function useProjectManager(
     const getFullProjectStateAsFile = useCallback(async (
         getStateToSave: () => { currentState: AppState, guides: any, toolSettings: any, quickAccess: any }
     ): Promise<{ projectBlob: Blob, thumbnailBlob: Blob }> => {
-        
+
         const { currentState, guides, toolSettings, quickAccess } = getStateToSave();
 
         const serializedObjects = currentState.objects.map(item => {
@@ -236,18 +286,18 @@ function useProjectManager(
 
         const jsonString = JSON.stringify(projectFile);
         const projectBlob = new Blob([jsonString], { type: 'application/json' });
-        
+
         const compositeCanvas = document.createElement('canvas');
         compositeCanvas.width = currentState.canvasSize.width;
         compositeCanvas.height = currentState.canvasSize.height;
         const compositeCtx = compositeCanvas.getContext('2d');
         if (compositeCtx) {
-             const drawableObjects = currentState.objects;
-             const backgroundObject = drawableObjects.find(o => o.type === 'object' && o.isBackground);
-             if(backgroundObject?.canvas && backgroundObject.isVisible){
+            const drawableObjects = currentState.objects;
+            const backgroundObject = drawableObjects.find(o => o.type === 'object' && o.isBackground);
+            if (backgroundObject?.canvas && backgroundObject.isVisible) {
                 compositeCtx.drawImage(backgroundObject.canvas, 0, 0);
-             }
-             const visibleObjects = drawableObjects.filter((obj): obj is SketchObject => obj.type === 'object' && !obj.isBackground && obj.isVisible && !!obj.canvas);
+            }
+            const visibleObjects = drawableObjects.filter((obj): obj is SketchObject => obj.type === 'object' && !obj.isBackground && obj.isVisible && !!obj.canvas);
             [...visibleObjects].reverse().forEach(obj => {
                 compositeCtx.globalAlpha = obj.opacity;
                 compositeCtx.drawImage(obj.canvas!, 0, 0);
@@ -289,9 +339,9 @@ function useProjectManager(
                     }
                 });
             });
-            
+
             const loadedObjects = await Promise.all(imageLoadPromises);
-            
+
             const newState: AppState = {
                 objects: loadedObjects,
                 canvasSize: projectFile.canvasSize,
@@ -319,28 +369,28 @@ function useProjectManager(
 
     const handleSaveLocally = useCallback(async (fileName: string, getStateToSave: () => any) => {
         try {
-          const { projectBlob } = await getFullProjectStateAsFile(getStateToSave);
-          const url = URL.createObjectURL(projectBlob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = fileName.endsWith('.sketcher') ? fileName : `${fileName}.sketcher`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
+            const { projectBlob } = await getFullProjectStateAsFile(getStateToSave);
+            const url = URL.createObjectURL(projectBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName.endsWith('.sketcher') ? fileName : `${fileName}.sketcher`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         } catch (error) {
             console.error("Error saving project locally:", error);
             alert(`Error saving project locally: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
     }, [getFullProjectStateAsFile]);
-    
+
     const handleSaveProject = useCallback(async (name: string, getStateToSave: () => any) => {
         if (!user) {
             alert("Please log in to save projects to the cloud.");
             return;
         }
-        
+
         const { projectBlob, thumbnailBlob } = await getFullProjectStateAsFile(getStateToSave);
         const projectId = doc(collection(db, 'dummy')).id;
         const projectFilePath = `users/${user.uid}/projects/${projectId}.sketcher`;
@@ -351,7 +401,7 @@ function useProjectManager(
 
         await uploadBytes(projectFileRef, projectBlob);
         await uploadBytes(thumbnailRef, thumbnailBlob);
-        
+
         await addDoc(collection(db, `users/${user.uid}/projects`), {
             name: name,
             projectFilePath: projectFilePath,
@@ -386,12 +436,12 @@ function useProjectManager(
                 deleteObject(projectFileRef).catch(e => console.warn("Project file delete failed, it might not exist.", e)),
                 deleteObject(thumbnailRef).catch(e => console.warn("Thumbnail delete failed, it might not exist.", e))
             ]);
-        } catch(error) {
+        } catch (error) {
             console.error("Error deleting project:", error);
             alert("Failed to delete project.");
         }
     }, [user]);
-    
+
     return {
         projects,
         projectsLoading,
@@ -428,7 +478,7 @@ function useAI(
             if (!obj.canvas) return;
             const bbox = getContentBoundingBox(obj.canvas);
             if (bbox) {
-                if (!combinedBbox) { combinedBbox = { ...bbox }; } 
+                if (!combinedBbox) { combinedBbox = { ...bbox }; }
                 else {
                     const newX1 = Math.min(combinedBbox.x, bbox.x);
                     const newY1 = Math.min(combinedBbox.y, bbox.y);
@@ -443,7 +493,7 @@ function useAI(
 
     const getCompositeCanvas = useCallback((
         includeBackground: boolean,
-        canvasSize: {width: number, height: number},
+        canvasSize: { width: number, height: number },
         getDrawableObjects: () => CanvasItem[],
         backgroundObject: SketchObject | undefined
     ): HTMLCanvasElement | null => {
@@ -458,7 +508,7 @@ function useAI(
         if (includeBackground && backgroundObject?.canvas && backgroundObject.isVisible) {
             compositeCtx.drawImage(backgroundObject.canvas, 0, 0);
         }
-        
+
         const visibleObjects = drawable.filter((obj): obj is SketchObject => obj.type === 'object' && !obj.isBackground && obj.isVisible && !!obj.canvas);
         [...visibleObjects].reverse().forEach(obj => {
             compositeCtx.globalAlpha = obj.opacity;
@@ -469,7 +519,7 @@ function useAI(
     }, []);
 
     const generateEnhancementPreview = useCallback((
-        canvasSize: {width: number, height: number},
+        canvasSize: { width: number, height: number },
         getDrawableObjects: () => CanvasItem[],
         backgroundObject: SketchObject | undefined
     ) => {
@@ -484,18 +534,18 @@ function useAI(
             let croppedDataUrl: string | null = null;
 
             if (combinedBbox && combinedBbox.width > 0 && combinedBbox.height > 0) {
-              const cropCanvas = document.createElement('canvas');
-              cropCanvas.width = combinedBbox.width;
-              cropCanvas.height = combinedBbox.height;
-              const cropCtx = cropCanvas.getContext('2d');
-              if (cropCtx) {
-                  cropCtx.drawImage(
-                      compositeCanvas,
-                      combinedBbox.x, combinedBbox.y, combinedBbox.width, combinedBbox.height,
-                      0, 0, combinedBbox.width, combinedBbox.height
-                  );
-                  croppedDataUrl = cropCanvas.toDataURL('image/png');
-              }
+                const cropCanvas = document.createElement('canvas');
+                cropCanvas.width = combinedBbox.width;
+                cropCanvas.height = combinedBbox.height;
+                const cropCtx = cropCanvas.getContext('2d');
+                if (cropCtx) {
+                    cropCtx.drawImage(
+                        compositeCanvas,
+                        combinedBbox.x, combinedBbox.y, combinedBbox.width, combinedBbox.height,
+                        0, 0, combinedBbox.width, combinedBbox.height
+                    );
+                    croppedDataUrl = cropCanvas.toDataURL('image/png');
+                }
             }
             setEnhancementPreview({ fullDataUrl, croppedDataUrl, bbox: combinedBbox });
         }, 10);
@@ -503,7 +553,7 @@ function useAI(
 
     const handleEnhance = useCallback(async (
         payload: any,
-        canvasSize: {width: number, height: number},
+        canvasSize: { width: number, height: number },
         getDrawableObjects: () => CanvasItem[],
         backgroundObject: SketchObject | undefined
     ) => {
@@ -520,7 +570,7 @@ function useAI(
                 case 'object': {
                     const { enhancementPrompt, enhancementStylePrompt, enhancementNegativePrompt, enhancementCreativity, enhancementInputMode, enhancementChromaKey, enhancementPreviewBgColor } = payload;
                     if (!enhancementPrompt) throw new Error("Description prompt is required.");
-                    
+
                     const compositeCanvas = getCompositeCanvas(false, canvasSize, getDrawableObjects, backgroundObject);
                     if (!compositeCanvas) throw new Error("Could not create composite canvas.");
 
@@ -536,7 +586,7 @@ function useAI(
                             imageCanvas = cropCanvas;
                         }
                     }
-                    
+
                     let finalImageCanvas = document.createElement('canvas');
                     finalImageCanvas.width = imageCanvas.width;
                     finalImageCanvas.height = imageCanvas.height;
@@ -551,7 +601,7 @@ function useAI(
                     const dataUrl = finalImageCanvas.toDataURL('image/jpeg');
                     debugImages.push({ name: 'Imagen de Entrada', url: dataUrl });
                     parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(dataUrl) } });
-                    
+
                     let creativityInstruction = '';
                     if (enhancementCreativity <= 40) creativityInstruction = 'Sé muy fiel a la imagen de entrada y a la descripción proporcionada. Realiza solo los cambios solicitados.';
                     else if (enhancementCreativity <= 80) creativityInstruction = 'Mantén una fidelidad moderada a la imagen y descripción, pero puedes hacer pequeñas mejoras estéticas.';
@@ -578,7 +628,7 @@ function useAI(
                     const dataUrl = compositeCanvas.toDataURL('image/jpeg');
                     debugImages.push({ name: 'Escena Compuesta', url: dataUrl });
                     parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(dataUrl) } });
-                    
+
                     if (payload.styleRef?.url) {
                         debugImages.push({ name: 'Referencia de Estilo', url: payload.styleRef.url });
                         parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(payload.styleRef.url) } });
@@ -600,7 +650,7 @@ function useAI(
                     break;
                 }
             }
-            
+
             setDebugInfo({ prompt: finalPrompt, images: debugImages });
 
             const textPart = { text: finalPrompt };
@@ -662,334 +712,335 @@ function useAI(
 // ===================================================================================
 
 export function App() {
-  const [historyState, dispatch] = useReducer(historyReducer, initialHistoryState);
-  const { present: currentState, past, future } = historyState;
-  const { objects, canvasSize, scaleFactor, scaleUnit } = currentState;
-  
-  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
-  const [tool, setTool] = useState<Tool>('brush');
-  const mainAreaRef = useRef<HTMLDivElement>(null);
-  
-  const [theme, setTheme] = useState<Theme>('dark');
-  const [user, setUser] = useState<User | null>(null);
+    const [historyState, dispatch] = useReducer(historyReducer, initialHistoryState);
+    const { present: currentState, past, future } = historyState;
+    const { objects, canvasSize, scaleFactor, scaleUnit } = currentState;
 
-  const [isToolSelectorOpen, setIsToolSelectorOpen] = useState(false);
-  const [editingToolSlotIndex, setEditingToolSlotIndex] = useState<number | null>(null);
+    const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
+    const [tool, setTool] = useState<Tool>('brush');
+    const mainAreaRef = useRef<HTMLDivElement>(null);
 
-  const [strokeMode, setStrokeMode] = useState<StrokeMode>('freehand');
-  const [strokeState, setStrokeState] = useState<StrokeState | null>(null);
-  const [strokeModifier, setStrokeModifier] = useState<StrokeModifier>({ style: 'solid', scale: 1 });
-  
-  const [selection, setSelection] = useState<Selection | null>(null);
-  const [clipboard, setClipboard] = useState<ClipboardData | null>(null);
+    const [theme, setTheme] = useState<Theme>('dark');
+    const [user, setUser] = useState<User | null>(null);
 
-  const [textEditState, setTextEditState] = useState<{ position: Point; value: string; activeItemId: string; } | null>(null);
+    const [isToolSelectorOpen, setIsToolSelectorOpen] = useState(false);
+    const [editingToolSlotIndex, setEditingToolSlotIndex] = useState<number | null>(null);
 
-  const [strokeSmoothing, setStrokeSmoothing] = useState(0.5);
+    const [strokeMode, setStrokeMode] = useState<StrokeMode>('freehand');
+    const [strokeState, setStrokeState] = useState<StrokeState | null>(null);
+    const [strokeModifier, setStrokeModifier] = useState<StrokeModifier>({ style: 'solid', scale: 1 });
 
-  const ui = useAppUI();
+    const [selection, setSelection] = useState<Selection | null>(null);
+    const [clipboard, setClipboard] = useState<ClipboardData | null>(null);
 
-  // Custom Hooks
-  const toolSettings = useToolSettings();
-  const library = useLibrary(user);
-  const guides = useGuides(canvasSize);
-  const { getMinZoom, ...canvasView } = useCanvasView(mainAreaRef, canvasSize);
-  const templates = useWorkspaceTemplates();
-  const quickAccess = useQuickAccess();
+    const [textEditState, setTextEditState] = useState<{ position: Point; value: string; activeItemId: string; } | null>(null);
 
-  const handleSelectItem = useCallback((id: string | null) => {
-      setSelectedItemIds(id ? [id] : []);
-      if (!id || (selection && selection.sourceItemId !== id)) {
-        setSelection(null);
-      }
+    const [strokeSmoothing, setStrokeSmoothing] = useState(0.5);
+
+    const ui = useAppUI();
+
+    // Custom Hooks
+    const toolSettings = useToolSettings();
+    const library = useLibrary(user);
+    const guides = useGuides(canvasSize);
+    const { getMinZoom, ...canvasView } = useCanvasView(mainAreaRef, canvasSize);
+    const templates = useWorkspaceTemplates();
+    const quickAccess = useQuickAccess();
+
+    const handleSelectItem = useCallback((id: string | null) => {
+        setSelectedItemIds(id ? [id] : []);
+        if (!id || (selection && selection.sourceItemId !== id)) {
+            setSelection(null);
+        }
     }, [selection]);
 
-  const ai = useAI(dispatch, library.onImportToLibrary, handleSelectItem, setTool);
-  
-  const loadAllToolSettings = useCallback((settings: any) => {
-    toolSettings.setBrushSettings(settings.brushSettings);
-    toolSettings.setEraserSettings(settings.eraserSettings);
-// FIX: Use setSimpleMarkerSettings and check for both old 'solidMarkerSettings' and new 'simpleMarkerSettings' for backward compatibility.
-    toolSettings.setSimpleMarkerSettings(settings.solidMarkerSettings || settings.simpleMarkerSettings);
-    toolSettings.setNaturalMarkerSettings(settings.naturalMarkerSettings);
-    toolSettings.setAirbrushSettings(settings.airbrushSettings);
-    toolSettings.setFxBrushSettings(settings.fxBrushSettings);
-    if (settings.magicWandSettings) toolSettings.setMagicWandSettings(settings.magicWandSettings);
-    if (settings.textSettings) toolSettings.setTextSettings(settings.textSettings);
-    if (settings.advancedMarkerSettings) toolSettings.setAdvancedMarkerSettings(settings.advancedMarkerSettings);
-  }, [toolSettings]);
+    const ai = useAI(dispatch, library.onImportToLibrary, handleSelectItem, setTool);
 
-  const projects = useProjectManager(user, dispatch, ui.setProjectGalleryOpen, canvasView.onZoomExtents, loadAllToolSettings, guides.loadGuideState, quickAccess.loadState);
+    const loadAllToolSettings = useCallback((settings: any) => {
+        toolSettings.setBrushSettings(settings.brushSettings);
+        toolSettings.setEraserSettings(settings.eraserSettings);
+        // FIX: Use setSimpleMarkerSettings and check for both old 'solidMarkerSettings' and new 'simpleMarkerSettings' for backward compatibility.
+        toolSettings.setSimpleMarkerSettings(settings.solidMarkerSettings || settings.simpleMarkerSettings);
+        toolSettings.setNaturalMarkerSettings(settings.naturalMarkerSettings);
+        toolSettings.setAirbrushSettings(settings.airbrushSettings);
+        toolSettings.setFxBrushSettings(settings.fxBrushSettings);
+        if (settings.magicWandSettings) toolSettings.setMagicWandSettings(settings.magicWandSettings);
+        if (settings.textSettings) toolSettings.setTextSettings(settings.textSettings);
+        if (settings.advancedMarkerSettings) toolSettings.setAdvancedMarkerSettings(settings.advancedMarkerSettings);
+    }, [toolSettings]);
 
-  const { onDropOnCanvas } = useCanvasModes(tool, setTool, dispatch, library.libraryItems, canvasSize, currentState.scaleFactor);
+    const projects = useProjectManager(user, dispatch, ui.setProjectGalleryOpen, canvasView.onZoomExtents, loadAllToolSettings, guides.loadGuideState, quickAccess.loadState);
 
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [isWorkspacePopoverOpen, setWorkspacePopoverOpen] = useState(false);
-  const workspaceButtonRef = useRef<HTMLButtonElement>(null);
-  
-  const [isScalePopoverOpen, setIsScalePopoverOpen] = useState(false);
-  const scaleButtonRef = useRef<HTMLButtonElement>(null);
+    const { onDropOnCanvas } = useCanvasModes(tool, setTool, dispatch, library.libraryItems, canvasSize, currentState.scaleFactor);
 
-  // Crop & Transform State
-  const [isCropping, setIsCropping] = useState(false);
-  const [cropRect, setCropRect] = useState<CropRect | null>(null);
-  const [isTransforming, setIsTransforming] = useState(false);
-  const [transformState, setTransformState] = useState<TransformState | null>(null);
-  const [transformSourceBbox, setTransformSourceBbox] = useState<CropRect | null>(null);
-  const [isAspectRatioLocked, setAspectRatioLocked] = useState(false);
-  const [isAngleSnapEnabled, setIsAngleSnapEnabled] = useState(false);
-  const [angleSnapValue, setAngleSnapValue] = useState<1 | 5 | 10 | 15>(15);
+    const [isInitialized, setIsInitialized] = useState(false);
+    const [isWorkspacePopoverOpen, setWorkspacePopoverOpen] = useState(false);
+    const workspaceButtonRef = useRef<HTMLButtonElement>(null);
 
-  const activeItemId = selectedItemIds.length > 0 ? selectedItemIds[selectedItemIds.length - 1] : null;
-  const activeItem = activeItemId ? objects.find(o => o.id === activeItemId) : null;
-  const canUndo = past.length > 0;
-  const canRedo = future.length > 0;
-  const backgroundObject = objects.find((o): o is SketchObject => o.type === 'object' && !!o.isBackground);
-  const isAiModalOpen = tool === 'enhance';
+    const [isScalePopoverOpen, setIsScalePopoverOpen] = useState(false);
+    const scaleButtonRef = useRef<HTMLButtonElement>(null);
 
-  const { activeColor, activeSize } = useMemo(() => {
-    let color: string | undefined, size: number | undefined;
-    switch (tool) {
-      case 'brush': color = toolSettings.brushSettings.color; size = toolSettings.brushSettings.size; break;
-// FIX: Renamed 'solid-marker' to 'simple-marker' and using simpleMarkerSettings.
-      case 'simple-marker': color = toolSettings.simpleMarkerSettings.color; size = toolSettings.simpleMarkerSettings.size; break;
-      case 'natural-marker': color = toolSettings.naturalMarkerSettings.color; size = toolSettings.naturalMarkerSettings.size; break;
-      case 'airbrush': color = toolSettings.airbrushSettings.color; size = toolSettings.airbrushSettings.size; break;
-      case 'fx-brush': color = toolSettings.fxBrushSettings.color; size = toolSettings.fxBrushSettings.size; break;
-      case 'eraser': size = toolSettings.eraserSettings.size; break;
-    }
-    return { activeColor: color, activeSize: size };
-  }, [tool, toolSettings]);
+    // Crop & Transform State
+    const [isCropping, setIsCropping] = useState(false);
+    const [cropRect, setCropRect] = useState<CropRect | null>(null);
+    const [isTransforming, setIsTransforming] = useState(false);
+    const [transformState, setTransformState] = useState<TransformState | null>(null);
+    const [transformSourceBbox, setTransformSourceBbox] = useState<CropRect | null>(null);
+    const [isAspectRatioLocked, setAspectRatioLocked] = useState(false);
+    const [isAngleSnapEnabled, setIsAngleSnapEnabled] = useState(false);
+    const [angleSnapValue, setAngleSnapValue] = useState<1 | 5 | 10 | 15>(15);
 
-  const handleSelectColor = useCallback((color: string) => {
-    switch (tool) {
-      case 'brush': toolSettings.setBrushSettings(s => ({ ...s, color })); break;
-// FIX: Renamed 'solid-marker' to 'simple-marker' and using setSimpleMarkerSettings.
-      case 'simple-marker': toolSettings.setSimpleMarkerSettings(s => ({ ...s, color })); break;
-      case 'natural-marker': toolSettings.setNaturalMarkerSettings(s => ({ ...s, color })); break;
-      case 'airbrush': toolSettings.setAirbrushSettings(s => ({ ...s, color })); break;
-      case 'fx-brush': toolSettings.setFxBrushSettings(s => ({ ...s, color })); break;
-    }
-  }, [tool, toolSettings]);
+    const activeItemId = selectedItemIds.length > 0 ? selectedItemIds[selectedItemIds.length - 1] : null;
+    const activeItem = activeItemId ? objects.find(o => o.id === activeItemId) : null;
+    const canUndo = past.length > 0;
+    const canRedo = future.length > 0;
+    const backgroundObject = objects.find((o): o is SketchObject => o.type === 'object' && !!o.isBackground);
+    const isAiModalOpen = tool === 'enhance';
 
-  const handleSelectSize = useCallback((size: number) => {
-    switch (tool) {
-      case 'brush': toolSettings.setBrushSettings(s => ({ ...s, size })); break;
-      case 'eraser': toolSettings.setEraserSettings(s => ({ ...s, size })); break;
-// FIX: Renamed 'solid-marker' to 'simple-marker' and using setSimpleMarkerSettings.
-      case 'simple-marker': toolSettings.setSimpleMarkerSettings(s => ({ ...s, size })); break;
-      case 'natural-marker': toolSettings.setNaturalMarkerSettings(s => ({ ...s, size })); break;
-      case 'airbrush': toolSettings.setAirbrushSettings(s => ({ ...s, size })); break;
-      case 'fx-brush': toolSettings.setFxBrushSettings(s => ({ ...s, size })); break;
-    }
-  }, [tool, toolSettings]);
-
-  const handleSetScaleFactor = useCallback((factor: number) => dispatch({ type: 'SET_SCALE_FACTOR', payload: factor }), [dispatch]);
-  const handleSetScaleUnit = useCallback((unit: ScaleUnit) => dispatch({ type: 'SET_SCALE_UNIT', payload: unit }), [dispatch]);
-
-  const handleSaveWorkspace = (name: string) => {
-    const newTemplateData: Omit<WorkspaceTemplate, 'id' | 'name'> = {
-        canvasSize,
-        backgroundColor: backgroundObject?.color || '#FFFFFF',
-        scaleFactor: currentState.scaleFactor,
-        scaleUnit: currentState.scaleUnit,
-        guides: {
-            activeGuide: guides.activeGuide, isOrthogonalVisible: guides.isOrthogonalVisible, rulerGuides: guides.rulerGuides,
-            mirrorGuides: guides.mirrorGuides, perspectiveGuide: guides.perspectiveGuide, orthogonalGuide: guides.orthogonalGuide,
-            gridGuide: guides.gridGuide, areGuidesLocked: guides.areGuidesLocked, isPerspectiveStrokeLockEnabled: guides.isPerspectiveStrokeLockEnabled,
-            isSnapToGridEnabled: guides.isSnapToGridEnabled,
-        },
-        toolSettings: { ...toolSettings },
-        quickAccessSettings: quickAccess.quickAccessSettings,
-    };
-    const newId = templates.saveTemplate(name, newTemplateData);
-    localStorage.setItem('sketcher-active-workspace-id', newId);
-  };
-
-  const handleLoadWorkspace = useCallback((id: string) => {
-    const template = templates.templates.find(t => t.id === id);
-    if (!template) return;
-    if (template.canvasSize.width !== canvasSize.width || template.canvasSize.height !== canvasSize.height) {
-        dispatch({ type: 'RESIZE_CANVAS', payload: { width: template.canvasSize.width, height: template.canvasSize.height } });
-    }
-    dispatch({ type: 'UPDATE_BACKGROUND', payload: { color: template.backgroundColor } });
-    dispatch({ type: 'SET_SCALE_FACTOR', payload: template.scaleFactor });
-    dispatch({ type: 'SET_SCALE_UNIT', payload: template.scaleUnit });
-    guides.loadGuideState(template.guides);
-    loadAllToolSettings(template.toolSettings);
-    quickAccess.loadState(template.quickAccessSettings);
-    localStorage.setItem('sketcher-active-workspace-id', id);
-    setTimeout(canvasView.onZoomExtents, 100);
-  }, [templates.templates, canvasSize, dispatch, guides, loadAllToolSettings, quickAccess, canvasView.onZoomExtents]);
-  
-  const getDrawableObjects = useCallback(() => {
-    const itemMap = new Map<string, CanvasItem>(objects.map(i => [i.id, i]));
-    const isEffectivelyVisible = (item: CanvasItem): boolean => {
-      if (!item.isVisible) return false;
-      if (item.parentId) {
-        const parent = itemMap.get(item.parentId);
-        if (parent) return isEffectivelyVisible(parent);
-      }
-      return true;
-    };
-    return objects.map(item => ({...item, isVisible: isEffectivelyVisible(item)}));
-  }, [objects]);
-
-  // Effects
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => setUser(currentUser));
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('sketcher-theme') as Theme | null;
-    if (savedTheme) setTheme(savedTheme);
-  }, []);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem('sketcher-theme', theme);
-  }, [theme]);
-
-  useLayoutEffect(() => {
-    if (isInitialized || !mainAreaRef.current || ui.showSplash) return;
-    const observer = new ResizeObserver(entries => {
-        const entry = entries[0];
-        const { width, height } = entry.contentRect;
-        if (width > 0 && height > 0) {
-            dispatch({ type: 'INITIALIZE_CANVASES', payload: { width: Math.floor(width), height: Math.floor(height) }});
-            setIsInitialized(true);
-            setSelectedItemIds(['object-1']);
-            observer.disconnect();
+    const { activeColor, activeSize } = useMemo(() => {
+        let color: string | undefined, size: number | undefined;
+        switch (tool) {
+            case 'brush': color = toolSettings.brushSettings.color; size = toolSettings.brushSettings.size; break;
+            // FIX: Renamed 'solid-marker' to 'simple-marker' and using simpleMarkerSettings.
+            case 'simple-marker': color = toolSettings.simpleMarkerSettings.color; size = toolSettings.simpleMarkerSettings.size; break;
+            case 'natural-marker': color = toolSettings.naturalMarkerSettings.color; size = toolSettings.naturalMarkerSettings.size; break;
+            case 'airbrush': color = toolSettings.airbrushSettings.color; size = toolSettings.airbrushSettings.size; break;
+            case 'fx-brush': color = toolSettings.fxBrushSettings.color; size = toolSettings.fxBrushSettings.size; break;
+            case 'eraser': size = toolSettings.eraserSettings.size; break;
         }
-    });
-    observer.observe(mainAreaRef.current);
-    return () => observer.disconnect();
-  }, [isInitialized, ui.showSplash, dispatch]);
+        return { activeColor: color, activeSize: size };
+    }, [tool, toolSettings]);
 
-  useEffect(() => {
-      if (!isInitialized) return;
-      const activeWorkspaceId = localStorage.getItem('sketcher-active-workspace-id');
-      const templateToLoad = activeWorkspaceId ? templates.templates.find(t => t.id === activeWorkspaceId) : null;
-      if (templateToLoad) handleLoadWorkspace(templateToLoad.id);
-      else canvasView.onZoomExtents();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isInitialized]);
+    const handleSelectColor = useCallback((color: string) => {
+        switch (tool) {
+            case 'brush': toolSettings.setBrushSettings(s => ({ ...s, color })); break;
+            // FIX: Renamed 'solid-marker' to 'simple-marker' and using setSimpleMarkerSettings.
+            case 'simple-marker': toolSettings.setSimpleMarkerSettings(s => ({ ...s, color })); break;
+            case 'natural-marker': toolSettings.setNaturalMarkerSettings(s => ({ ...s, color })); break;
+            case 'airbrush': toolSettings.setAirbrushSettings(s => ({ ...s, color })); break;
+            case 'fx-brush': toolSettings.setFxBrushSettings(s => ({ ...s, color })); break;
+        }
+    }, [tool, toolSettings]);
 
-  useEffect(() => {
-    if (backgroundObject?.canvas) ai.setBackgroundDataUrl(backgroundObject.canvas.toDataURL());
-    else ai.setBackgroundDataUrl(null);
-  }, [backgroundObject, backgroundObject?.canvas, ai]);
+    const handleSelectSize = useCallback((size: number) => {
+        switch (tool) {
+            case 'brush': toolSettings.setBrushSettings(s => ({ ...s, size })); break;
+            case 'eraser': toolSettings.setEraserSettings(s => ({ ...s, size })); break;
+            // FIX: Renamed 'solid-marker' to 'simple-marker' and using setSimpleMarkerSettings.
+            case 'simple-marker': toolSettings.setSimpleMarkerSettings(s => ({ ...s, size })); break;
+            case 'natural-marker': toolSettings.setNaturalMarkerSettings(s => ({ ...s, size })); break;
+            case 'airbrush': toolSettings.setAirbrushSettings(s => ({ ...s, size })); break;
+            case 'fx-brush': toolSettings.setFxBrushSettings(s => ({ ...s, size })); break;
+        }
+    }, [tool, toolSettings]);
 
-  useEffect(() => {
-    setIsCropping(false); setCropRect(null); setIsTransforming(false); setTransformState(null); setTransformSourceBbox(null);
-    if (tool === 'crop') {
-        setIsCropping(true);
-        setCropRect({ x: 0, y: 0, width: canvasSize.width, height: canvasSize.height });
-    } else if ((tool === 'transform' || tool === 'free-transform') && activeItem?.type === 'object' && activeItem.canvas) {
-        const bbox = getContentBoundingBox(activeItem.canvas);
-        if (bbox) {
-            setIsTransforming(true); setTransformSourceBbox(bbox);
-            if (tool === 'transform') {
-                setTransformState({ type: 'affine', x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height, rotation: 0 });
-            } else {
-                 setTransformState({ type: 'free', x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height, corners: { tl: { x: bbox.x, y: bbox.y }, tr: { x: bbox.x + bbox.width, y: bbox.y }, bl: { x: bbox.x, y: bbox.y + bbox.height }, br: { x: bbox.x + bbox.width, y: bbox.y + bbox.height } } });
+    const handleSetScaleFactor = useCallback((factor: number) => dispatch({ type: 'SET_SCALE_FACTOR', payload: factor }), [dispatch]);
+    const handleSetScaleUnit = useCallback((unit: ScaleUnit) => dispatch({ type: 'SET_SCALE_UNIT', payload: unit }), [dispatch]);
+
+    const handleSaveWorkspace = (name: string) => {
+        const newTemplateData: Omit<WorkspaceTemplate, 'id' | 'name'> = {
+            canvasSize,
+            backgroundColor: backgroundObject?.color || '#FFFFFF',
+            scaleFactor: currentState.scaleFactor,
+            scaleUnit: currentState.scaleUnit,
+            guides: {
+                activeGuide: guides.activeGuide, isOrthogonalVisible: guides.isOrthogonalVisible, rulerGuides: guides.rulerGuides,
+                mirrorGuides: guides.mirrorGuides, perspectiveGuide: guides.perspectiveGuide, orthogonalGuide: guides.orthogonalGuide,
+                gridGuide: guides.gridGuide, areGuidesLocked: guides.areGuidesLocked, isPerspectiveStrokeLockEnabled: guides.isPerspectiveStrokeLockEnabled,
+                isSnapToGridEnabled: guides.isSnapToGridEnabled,
+            },
+            toolSettings: { ...toolSettings },
+            quickAccessSettings: quickAccess.quickAccessSettings,
+        };
+        const newId = templates.saveTemplate(name, newTemplateData);
+        localStorage.setItem('sketcher-active-workspace-id', newId);
+    };
+
+    const handleLoadWorkspace = useCallback((id: string) => {
+        const template = templates.templates.find(t => t.id === id);
+        if (!template) return;
+        if (template.canvasSize.width !== canvasSize.width || template.canvasSize.height !== canvasSize.height) {
+            dispatch({ type: 'RESIZE_CANVAS', payload: { width: template.canvasSize.width, height: template.canvasSize.height } });
+        }
+        dispatch({ type: 'UPDATE_BACKGROUND', payload: { color: template.backgroundColor } });
+        dispatch({ type: 'SET_SCALE_FACTOR', payload: template.scaleFactor });
+        dispatch({ type: 'SET_SCALE_UNIT', payload: template.scaleUnit });
+        guides.loadGuideState(template.guides);
+        loadAllToolSettings(template.toolSettings);
+        quickAccess.loadState(template.quickAccessSettings);
+        localStorage.setItem('sketcher-active-workspace-id', id);
+        setTimeout(canvasView.onZoomExtents, 100);
+    }, [templates.templates, canvasSize, dispatch, guides, loadAllToolSettings, quickAccess, canvasView.onZoomExtents]);
+
+    const getDrawableObjects = useCallback(() => {
+        const itemMap = new Map<string, CanvasItem>(objects.map(i => [i.id, i]));
+        const isEffectivelyVisible = (item: CanvasItem): boolean => {
+            if (!item.isVisible) return false;
+            if (item.parentId) {
+                const parent = itemMap.get(item.parentId);
+                if (parent) return isEffectivelyVisible(parent);
             }
-        } else {
-            setTool('select');
+            return true;
+        };
+        return objects.map(item => ({ ...item, isVisible: isEffectivelyVisible(item) }));
+    }, [objects]);
+
+    // Effects
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => setUser(currentUser));
+        return () => unsubscribe();
+    }, []);
+
+    useEffect(() => {
+        const savedTheme = localStorage.getItem('sketcher-theme') as Theme | null;
+        if (savedTheme) setTheme(savedTheme);
+    }, []);
+
+    useEffect(() => {
+        document.documentElement.classList.toggle('dark', theme === 'dark');
+        localStorage.setItem('sketcher-theme', theme);
+    }, [theme]);
+
+    useLayoutEffect(() => {
+        if (isInitialized || !mainAreaRef.current || ui.showSplash) return;
+        const observer = new ResizeObserver(entries => {
+            const entry = entries[0];
+            const { width, height } = entry.contentRect;
+            if (width > 0 && height > 0) {
+                dispatch({ type: 'INITIALIZE_CANVASES', payload: { width: Math.floor(width), height: Math.floor(height) } });
+                setIsInitialized(true);
+                setSelectedItemIds(['object-1']);
+                observer.disconnect();
+            }
+        });
+        observer.observe(mainAreaRef.current);
+        return () => observer.disconnect();
+    }, [isInitialized, ui.showSplash, dispatch]);
+
+    useEffect(() => {
+        if (!isInitialized) return;
+        const activeWorkspaceId = localStorage.getItem('sketcher-active-workspace-id');
+        const templateToLoad = activeWorkspaceId ? templates.templates.find(t => t.id === activeWorkspaceId) : null;
+        if (templateToLoad) handleLoadWorkspace(templateToLoad.id);
+        else canvasView.onZoomExtents();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isInitialized]);
+
+    useEffect(() => {
+        if (backgroundObject?.canvas) ai.setBackgroundDataUrl(backgroundObject.canvas.toDataURL());
+        else ai.setBackgroundDataUrl(null);
+    }, [backgroundObject, backgroundObject?.canvas, ai]);
+
+    useEffect(() => {
+        setIsCropping(false); setCropRect(null); setIsTransforming(false); setTransformState(null); setTransformSourceBbox(null);
+        if (tool === 'crop') {
+            setIsCropping(true);
+            setCropRect({ x: 0, y: 0, width: canvasSize.width, height: canvasSize.height });
+        } else if ((tool === 'transform' || tool === 'free-transform') && activeItem?.type === 'object' && activeItem.canvas) {
+            const bbox = getContentBoundingBox(activeItem.canvas);
+            if (bbox) {
+                setIsTransforming(true); setTransformSourceBbox(bbox);
+                if (tool === 'transform') {
+                    setTransformState({ type: 'affine', x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height, rotation: 0 });
+                } else {
+                    setTransformState({ type: 'free', x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height, corners: { tl: { x: bbox.x, y: bbox.y }, tr: { x: bbox.x + bbox.width, y: bbox.y }, bl: { x: bbox.x, y: bbox.y + bbox.height }, br: { x: bbox.x + bbox.width, y: bbox.y + bbox.height } } });
+                }
+            } else {
+                setTool('select');
+            }
         }
-    }
-  }, [tool, canvasSize.width, canvasSize.height, activeItem, setTool]);
+    }, [tool, canvasSize.width, canvasSize.height, activeItem, setTool]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setStrokeState(null); setSelection(null); }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') { setStrokeState(null); setSelection(null); }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
-  useEffect(() => { setStrokeState(null); }, [tool, strokeMode]);
-  
-  // Callbacks
-  const undo = useCallback(() => dispatch({ type: 'UNDO' }), [dispatch]);
-  const redo = useCallback(() => dispatch({ type: 'REDO' }), [dispatch]);
-  const addItem = useCallback((type: 'group' | 'object') => {
-    const newItemId = `${type}-${Date.now()}`;
-    dispatch({ type: 'ADD_ITEM', payload: { type, activeItemId, canvasSize, newItemId } });
-    setSelectedItemIds([newItemId]);
-    return newItemId;
-  }, [activeItemId, canvasSize, dispatch]);
-  const copyItem = useCallback((id: string) => dispatch({ type: 'COPY_ITEM', payload: { id } }), [dispatch]);
-  const deleteItem = useCallback((id: string) => ui.setDeletingItemId(id), [ui]);
-  const handleMoveItem = useCallback((draggedId: string, targetId: string, position: 'top' | 'bottom' | 'middle') => dispatch({ type: 'MOVE_ITEM', payload: { draggedId, targetId, position } }), [dispatch]);
-  const handleDrawCommit = useCallback((id: string, beforeCanvas: HTMLCanvasElement) => dispatch({ type: 'COMMIT_DRAWING', payload: { activeItemId: id, beforeCanvas } }), [dispatch]);
-  const updateItem = useCallback((id: string, updates: Partial<CanvasItem>) => dispatch({ type: 'UPDATE_ITEM', payload: { id, updates } }), [dispatch]);
+    useEffect(() => { setStrokeState(null); }, [tool, strokeMode]);
 
-  const handleUpdateBackground = useCallback((updates: { color?: string, file?: File, image?: HTMLImageElement }) => {
-    if (updates.file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        if (e.target?.result) {
-          const img = new Image();
-          img.onload = () => {
-            dispatch({ type: 'SET_CANVAS_FROM_IMAGE', payload: { image: img } });
-            canvasView.onZoomExtents();
-          };
-          img.src = e.target.result as string;
-        }
-      };
-      reader.readAsDataURL(updates.file);
-    } else if (updates.image) { dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: updates.image } });
-    } else if (updates.color) { dispatch({ type: 'UPDATE_BACKGROUND', payload: { color: updates.color } }); }
-  }, [canvasView, dispatch]);
+    // Callbacks
+    const undo = useCallback(() => dispatch({ type: 'UNDO' }), [dispatch]);
+    const redo = useCallback(() => dispatch({ type: 'REDO' }), [dispatch]);
+    const addItem = useCallback((type: 'group' | 'object') => {
+        const newItemId = `${type}-${Date.now()}`;
+        dispatch({ type: 'ADD_ITEM', payload: { type, activeItemId, canvasSize, newItemId } });
+        setSelectedItemIds([newItemId]);
+        return newItemId;
+    }, [activeItemId, canvasSize, dispatch]);
+    const copyItem = useCallback((id: string) => dispatch({ type: 'COPY_ITEM', payload: { id } }), [dispatch]);
+    const deleteItem = useCallback((id: string) => ui.setDeletingItemId(id), [ui]);
+    const handleMoveItem = useCallback((draggedId: string, targetId: string, position: 'top' | 'bottom' | 'middle') => dispatch({ type: 'MOVE_ITEM', payload: { draggedId, targetId, position } }), [dispatch]);
+    const handleDrawCommit = useCallback((id: string, beforeCanvas: HTMLCanvasElement) => dispatch({ type: 'COMMIT_DRAWING', payload: { activeItemId: id, beforeCanvas } }), [dispatch]);
+    const updateItem = useCallback((id: string, updates: Partial<CanvasItem>) => dispatch({ type: 'UPDATE_ITEM', payload: { id, updates } }), [dispatch]);
 
-  const handleRemoveBackgroundImage = useCallback(() => dispatch({ type: 'REMOVE_BACKGROUND_IMAGE' }), [dispatch]);
-  const handleConfirmDelete = useCallback(() => {
-    if (!ui.deletingItemId) return;
-    dispatch({ type: 'DELETE_ITEM', payload: { id: ui.deletingItemId } });
-    setSelectedItemIds(currentIds => currentIds.filter(cid => cid !== ui.deletingItemId));
-    ui.setDeletingItemId(null);
-  }, [ui, dispatch]);
+    const handleUpdateBackground = useCallback((updates: { color?: string, file?: File, image?: HTMLImageElement }) => {
+        if (updates.file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                if (e.target?.result) {
+                    const img = new Image();
+                    img.onload = () => {
+                        dispatch({ type: 'SET_CANVAS_FROM_IMAGE', payload: { image: img } });
+                        canvasView.onZoomExtents();
+                    };
+                    img.src = e.target.result as string;
+                }
+            };
+            reader.readAsDataURL(updates.file);
+        } else if (updates.image) {
+            dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: updates.image } });
+        } else if (updates.color) { dispatch({ type: 'UPDATE_BACKGROUND', payload: { color: updates.color } }); }
+    }, [canvasView, dispatch]);
 
-  const handleMergeItems = useCallback(async (sourceId: string, targetId: string) => {
-    dispatch({ type: 'MERGE_ITEMS', payload: { sourceId, targetId }});
-    setSelectedItemIds([targetId]);
-  }, [dispatch]);
-  
-  const handleConfirmClear = useCallback(() => { dispatch({ type: 'CLEAR_CANVAS' }); ui.setShowClearConfirm(false); }, [dispatch, ui]);
-  const handleSaveItemToLibrary = useCallback((imageDataUrl: string, name: string) => {
-      fetch(imageDataUrl).then(res => res.blob()).then(blob => {
+    const handleRemoveBackgroundImage = useCallback(() => dispatch({ type: 'REMOVE_BACKGROUND_IMAGE' }), [dispatch]);
+    const handleConfirmDelete = useCallback(() => {
+        if (!ui.deletingItemId) return;
+        dispatch({ type: 'DELETE_ITEM', payload: { id: ui.deletingItemId } });
+        setSelectedItemIds(currentIds => currentIds.filter(cid => cid !== ui.deletingItemId));
+        ui.setDeletingItemId(null);
+    }, [ui, dispatch]);
+
+    const handleMergeItems = useCallback(async (sourceId: string, targetId: string) => {
+        dispatch({ type: 'MERGE_ITEMS', payload: { sourceId, targetId } });
+        setSelectedItemIds([targetId]);
+    }, [dispatch]);
+
+    const handleConfirmClear = useCallback(() => { dispatch({ type: 'CLEAR_CANVAS' }); ui.setShowClearConfirm(false); }, [dispatch, ui]);
+    const handleSaveItemToLibrary = useCallback((imageDataUrl: string, name: string) => {
+        fetch(imageDataUrl).then(res => res.blob()).then(blob => {
             if (blob) {
                 const filename = name.endsWith('.png') ? name : `${name}.png`;
                 library.onImportToLibrary(new File([blob], filename, { type: 'image/png' }), null);
             }
         });
-  }, [library]);
-  
-  const handleCommitText = useCallback((textState: { position: Point; value: string; activeItemId: string; }) => {
-      if (!textState.value.trim()) { setTextEditState(null); return; }
-      const item = objects.find(o => o.id === textState.activeItemId) as SketchObject;
-      if (!item || !item.context) { setTextEditState(null); return; }
-      const beforeCanvas = cloneCanvas(item.canvas!);
-      const ctx = item.context;
-      ctx.save();
-      const settings = toolSettings.textSettings;
-      ctx.font = `${settings.fontWeight === 'italic' ? 'italic ' : ''}${settings.fontWeight === 'bold' ? 'bold ' : ''}${settings.fontSize}px ${settings.fontFamily}`;
-      ctx.fillStyle = settings.color;
-      ctx.textAlign = settings.textAlign;
-      textState.value.split('\n').forEach((line, index) => ctx.fillText(line, textState.position.x, textState.position.y + (index * settings.fontSize * 1.2)));
-      ctx.restore();
-      dispatch({ type: 'COMMIT_DRAWING', payload: { activeItemId: textState.activeItemId, beforeCanvas } });
-      setTextEditState(null);
-  }, [objects, toolSettings.textSettings, dispatch]);
+    }, [library]);
+
+    const handleCommitText = useCallback((textState: { position: Point; value: string; activeItemId: string; }) => {
+        if (!textState.value.trim()) { setTextEditState(null); return; }
+        const item = objects.find(o => o.id === textState.activeItemId) as SketchObject;
+        if (!item || !item.context) { setTextEditState(null); return; }
+        const beforeCanvas = cloneCanvas(item.canvas!);
+        const ctx = item.context;
+        ctx.save();
+        const settings = toolSettings.textSettings;
+        ctx.font = `${settings.fontWeight === 'italic' ? 'italic ' : ''}${settings.fontWeight === 'bold' ? 'bold ' : ''}${settings.fontSize}px ${settings.fontFamily}`;
+        ctx.fillStyle = settings.color;
+        ctx.textAlign = settings.textAlign;
+        textState.value.split('\n').forEach((line, index) => ctx.fillText(line, textState.position.x, textState.position.y + (index * settings.fontSize * 1.2)));
+        ctx.restore();
+        dispatch({ type: 'COMMIT_DRAWING', payload: { activeItemId: textState.activeItemId, beforeCanvas } });
+        setTextEditState(null);
+    }, [objects, toolSettings.textSettings, dispatch]);
 
     // Crop & Transform handlers
     const handleApplyCrop = () => { if (cropRect) { dispatch({ type: 'CROP_CANVAS', payload: { cropRect } }); setTool('select'); } };
     const handleCancelCrop = () => setTool('select');
     const handleApplyTransform = () => { if (transformState && transformSourceBbox && activeItem) { dispatch({ type: 'APPLY_TRANSFORM', payload: { id: activeItem.id, transform: transformState, sourceBbox: transformSourceBbox } }); setTool('select'); } };
     const handleCancelTransform = () => setTool('select');
-    
+
     // Selection handlers
     const handleDeselect = useCallback(() => setSelection(null), []);
     const handleDeleteSelection = useCallback(() => {
@@ -1009,7 +1060,7 @@ export function App() {
         tempCanvas.width = boundingBox.width; tempCanvas.height = boundingBox.height;
         const tempCtx = tempCanvas.getContext('2d');
         if (!tempCtx) return;
-        tempCtx.drawImage( ctx.canvas, boundingBox.x, boundingBox.y, boundingBox.width, boundingBox.height, 0, 0, boundingBox.width, boundingBox.height );
+        tempCtx.drawImage(ctx.canvas, boundingBox.x, boundingBox.y, boundingBox.width, boundingBox.height, 0, 0, boundingBox.width, boundingBox.height);
         tempCtx.globalCompositeOperation = 'destination-in'; tempCtx.save(); tempCtx.translate(-boundingBox.x, -boundingBox.y); tempCtx.fillStyle = 'black'; tempCtx.fill(path); tempCtx.restore();
         const imageData = tempCtx.getImageData(0, 0, boundingBox.width, boundingBox.height);
         setClipboard({ imageData, sourceRect: boundingBox });
@@ -1042,17 +1093,17 @@ export function App() {
 
         let canMergeUp = false;
         let canMergeDown = false;
-        
+
         const currentItem = visualList[currentIndex];
 
         // Merge Up (with visually-above item). Icon is arrow pointing up.
-        if (canMoveUp) { 
+        if (canMoveUp) {
             const itemAbove = visualList[currentIndex + 1];
             if (currentItem.type === 'object' && itemAbove.type === 'object' && currentItem.parentId === itemAbove.parentId) {
                 canMergeUp = true;
             }
         }
-        
+
         // Merge Down (with visually-below item). Icon is arrow pointing down.
         if (canMoveDown) {
             const itemBelow = visualList[currentIndex - 1];
@@ -1070,31 +1121,31 @@ export function App() {
 
         // 'up' in UI means moving towards the top of the list, which corresponds to a higher index in the data array.
         const targetIndex = direction === 'up' ? currentIndex + 1 : currentIndex - 1;
-        
+
         if (targetIndex < 0 || targetIndex >= visualList.length) return;
         const targetItem = visualList[targetIndex];
-        
+
         // To move item UP in data array (and UI), place it AFTER its new upper neighbor.
         // To move item DOWN in data array (and UI), place it BEFORE its new lower neighbor.
         const position = direction === 'up' ? 'bottom' : 'top';
-        
+
         handleMoveItem(id, targetItem.id, position);
     }, [visualList, handleMoveItem]);
 
-    const handleMergeItemDown = useCallback((id: string) => { 
-        if (activeItemState.canMergeDown) { 
+    const handleMergeItemDown = useCallback((id: string) => {
+        if (activeItemState.canMergeDown) {
             const currentIndex = visualList.findIndex(item => item.id === id);
             // Merging down means merging the current item (top) into the one below it (bottom).
-            handleMergeItems(id, visualList[currentIndex - 1].id); 
-        } 
+            handleMergeItems(id, visualList[currentIndex - 1].id);
+        }
     }, [activeItemState.canMergeDown, visualList, handleMergeItems]);
 
-    const handleMergeItemUp = useCallback((id: string) => { 
-        if (activeItemState.canMergeUp) { 
+    const handleMergeItemUp = useCallback((id: string) => {
+        if (activeItemState.canMergeUp) {
             const currentIndex = visualList.findIndex(item => item.id === id);
             // Merging up means merging the item above (top) into the current one (bottom).
             handleMergeItems(visualList[currentIndex + 1].id, id);
-        } 
+        }
     }, [activeItemState.canMergeUp, visualList, handleMergeItems]);
 
     const handleAddObjectAbove = useCallback((id: string) => { const newItemId = `object-${Date.now()}`; dispatch({ type: 'ADD_ITEM', payload: { type: 'object', activeItemId: id, canvasSize, newItemId } }); setSelectedItemIds([newItemId]); }, [canvasSize, dispatch]);
@@ -1113,156 +1164,181 @@ export function App() {
         }
         return null;
     }, [canvasSize, scaleFactor, scaleUnit]);
-  
-  const drawableObjects = getDrawableObjects();
-  const itemToDelete = objects.find(item => item.id === ui.deletingItemId);
 
-  if (ui.showSplash) {
+    const drawableObjects = getDrawableObjects();
+    const itemToDelete = objects.find(item => item.id === ui.deletingItemId);
+
+    if (ui.showSplash) {
+        return (
+            <div className="w-screen h-screen bg-[--bg-primary] text-[--text-primary] flex items-center justify-center font-sans">
+                <div className="text-center p-8">
+                    <h1 className="text-5xl font-bold mb-4">Sketcher</h1>
+                    <p className="text-lg text-[--text-secondary] mb-10">Tu lienzo creativo te espera.</p>
+                    <button onClick={ui.handleStart} className="px-10 py-4 bg-[--accent-primary] text-white font-bold text-lg rounded-lg shadow-lg hover:bg-[--accent-hover] transform hover:scale-105 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-offset-2 focus:ring-offset-[--bg-primary] focus:ring-[--accent-primary]">
+                        Comenzar a Dibujar
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     return (
-      <div className="w-screen h-screen bg-[--bg-primary] text-[--text-primary] flex items-center justify-center font-sans">
-        <div className="text-center p-8">
-          <h1 className="text-5xl font-bold mb-4">Sketcher</h1>
-          <p className="text-lg text-[--text-secondary] mb-10">Tu lienzo creativo te espera.</p>
-          <button onClick={ui.handleStart} className="px-10 py-4 bg-[--accent-primary] text-white font-bold text-lg rounded-lg shadow-lg hover:bg-[--accent-hover] transform hover:scale-105 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-offset-2 focus:ring-offset-[--bg-primary] focus:ring-[--accent-primary]">
-            Comenzar a Dibujar
-          </button>
-        </div>
-      </div>
-    );
-  }
+        <div className="w-screen h-screen bg-[--bg-primary] text-[--text-primary] flex flex-col font-sans overflow-hidden">
+            {/* Modals & Overlays */}
+            {ui.isExportModalOpen && <ExportModal isOpen={ui.isExportModalOpen} onClose={() => ui.setExportModalOpen(false)} drawableObjects={drawableObjects.filter((o): o is SketchObject => o.type === 'object')} canvasSize={canvasSize} />}
+            {ui.isSingleExportModalOpen && <SingleObjectExportModal isOpen={ui.isSingleExportModalOpen} onClose={() => ui.setSingleExportModalOpen(false)} item={activeItem as SketchObject} canvasSize={canvasSize} onSaveToLibrary={handleSaveItemToLibrary} />}
+            {ui.deletingItemId && <ConfirmDeleteModal isOpen={!!ui.deletingItemId} onCancel={() => ui.setDeletingItemId(null)} onConfirm={handleConfirmDelete} itemName={itemToDelete?.name || ''} itemType={itemToDelete?.type === 'group' ? 'group' : 'object'} />}
+            {library.deletingLibraryItem && <ConfirmDeleteLibraryItemModal isOpen={!!library.deletingLibraryItem} onCancel={library.onCancelDeleteLibraryItem} onConfirm={library.onConfirmDeleteLibraryItem} itemToDelete={library.deletingLibraryItem} />}
+            {ui.showClearConfirm && <ConfirmClearModal isOpen={ui.showClearConfirm} onCancel={() => ui.setShowClearConfirm(false)} onConfirm={handleConfirmClear} />}
+            {ui.isCanvasSizeModalOpen && <CanvasSizeModal isOpen={ui.isCanvasSizeModalOpen} onClose={() => ui.setCanvasSizeModalOpen(false)} currentSize={canvasSize} onApply={(w, h) => { dispatch({ type: 'RESIZE_CANVAS', payload: { width: w, height: h } }); ui.setCanvasSizeModalOpen(false); setTimeout(canvasView.onZoomExtents, 100); }} />}
+            {ui.isResetConfirmOpen && <ConfirmResetModal isOpen={ui.isResetConfirmOpen} onCancel={() => ui.setIsResetConfirmOpen(false)} onConfirm={() => { console.log("Resetting preferences..."); ui.setIsResetConfirmOpen(false); }} />}
+            {library.imageToEdit && <TransparencyEditor item={library.imageToEdit} onApply={library.onApplyTransparency} onCancel={library.onCancelEditTransparency} />}
+            {isToolSelectorOpen && editingToolSlotIndex !== null && <ToolSelectorModal isOpen={isToolSelectorOpen} onClose={() => { setIsToolSelectorOpen(false); setEditingToolSlotIndex(null); }} onSelectTool={(tool) => quickAccess.updateTool(editingToolSlotIndex, tool)} fxPresets={toolSettings.brushPresets} />}
 
-  return (
-    <div className="w-screen h-screen bg-[--bg-primary] text-[--text-primary] flex flex-col font-sans overflow-hidden">
-      {/* Modals & Overlays */}
-      {ui.isExportModalOpen && <ExportModal isOpen={ui.isExportModalOpen} onClose={() => ui.setExportModalOpen(false)} drawableObjects={drawableObjects.filter((o): o is SketchObject => o.type === 'object')} canvasSize={canvasSize} /> }
-      {ui.isSingleExportModalOpen && <SingleObjectExportModal isOpen={ui.isSingleExportModalOpen} onClose={() => ui.setSingleExportModalOpen(false)} item={activeItem as SketchObject} canvasSize={canvasSize} onSaveToLibrary={handleSaveItemToLibrary} /> }
-      {ui.deletingItemId && <ConfirmDeleteModal isOpen={!!ui.deletingItemId} onCancel={() => ui.setDeletingItemId(null)} onConfirm={handleConfirmDelete} itemName={itemToDelete?.name || ''} itemType={itemToDelete?.type === 'group' ? 'group' : 'object'} /> }
-      {library.deletingLibraryItem && <ConfirmDeleteLibraryItemModal isOpen={!!library.deletingLibraryItem} onCancel={library.onCancelDeleteLibraryItem} onConfirm={library.onConfirmDeleteLibraryItem} itemToDelete={library.deletingLibraryItem} /> }
-      {ui.showClearConfirm && <ConfirmClearModal isOpen={ui.showClearConfirm} onCancel={() => ui.setShowClearConfirm(false)} onConfirm={handleConfirmClear} /> }
-      {ui.isCanvasSizeModalOpen && <CanvasSizeModal isOpen={ui.isCanvasSizeModalOpen} onClose={() => ui.setCanvasSizeModalOpen(false)} currentSize={canvasSize} onApply={(w,h) => { dispatch({ type: 'RESIZE_CANVAS', payload: { width: w, height: h } }); ui.setCanvasSizeModalOpen(false); setTimeout(canvasView.onZoomExtents, 100); }} /> }
-      {ui.isResetConfirmOpen && <ConfirmResetModal isOpen={ui.isResetConfirmOpen} onCancel={() => ui.setIsResetConfirmOpen(false)} onConfirm={() => { console.log("Resetting preferences..."); ui.setIsResetConfirmOpen(false); }} /> }
-      {library.imageToEdit && <TransparencyEditor item={library.imageToEdit} onApply={library.onApplyTransparency} onCancel={library.onCancelEditTransparency} /> }
-      {isToolSelectorOpen && editingToolSlotIndex !== null && <ToolSelectorModal isOpen={isToolSelectorOpen} onClose={() => { setIsToolSelectorOpen(false); setEditingToolSlotIndex(null); }} onSelectTool={(tool) => quickAccess.updateTool(editingToolSlotIndex, tool)} fxPresets={toolSettings.brushPresets} /> }
-      
-      <ProjectGalleryModal 
-            isOpen={ui.isProjectGalleryOpen}
-            onClose={() => ui.setProjectGalleryOpen(false)}
-            user={user}
-            projects={projects.projects}
-            isLoading={projects.projectsLoading}
-            onSave={(name) => projects.saveProject(name, () => ({ currentState, guides, toolSettings: {...toolSettings}, quickAccess: quickAccess.quickAccessSettings }))}
-            onLoad={projects.loadProject}
-            onDelete={projects.deleteProject}
-            onSaveLocally={(name) => projects.saveLocally(name, () => ({ currentState, guides, toolSettings: {...toolSettings}, quickAccess: quickAccess.quickAccessSettings }))}
-            onLoadFromFile={projects.loadFromFile}
-      />
+            <ProjectGalleryModal
+                isOpen={ui.isProjectGalleryOpen}
+                onClose={() => ui.setProjectGalleryOpen(false)}
+                user={user}
+                projects={projects.projects}
+                isLoading={projects.projectsLoading}
+                onSave={(name) => projects.saveProject(name, () => ({ currentState, guides, toolSettings: { ...toolSettings }, quickAccess: quickAccess.quickAccessSettings }))}
+                onLoad={projects.loadProject}
+                onDelete={projects.deleteProject}
+                onSaveLocally={(name) => projects.saveLocally(name, () => ({ currentState, guides, toolSettings: { ...toolSettings }, quickAccess: quickAccess.quickAccessSettings }))}
+                onLoadFromFile={projects.loadFromFile}
+            />
 
-      {/* Main Header */}
-      <header className="flex-shrink-0 flex items-center justify-between p-2 bg-[--bg-primary] border-b border-[--bg-tertiary] z-20">
-        <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold">Sketcher</h1>
-            <button onClick={() => ui.setProjectGalleryOpen(true)} className="flex items-center gap-2 p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] border border-[--bg-tertiary] transition-colors text-sm">
-                <GalleryIcon className="w-5 h-5" />
-                <span>Galería</span>
-            </button>
-            <button ref={workspaceButtonRef} onClick={() => setWorkspacePopoverOpen(p => !p)} className="flex items-center gap-2 p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] border border-[--bg-tertiary] transition-colors text-sm relative">
-                <BookmarkIcon className="w-5 h-5" />
-                <span>Plantillas</span>
-                 <WorkspaceTemplatesPopover isOpen={isWorkspacePopoverOpen} onClose={() => setWorkspacePopoverOpen(false)} templates={templates.templates} onSave={handleSaveWorkspace} onLoad={handleLoadWorkspace} onDelete={templates.deleteTemplate} onResetPreferences={() => ui.setIsResetConfirmOpen(true)} />
-            </button>
-        </div>
-        <div className="flex items-center gap-4">
-             <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] text-[--text-secondary]">
-                {theme === 'dark' ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
-            </button>
-            <Auth user={user} />
-        </div>
-      </header>
+            {/* Main Header */}
+            <header className="flex-shrink-0 flex items-center justify-between p-2 bg-[--bg-primary] border-b border-[--bg-tertiary] z-20">
+                <div className="flex items-center gap-4">
+                    <h1 className="text-xl font-bold">Sketcher</h1>
+                    <button onClick={() => ui.setProjectGalleryOpen(true)} className="flex items-center gap-2 p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] border border-[--bg-tertiary] transition-colors text-sm">
+                        <GalleryIcon className="w-5 h-5" />
+                        <span>Galería</span>
+                    </button>
+                    <button ref={workspaceButtonRef} onClick={() => setWorkspacePopoverOpen(p => !p)} className="flex items-center gap-2 p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] border border-[--bg-tertiary] transition-colors text-sm relative">
+                        <BookmarkIcon className="w-5 h-5" />
+                        <span>Plantillas</span>
+                        <WorkspaceTemplatesPopover isOpen={isWorkspacePopoverOpen} onClose={() => setWorkspacePopoverOpen(false)} templates={templates.templates} onSave={handleSaveWorkspace} onLoad={handleLoadWorkspace} onDelete={templates.deleteTemplate} onResetPreferences={() => ui.setIsResetConfirmOpen(true)} />
+                    </button>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 mr-2 px-2 py-1 bg-[--bg-secondary] rounded-md border border-[--bg-tertiary]">
+                        {ui.deferredPrompt && (
+                            <>
+                                <button onClick={ui.handleInstallClick} className="flex items-center gap-1 p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Instalar Aplicación">
+                                    <DownloadIcon className="w-4 h-4" />
+                                    <span className="text-xs font-bold hidden sm:inline">Instalar</span>
+                                </button>
+                                <div className="w-px h-4 bg-[--bg-tertiary] mx-1"></div>
+                            </>
+                        )}
+                        <button onClick={() => ui.setUiScale(ui.uiScale - 0.1)} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Reducir Interfaz">
+                            <span className="text-xs font-bold">A-</span>
+                        </button>
+                        <span className="text-xs font-mono w-8 text-center">{Math.round(ui.uiScale * 100)}%</span>
+                        <button onClick={() => ui.setUiScale(ui.uiScale + 0.1)} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Aumentar Interfaz">
+                            <span className="text-xs font-bold">A+</span>
+                        </button>
+                        <div className="w-px h-4 bg-[--bg-tertiary] mx-1"></div>
+                        <button onClick={ui.handleSaveUiScale} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Guardar configuración de tamaño">
+                            <SaveIcon className="w-4 h-4" />
+                        </button>
+                    </div>
 
-      {/* Main Content Area */}
-      <div className="flex flex-grow min-h-0 relative">
-          <Toolbar
-              tool={tool} setTool={setTool} {...toolSettings} brushPresets={toolSettings.brushPresets} onSavePreset={toolSettings.onSavePreset}
-              onUpdatePreset={toolSettings.onUpdatePreset} onLoadPreset={toolSettings.onLoadPreset} onDeletePreset={toolSettings.onDeletePreset}
-              activeGuide={guides.activeGuide} setActiveGuide={guides.onSetActiveGuide} isOrthogonalVisible={guides.isOrthogonalVisible}
-              onToggleOrthogonal={guides.toggleOrthogonal} onExportClick={() => ui.setExportModalOpen(true)}
-              onEnhance={(payload) => ai.handleEnhance(payload, canvasSize, getDrawableObjects, backgroundObject)}
-              isEnhancing={ai.isEnhancing} enhancementPreview={ai.enhancementPreview} 
-              onGenerateEnhancementPreview={() => ai.generateEnhancementPreview(canvasSize, getDrawableObjects, backgroundObject)}
-              objects={objects} libraryItems={library.libraryItems} backgroundDataUrl={ai.backgroundDataUrl} debugInfo={ai.debugInfo}
-              strokeMode={strokeMode} setStrokeMode={setStrokeMode} strokeModifier={strokeModifier} setStrokeModifier={setStrokeModifier}
-          />
-          <main ref={mainAreaRef} className="flex-grow relative" onDrop={(e) => { e.preventDefault(); try { const data = JSON.parse(e.dataTransfer.getData('application/json')); if (data.type === 'library-item') { onDropOnCanvas(data, activeItemId, setSelectedItemIds); } } catch (error) { /* Ignore */ } }} onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }} >
-              <CanvasContainer
-                items={drawableObjects} activeItemId={activeItemId} {...toolSettings} tool={tool} setTool={setTool}
-                onDrawCommit={handleDrawCommit} onUpdateItem={updateItem} viewTransform={canvasView.viewTransform}
-                setViewTransform={canvasView.setViewTransform} onSelectItem={handleSelectItem} {...guides} isCropping={isCropping}
-                cropRect={cropRect} setCropRect={setCropRect} isTransforming={isTransforming} transformState={transformState}
-                setTransformState={setTransformState} transformSourceBbox={transformSourceBbox} isAspectRatioLocked={isAspectRatioLocked}
-                strokeMode={strokeMode} strokeState={strokeState} setStrokeState={setStrokeState} strokeModifier={strokeModifier}
-                selection={selection} setSelection={setSelection} onCutSelection={handleCutSelection} onCopySelection={handleCopySelection}
-                onDeleteSelection={handleDeleteSelection} onDeselect={handleDeselect} getMinZoom={getMinZoom} MAX_ZOOM={MAX_ZOOM}
-                isAngleSnapEnabled={isAngleSnapEnabled} angleSnapValue={angleSnapValue} onAddItem={addItem}
-                textEditState={textEditState} setTextEditState={setTextEditState} onCommitText={handleCommitText}
-                strokeSmoothing={strokeSmoothing}
-              />
-              <div className="absolute top-2 left-2 flex items-center gap-2 z-10">
-                {dimensionDisplay && <button ref={scaleButtonRef} onClick={() => setIsScalePopoverOpen(p => !p)} className="bg-[--bg-primary]/80 backdrop-blur-sm text-[--text-secondary] text-xs rounded-md px-2 py-1 pointer-events-auto hover:bg-[--bg-secondary] transition-colors" title="Ajustar escala del lienzo">{dimensionDisplay}</button> }
-              </div>
-              <button onClick={ui.handleToggleFullscreen} className="absolute top-2 right-2 p-2 rounded-md bg-[--bg-primary]/80 backdrop-blur-sm hover:bg-[--bg-secondary] text-[--text-primary] transition-colors z-10" title={ui.isFullscreen ? "Salir de Pantalla Completa" : "Entrar en Pantalla Completa"}>
-                {ui.isFullscreen ? <MinimizeIcon className="w-5 h-5" /> : <ExpandIcon className="w-5 h-5" />}
-              </button>
-              <ScalePopover isOpen={isScalePopoverOpen} onClose={() => setIsScalePopoverOpen(false)} anchorEl={scaleButtonRef.current} scaleFactor={scaleFactor} scaleUnit={scaleUnit} onSetScaleFactor={handleSetScaleFactor} onSetScaleUnit={handleSetScaleUnit} />
-              <CanvasToolbar
-                tool={tool} setTool={setTool} onZoomExtents={canvasView.onZoomExtents} onZoomIn={canvasView.onZoomIn} onZoomOut={canvasView.onZoomOut}
-                onUndo={undo} onRedo={redo} onClearAll={() => ui.setShowClearConfirm(true)} canUndo={canUndo} canRedo={canRedo}
-                isCropping={isCropping} onApplyCrop={handleApplyCrop} onCancelCrop={handleCancelCrop} isTransforming={isTransforming}
-                transformState={transformState} onApplyTransform={handleApplyTransform} onCancelTransform={handleCancelTransform}
-                isAspectRatioLocked={isAspectRatioLocked} onSetAspectRatioLocked={setAspectRatioLocked} isAngleSnapEnabled={isAngleSnapEnabled}
-                onToggleAngleSnap={() => setIsAngleSnapEnabled(p => !p)} angleSnapValue={angleSnapValue} onSetAngleSnapValue={setAngleSnapValue}
-                onSetActiveGuide={guides.onSetActiveGuide} onSetGridType={guides.setGridType} isSnapToGridEnabled={guides.isSnapToGridEnabled}
-                onToggleSnapToGrid={guides.toggleSnapToGrid} isOrthogonalVisible={guides.isOrthogonalVisible} activeGuide={guides.activeGuide}
-                orthogonalGuide={guides.orthogonalGuide} onSetOrthogonalAngle={guides.onSetOrthogonalAngle} gridGuide={guides.gridGuide}
-                onSetGridSpacing={guides.onSetGridSpacing} onSetGridMajorLineFrequency={guides.onSetGridMajorLineFrequency}
-                onSetGridIsoAngle={guides.onSetGridIsoAngle} onSetGridMajorLineColor={guides.onSetGridMajorLineColor}
-                onSetGridMinorLineColor={guides.onSetGridMinorLineColor} areGuidesLocked={guides.areGuidesLocked}
-                onSetAreGuidesLocked={guides.setAreGuidesLocked} isPerspectiveStrokeLockEnabled={guides.isPerspectiveStrokeLockEnabled}
-                onSetIsPerspectiveStrokeLockEnabled={guides.setIsPerspectiveStrokeLockEnabled} scaleFactor={currentState.scaleFactor}
-                scaleUnit={currentState.scaleUnit} onPaste={handlePaste} hasClipboardContent={!!clipboard}
-                strokeSmoothing={strokeSmoothing} setStrokeSmoothing={setStrokeSmoothing}
-              />
-               <QuickAccessBar 
-                  settings={quickAccess.quickAccessSettings} onUpdateColor={quickAccess.updateColor} onAddColor={quickAccess.addColor}
-                  onRemoveColor={quickAccess.removeColor} onUpdateSize={quickAccess.updateSize} onUpdateTool={() => {}}
-                  onSelectColor={handleSelectColor} onSelectSize={handleSelectSize} onSelectTool={(qaTool) => { if (qaTool.type === 'tool') setTool(qaTool.tool); else if (qaTool.type === 'fx-preset') { setTool('fx-brush'); toolSettings.onLoadPreset(qaTool.id); } }}
-                  onOpenToolSelector={(index) => { setIsToolSelectorOpen(true); setEditingToolSlotIndex(index); }}
-                  activeTool={tool} activeColor={activeColor} activeSize={activeSize}
-               />
-          </main>
-          {ui.isRightSidebarVisible && (
-            <aside ref={ui.rightSidebarRef} className={`flex-shrink-0 w-80 border-l border-[--bg-tertiary] flex flex-col ${isAiModalOpen ? 'z-50' : ''}`}>
-              <div style={{ height: ui.rightSidebarTopHeight }} className="flex-shrink-0">
-                <Outliner
-                  items={objects} activeItemId={activeItemId} onAddItem={addItem} onCopyItem={copyItem} onDeleteItem={deleteItem} onSelectItem={handleSelectItem}
-                  onUpdateItem={updateItem} onMoveItem={handleMoveItem} onMergeItems={handleMergeItems} onUpdateBackground={handleUpdateBackground}
-                  onRemoveBackgroundImage={handleRemoveBackgroundImage} onExportItem={() => { if (activeItem) ui.setSingleExportModalOpen(true); }}
-                  onOpenCanvasSizeModal={() => ui.setCanvasSizeModalOpen(true)} activeItemState={activeItemState}
-                  onMoveItemUpDown={handleMoveItemUpDown} onMergeItemDown={handleMergeItemDown} onMergeItemUp={handleMergeItemUp}
-                  onAddObjectAbove={handleAddObjectAbove} onAddObjectBelow={handleAddObjectBelow}
+                    <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] text-[--text-secondary]">
+                        {theme === 'dark' ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
+                    </button>
+                    <Auth user={user} />
+                </div>
+            </header>
+
+            {/* Main Content Area */}
+            <div className="flex flex-grow min-h-0 relative">
+                <Toolbar
+                    tool={tool} setTool={setTool} {...toolSettings} brushPresets={toolSettings.brushPresets} onSavePreset={toolSettings.onSavePreset}
+                    onUpdatePreset={toolSettings.onUpdatePreset} onLoadPreset={toolSettings.onLoadPreset} onDeletePreset={toolSettings.onDeletePreset}
+                    activeGuide={guides.activeGuide} setActiveGuide={guides.onSetActiveGuide} isOrthogonalVisible={guides.isOrthogonalVisible}
+                    onToggleOrthogonal={guides.toggleOrthogonal} onExportClick={() => ui.setExportModalOpen(true)}
+                    onEnhance={(payload) => ai.handleEnhance(payload, canvasSize, getDrawableObjects, backgroundObject)}
+                    isEnhancing={ai.isEnhancing} enhancementPreview={ai.enhancementPreview}
+                    onGenerateEnhancementPreview={() => ai.generateEnhancementPreview(canvasSize, getDrawableObjects, backgroundObject)}
+                    objects={objects} libraryItems={library.libraryItems} backgroundDataUrl={ai.backgroundDataUrl} debugInfo={ai.debugInfo}
+                    strokeMode={strokeMode} setStrokeMode={setStrokeMode} strokeModifier={strokeModifier} setStrokeModifier={setStrokeModifier}
                 />
-              </div>
-               <div onPointerDown={ui.handlePointerDownResize} className="flex-shrink-0 h-1.5 bg-[--bg-secondary] hover:bg-[--accent-primary] transition-colors cursor-ns-resize" />
-              <div className="flex-grow min-h-0">
-                <Library user={user} items={library.libraryItems} onImportImage={library.onImportToLibrary} onCreateFolder={library.onCreateFolder} onEditItem={library.onEditTransparency} onDeleteItem={library.onDeleteLibraryItem} onAddItemToScene={(id) => onDropOnCanvas({ type: 'library-item', id }, activeItemId, setSelectedItemIds)} onMoveItems={library.onMoveItems} />
-              </div>
-            </aside>
-          )}
-           <button onClick={() => ui.setIsRightSidebarVisible(!ui.isRightSidebarVisible)} className="absolute top-1/2 -translate-y-1/2 bg-[--bg-secondary] p-2 rounded-full shadow-xl z-40 border border-[--bg-tertiary] hover:bg-[--bg-tertiary] transition-all" style={{ right: ui.isRightSidebarVisible ? '20.25rem' : '0.25rem' }} title={ui.isRightSidebarVisible ? 'Ocultar paneles' : 'Mostrar paneles'}>
-                {ui.isRightSidebarVisible ? <ChevronRightIcon className="w-5 h-5"/> : <ChevronLeftIcon className="w-5 h-5"/>}
-           </button>
-      </div>
-    </div>
-  );
+                <main ref={mainAreaRef} className="flex-grow relative" onDrop={(e) => { e.preventDefault(); try { const data = JSON.parse(e.dataTransfer.getData('application/json')); if (data.type === 'library-item') { onDropOnCanvas(data, activeItemId, setSelectedItemIds); } } catch (error) { /* Ignore */ } }} onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }} >
+                    <CanvasContainer
+                        items={drawableObjects} activeItemId={activeItemId} {...toolSettings} tool={tool} setTool={setTool}
+                        onDrawCommit={handleDrawCommit} onUpdateItem={updateItem} viewTransform={canvasView.viewTransform}
+                        setViewTransform={canvasView.setViewTransform} onSelectItem={handleSelectItem} {...guides} isCropping={isCropping}
+                        cropRect={cropRect} setCropRect={setCropRect} isTransforming={isTransforming} transformState={transformState}
+                        setTransformState={setTransformState} transformSourceBbox={transformSourceBbox} isAspectRatioLocked={isAspectRatioLocked}
+                        strokeMode={strokeMode} strokeState={strokeState} setStrokeState={setStrokeState} strokeModifier={strokeModifier}
+                        selection={selection} setSelection={setSelection} onCutSelection={handleCutSelection} onCopySelection={handleCopySelection}
+                        onDeleteSelection={handleDeleteSelection} onDeselect={handleDeselect} getMinZoom={getMinZoom} MAX_ZOOM={MAX_ZOOM}
+                        isAngleSnapEnabled={isAngleSnapEnabled} angleSnapValue={angleSnapValue} onAddItem={addItem}
+                        textEditState={textEditState} setTextEditState={setTextEditState} onCommitText={handleCommitText}
+                        strokeSmoothing={strokeSmoothing}
+                    />
+                    <div className="absolute top-2 left-2 flex items-center gap-2 z-10">
+                        {dimensionDisplay && <button ref={scaleButtonRef} onClick={() => setIsScalePopoverOpen(p => !p)} className="bg-[--bg-primary]/80 backdrop-blur-sm text-[--text-secondary] text-xs rounded-md px-2 py-1 pointer-events-auto hover:bg-[--bg-secondary] transition-colors" title="Ajustar escala del lienzo">{dimensionDisplay}</button>}
+                    </div>
+                    <button onClick={ui.handleToggleFullscreen} className="absolute top-2 right-2 p-2 rounded-md bg-[--bg-primary]/80 backdrop-blur-sm hover:bg-[--bg-secondary] text-[--text-primary] transition-colors z-10" title={ui.isFullscreen ? "Salir de Pantalla Completa" : "Entrar en Pantalla Completa"}>
+                        {ui.isFullscreen ? <MinimizeIcon className="w-5 h-5" /> : <ExpandIcon className="w-5 h-5" />}
+                    </button>
+                    <ScalePopover isOpen={isScalePopoverOpen} onClose={() => setIsScalePopoverOpen(false)} anchorEl={scaleButtonRef.current} scaleFactor={scaleFactor} scaleUnit={scaleUnit} onSetScaleFactor={handleSetScaleFactor} onSetScaleUnit={handleSetScaleUnit} />
+                    <CanvasToolbar
+                        tool={tool} setTool={setTool} onZoomExtents={canvasView.onZoomExtents} onZoomIn={canvasView.onZoomIn} onZoomOut={canvasView.onZoomOut}
+                        onUndo={undo} onRedo={redo} onClearAll={() => ui.setShowClearConfirm(true)} canUndo={canUndo} canRedo={canRedo}
+                        isCropping={isCropping} onApplyCrop={handleApplyCrop} onCancelCrop={handleCancelCrop} isTransforming={isTransforming}
+                        transformState={transformState} onApplyTransform={handleApplyTransform} onCancelTransform={handleCancelTransform}
+                        isAspectRatioLocked={isAspectRatioLocked} onSetAspectRatioLocked={setAspectRatioLocked} isAngleSnapEnabled={isAngleSnapEnabled}
+                        onToggleAngleSnap={() => setIsAngleSnapEnabled(p => !p)} angleSnapValue={angleSnapValue} onSetAngleSnapValue={setAngleSnapValue}
+                        onSetActiveGuide={guides.onSetActiveGuide} onSetGridType={guides.setGridType} isSnapToGridEnabled={guides.isSnapToGridEnabled}
+                        onToggleSnapToGrid={guides.toggleSnapToGrid} isOrthogonalVisible={guides.isOrthogonalVisible} activeGuide={guides.activeGuide}
+                        orthogonalGuide={guides.orthogonalGuide} onSetOrthogonalAngle={guides.onSetOrthogonalAngle} gridGuide={guides.gridGuide}
+                        onSetGridSpacing={guides.onSetGridSpacing} onSetGridMajorLineFrequency={guides.onSetGridMajorLineFrequency}
+                        onSetGridIsoAngle={guides.onSetGridIsoAngle} onSetGridMajorLineColor={guides.onSetGridMajorLineColor}
+                        onSetGridMinorLineColor={guides.onSetGridMinorLineColor} areGuidesLocked={guides.areGuidesLocked}
+                        onSetAreGuidesLocked={guides.setAreGuidesLocked} isPerspectiveStrokeLockEnabled={guides.isPerspectiveStrokeLockEnabled}
+                        onSetIsPerspectiveStrokeLockEnabled={guides.setIsPerspectiveStrokeLockEnabled} scaleFactor={currentState.scaleFactor}
+                        scaleUnit={currentState.scaleUnit} onPaste={handlePaste} hasClipboardContent={!!clipboard}
+                        strokeSmoothing={strokeSmoothing} setStrokeSmoothing={setStrokeSmoothing}
+                    />
+                    <QuickAccessBar
+                        settings={quickAccess.quickAccessSettings} onUpdateColor={quickAccess.updateColor} onAddColor={quickAccess.addColor}
+                        onRemoveColor={quickAccess.removeColor} onUpdateSize={quickAccess.updateSize} onUpdateTool={() => { }}
+                        onSelectColor={handleSelectColor} onSelectSize={handleSelectSize} onSelectTool={(qaTool) => { if (qaTool.type === 'tool') setTool(qaTool.tool); else if (qaTool.type === 'fx-preset') { setTool('fx-brush'); toolSettings.onLoadPreset(qaTool.id); } }}
+                        onOpenToolSelector={(index) => { setIsToolSelectorOpen(true); setEditingToolSlotIndex(index); }}
+                        activeTool={tool} activeColor={activeColor} activeSize={activeSize}
+                        onIncreaseUiScale={() => ui.setUiScale(ui.uiScale + 0.1)}
+                        onDecreaseUiScale={() => ui.setUiScale(ui.uiScale - 0.1)}
+                    />
+                </main>
+                {ui.isRightSidebarVisible && (
+                    <aside ref={ui.rightSidebarRef} className={`flex-shrink-0 w-80 border-l border-[--bg-tertiary] flex flex-col ${isAiModalOpen ? 'z-50' : ''}`}>
+                        <div style={{ height: ui.rightSidebarTopHeight }} className="flex-shrink-0">
+                            <Outliner
+                                items={objects} activeItemId={activeItemId} onAddItem={addItem} onCopyItem={copyItem} onDeleteItem={deleteItem} onSelectItem={handleSelectItem}
+                                onUpdateItem={updateItem} onMoveItem={handleMoveItem} onMergeItems={handleMergeItems} onUpdateBackground={handleUpdateBackground}
+                                onRemoveBackgroundImage={handleRemoveBackgroundImage} onExportItem={() => { if (activeItem) ui.setSingleExportModalOpen(true); }}
+                                onOpenCanvasSizeModal={() => ui.setCanvasSizeModalOpen(true)} activeItemState={activeItemState}
+                                onMoveItemUpDown={handleMoveItemUpDown} onMergeItemDown={handleMergeItemDown} onMergeItemUp={handleMergeItemUp}
+                                onAddObjectAbove={handleAddObjectAbove} onAddObjectBelow={handleAddObjectBelow}
+                            />
+                        </div>
+                        <div onPointerDown={ui.handlePointerDownResize} className="flex-shrink-0 h-1.5 bg-[--bg-secondary] hover:bg-[--accent-primary] transition-colors cursor-ns-resize" />
+                        <div className="flex-grow min-h-0">
+                            <Library user={user} items={library.libraryItems} onImportImage={library.onImportToLibrary} onCreateFolder={library.onCreateFolder} onEditItem={library.onEditTransparency} onDeleteItem={library.onDeleteLibraryItem} onAddItemToScene={(id) => onDropOnCanvas({ type: 'library-item', id }, activeItemId, setSelectedItemIds)} onMoveItems={library.onMoveItems} />
+                        </div>
+                    </aside>
+                )}
+                <button onClick={() => ui.setIsRightSidebarVisible(!ui.isRightSidebarVisible)} className="absolute top-1/2 -translate-y-1/2 bg-[--bg-secondary] p-2 rounded-full shadow-xl z-40 border border-[--bg-tertiary] hover:bg-[--bg-tertiary] transition-all" style={{ right: ui.isRightSidebarVisible ? '20.25rem' : '0.25rem' }} title={ui.isRightSidebarVisible ? 'Ocultar paneles' : 'Mostrar paneles'}>
+                    {ui.isRightSidebarVisible ? <ChevronRightIcon className="w-5 h-5" /> : <ChevronLeftIcon className="w-5 h-5" />}
+                </button>
+            </div>
+        </div>
+    );
 }
 
 // ===================================================================================
@@ -1308,26 +1384,26 @@ const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({ isOpen, onClo
                         </div>
                     ) : (
                         <div className="flex items-center gap-2">
-                             <input type="file" ref={fileInputRef} className="hidden" accept=".sketcher,application/json" onChange={handleFileSelected} />
+                            <input type="file" ref={fileInputRef} className="hidden" accept=".sketcher,application/json" onChange={handleFileSelected} />
                             <button onClick={handleFileLoadClick} className="flex items-center gap-2 px-4 py-2 rounded-md bg-[--bg-tertiary] hover:bg-[--bg-hover] font-semibold"> <FolderOpenIcon className="w-5 h-5" /> <span>Cargar desde Archivo</span> </button>
                             <button onClick={handleHeaderSaveLocalClick} className="flex items-center gap-2 px-4 py-2 rounded-md bg-[--bg-tertiary] hover:bg-[--bg-hover] font-semibold"> <SaveIcon className="w-5 h-5" /> <span>Guardar Local</span> </button>
                             <button onClick={onClose} className="p-2 rounded-full hover:bg-[--bg-tertiary]"> <XIcon className="w-6 h-6" /> </button>
                         </div>
                     )}
                 </div>
-                {!user ? ( <div className="flex-grow flex flex-col items-center justify-center text-center text-[--text-secondary]"> <UserIcon className="w-16 h-16 mb-4" /> <h3 className="text-xl font-bold">Por favor, inicie sesión</h3> <p>Inicie sesión para guardar y cargar sus proyectos en la nube.</p> </div>
-                ) : ( <>
-                        <div className="bg-[--bg-primary] p-4 rounded-lg mb-4 flex-shrink-0">
-                            <h3 className="text-lg font-semibold mb-2">Guardar Lienzo Actual</h3>
-                            <div className="flex items-center gap-2">
-                                <input type="text" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="Nombre del nuevo proyecto..." className="flex-grow bg-[--bg-secondary] text-[--text-primary] text-sm rounded-md p-2 border border-[--bg-tertiary] focus:ring-1 focus:ring-[--accent-primary] focus:outline-none" disabled={isSaving} />
-                                <button onClick={handleSave} disabled={!newProjectName.trim() || isSaving || !user} className="px-4 py-2 rounded-md bg-[--accent-primary] hover:bg-[--accent-hover] text-white font-semibold disabled:bg-gray-500 disabled:cursor-not-allowed" title={!user ? "Inicie sesión para guardar en la nube" : ""}> {isSaving ? 'Guardando...' : 'Guardar en la Nube'} </button>
-                            </div>
+                {!user ? (<div className="flex-grow flex flex-col items-center justify-center text-center text-[--text-secondary]"> <UserIcon className="w-16 h-16 mb-4" /> <h3 className="text-xl font-bold">Por favor, inicie sesión</h3> <p>Inicie sesión para guardar y cargar sus proyectos en la nube.</p> </div>
+                ) : (<>
+                    <div className="bg-[--bg-primary] p-4 rounded-lg mb-4 flex-shrink-0">
+                        <h3 className="text-lg font-semibold mb-2">Guardar Lienzo Actual</h3>
+                        <div className="flex items-center gap-2">
+                            <input type="text" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="Nombre del nuevo proyecto..." className="flex-grow bg-[--bg-secondary] text-[--text-primary] text-sm rounded-md p-2 border border-[--bg-tertiary] focus:ring-1 focus:ring-[--accent-primary] focus:outline-none" disabled={isSaving} />
+                            <button onClick={handleSave} disabled={!newProjectName.trim() || isSaving || !user} className="px-4 py-2 rounded-md bg-[--accent-primary] hover:bg-[--accent-hover] text-white font-semibold disabled:bg-gray-500 disabled:cursor-not-allowed" title={!user ? "Inicie sesión para guardar en la nube" : ""}> {isSaving ? 'Guardando...' : 'Guardar en la Nube'} </button>
                         </div>
-                        <div className="flex-grow overflow-y-auto pr-2">
-                            {isLoading ? <div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-4 border-[--accent-primary] border-t-transparent rounded-full animate-spin"></div></div>
-                             : projects.length === 0 ? <div className="text-center text-[--text-secondary] py-16"> <p>No se encontraron proyectos guardados.</p> <p className="text-sm">¡Guarda tu lienzo actual para empezar!</p> </div>
-                             : <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    </div>
+                    <div className="flex-grow overflow-y-auto pr-2">
+                        {isLoading ? <div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-4 border-[--accent-primary] border-t-transparent rounded-full animate-spin"></div></div>
+                            : projects.length === 0 ? <div className="text-center text-[--text-secondary] py-16"> <p>No se encontraron proyectos guardados.</p> <p className="text-sm">¡Guarda tu lienzo actual para empezar!</p> </div>
+                                : <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                                     {projects.map(p => (
                                         <div key={p.id} className="group relative bg-[--bg-tertiary] rounded-lg overflow-hidden shadow-md">
                                             <div className="aspect-video bg-white/10 flex items-center justify-center"><img src={p.thumbnailUrl} alt={p.name} className="w-full h-full object-cover" /></div>
@@ -1339,12 +1415,12 @@ const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({ isOpen, onClo
                                         </div>
                                     ))}
                                 </div>
-                            }
-                        </div>
-                    </>
+                        }
+                    </div>
+                </>
                 )}
             </div>
-             {deletingProject && <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"> <div className="bg-[--bg-secondary] rounded-lg p-6 shadow-xl"> <h3 className="text-lg font-bold">Confirmar Eliminación</h3> <p className="my-2 text-[--text-secondary]">¿Estás seguro de que quieres eliminar "{deletingProject.name}"? Esta acción no se puede deshacer.</p> <div className="flex justify-end gap-4 mt-4"> <button onClick={() => setDeletingProject(null)} className="px-4 py-2 rounded-md bg-[--bg-tertiary] hover:bg-[--bg-hover]">Cancelar</button> <button onClick={handleDeleteConfirm} className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-500 text-white">Eliminar</button> </div> </div> </div>}
+            {deletingProject && <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"> <div className="bg-[--bg-secondary] rounded-lg p-6 shadow-xl"> <h3 className="text-lg font-bold">Confirmar Eliminación</h3> <p className="my-2 text-[--text-secondary]">¿Estás seguro de que quieres eliminar "{deletingProject.name}"? Esta acción no se puede deshacer.</p> <div className="flex justify-end gap-4 mt-4"> <button onClick={() => setDeletingProject(null)} className="px-4 py-2 rounded-md bg-[--bg-tertiary] hover:bg-[--bg-hover]">Cancelar</button> <button onClick={handleDeleteConfirm} className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-500 text-white">Eliminar</button> </div> </div> </div>}
         </div>
     );
 };

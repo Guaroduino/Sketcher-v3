@@ -273,22 +273,50 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         }
     }, [isTransforming, activeItem, transformSourceBbox]);
 
+// Used to cache the BCR to avoid layout thrashing
+    const canvasRectRef = useRef<DOMRect | null>(null);
+
     useEffect(() => {
+        const updateRect = () => {
+            if (uiCanvasRef.current) {
+                canvasRectRef.current = uiCanvasRef.current.getBoundingClientRect();
+            }
+        };
+        
+        // Initial update
+        updateRect();
+        
         const handleMove = (e: PointerEvent) => {
             if (!uiCanvasRef.current) return;
-            const pointOnUi = { x: e.clientX - uiCanvasRef.current.getBoundingClientRect().left, y: e.clientY - uiCanvasRef.current.getBoundingClientRect().top };
+            // Use cached rect or update if missing (e.g. first move)
+            if (!canvasRectRef.current) updateRect();
+            
+            const rect = canvasRectRef.current!;
+            const pointOnUi = { x: e.clientX - rect.left, y: e.clientY - rect.top };
             setPointerPosition(pointOnUi);
         };
+        
         const handleLeave = () => {
             setPointerPosition(null);
             isDrawingRef.current = false;
         };
+
+        const handleResize = () => {
+            updateRect();
+        }
+
         const container = containerRef.current;
         container?.addEventListener('pointermove', handleMove);
         container?.addEventListener('pointerleave', handleLeave);
+        // Also listen for scroll/resize to invalid cache
+        window.addEventListener('scroll', updateRect, { capture: true, passive: true });
+        window.addEventListener('resize', handleResize);
+
         return () => {
             container?.removeEventListener('pointermove', handleMove);
             container?.removeEventListener('pointerleave', handleLeave);
+            window.removeEventListener('scroll', updateRect, { capture: true });
+            window.removeEventListener('resize', handleResize);
         };
     }, []);
 

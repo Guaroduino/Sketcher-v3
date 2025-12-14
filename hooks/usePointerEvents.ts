@@ -35,7 +35,7 @@ function generateCurvePoints(points: Point[]): Point[] {
         const x = (1 - t) ** 2 * p0.x + 2 * (1 - t) * t * p1.x + t ** 2 * p2.x;
         const y = (1 - t) ** 2 * p0.y + 2 * (1 - t) * t * p1.y + t ** 2 * p2.y;
         const p0_pressure = p0.pressure ?? 1.0;
-        const p1_pressure = p1.pressure ?? p0_pressure + ( (p2.pressure ?? 1.0) - p0_pressure) / 2;
+        const p1_pressure = p1.pressure ?? p0_pressure + ((p2.pressure ?? 1.0) - p0_pressure) / 2;
         const p2_pressure = p2.pressure ?? 1.0;
         const pressure = (1 - t) ** 2 * p0_pressure + 2 * (1 - t) * t * p1_pressure + t ** 2 * p2_pressure;
         curvePoints.push({ x, y, pressure });
@@ -109,7 +109,7 @@ export function usePointerEvents({
     isAspectRatioLocked,
     isAngleSnapEnabled,
     angleSnapValue,
-    livePreviewLayerId, 
+    livePreviewLayerId,
     setLivePreviewLayerId,
     isPerspectiveStrokeLockEnabled,
     isSnapToGridEnabled,
@@ -185,8 +185,9 @@ export function usePointerEvents({
     onCommitText: (textState: { position: Point; value: string; activeItemId: string; }) => void;
     strokeSmoothing: number;
     strokeModifier: StrokeModifier;
-    setDebugPointers: React.Dispatch<React.SetStateAction<Map<number, {x: number, y: number}>>>;
+    setDebugPointers: React.Dispatch<React.SetStateAction<Map<number, { x: number, y: number }>>>;
 }) {
+    const canvasRectRef = useRef<DOMRect | null>(null);
 
     const dragAction = useRef<DragAction>({ type: 'none' });
     const activeBrushRef = useRef<BaseBrush | null>(null);
@@ -201,7 +202,45 @@ export function usePointerEvents({
     // zoom and pan updates relative to the gesture start.
     const gestureBaseRef = useRef<{ distance: number; midpoint: Point; zoom: number; pan: { x: number; y: number } } | null>(null);
     const longPressTimerRef = useRef<number | null>(null);
-    
+
+    // Throttle debug ptrs update to avoid excessive re-renders
+    const lastDebugUpdateRef = useRef(0);
+
+    // Cache the rect on mount and resize
+    useEffect(() => {
+        const updateRect = () => {
+            if (uiCanvasRef.current) {
+                canvasRectRef.current = uiCanvasRef.current.getBoundingClientRect();
+            }
+        };
+        updateRect();
+        window.addEventListener('resize', updateRect);
+        window.addEventListener('scroll', updateRect, { capture: true, passive: true });
+        return () => {
+            window.removeEventListener('resize', updateRect);
+            window.removeEventListener('scroll', updateRect, { capture: true });
+        };
+    }, [uiCanvasRef]);
+
+    // Optimized getCanvasPoint using cached rect if available
+    const getPoint = useCallback((e: PointerEvent | React.PointerEvent, vt: ViewTransform) => {
+        if (!canvasRectRef.current && uiCanvasRef.current) {
+            canvasRectRef.current = uiCanvasRef.current.getBoundingClientRect();
+        }
+        if (!canvasRectRef.current) return { x: 0, y: 0 };
+
+        const rect = canvasRectRef.current;
+        const clientX = 'clientX' in e ? e.clientX : (e as any).changedTouches?.[0]?.clientX ?? 0;
+        const clientY = 'clientY' in e ? e.clientY : (e as any).changedTouches?.[0]?.clientY ?? 0;
+
+        const x = clientX - rect.left;
+        const y = clientY - rect.top;
+        return {
+            x: (x - vt.pan.x) / vt.zoom,
+            y: (y - vt.pan.y) / vt.zoom,
+        };
+    }, []);
+
     const setDragAction = (action: DragAction) => {
         dragAction.current = action;
         forceRender();
@@ -226,7 +265,7 @@ export function usePointerEvents({
             return point;
         }
         const { spacing } = gridGuide;
-    
+
         if (gridGuide.type === 'cartesian') {
             return {
                 ...point,
@@ -234,56 +273,59 @@ export function usePointerEvents({
                 y: Math.round(point.y / spacing) * spacing,
             };
         }
-        
+
         if (gridGuide.type === 'isometric') {
             const s = spacing;
             const { x, y } = point;
-    
+
             const angle_rad = -30 * (Math.PI / 180);
             const cos_a = Math.cos(angle_rad);
             const sin_a = Math.sin(angle_rad);
             const x_rot = x * cos_a - y * sin_a;
             const y_rot = x * sin_a + y * cos_a;
-    
+
             const L = s * 2 / Math.sqrt(3);
-    
+
             const q_f = (x_rot * (Math.sqrt(3) / 3) - y_rot / 3) / (L / Math.sqrt(3));
             const r_f = (y_rot * 2 / 3) / (L / Math.sqrt(3));
-            
+
             const s_f = -q_f - r_f;
-    
+
             let q_r = Math.round(q_f);
             let r_r = Math.round(r_f);
             let s_r = Math.round(s_f);
-    
+
             const dq = Math.abs(q_r - q_f);
             const dr = Math.abs(r_r - r_f);
             const ds = Math.abs(s_r - s_f);
-    
+
             if (dq > dr && dq > ds) {
                 q_r = -r_r - s_r;
             } else if (dr > ds) {
                 r_r = -q_r - s_r;
             }
-    
+
             const snapped_x_rot = L * (q_r + r_r / 2);
             const snapped_y_rot = L * (r_r * Math.sqrt(3) / 2);
-    
+
             const final_angle_rad = 30 * (Math.PI / 180);
             const cos_fa = Math.cos(final_angle_rad);
             const sin_fa = Math.sin(final_angle_rad);
-    
+
             const snapped_x = snapped_x_rot * cos_fa - snapped_y_rot * sin_fa;
             const snapped_y = snapped_x_rot * sin_fa + snapped_y_rot * cos_fa;
-    
+
             return { ...point, x: snapped_x, y: snapped_y };
         }
-    
+
         return point;
     }, [isSnapToGridEnabled, gridGuide]);
 
     const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
         if (!uiCanvasRef.current) return;
+        // Update rect ensuring it's fresh for the gesture start
+        canvasRectRef.current = uiCanvasRef.current.getBoundingClientRect();
+
         if (e.button !== 0 && e.pointerType === 'mouse' && e.button !== 1) return;
         if (e.pointerType === 'pen' && e.pressure === 0) return;
 
@@ -307,7 +349,7 @@ export function usePointerEvents({
 
             if (activePointers.current.size === 2) {
                 // FIX: Explicitly type `pointers` to resolve type inference issue with Map values.
-                const pointers: {x: number, y: number}[] = Array.from(activePointers.current.values());
+                const pointers: { x: number, y: number }[] = Array.from(activePointers.current.values());
                 const p1 = pointers[0];
                 const p2 = pointers[1];
                 const midpoint = {
@@ -333,12 +375,29 @@ export function usePointerEvents({
             return;
         }
 
-        const point = getCanvasPoint(e.nativeEvent, viewTransform, uiCanvasRef.current!) as Point;
-        const snappedPoint = snapPointToGrid(point);
+        const point = getPoint(e, viewTransform) as Point;
+        let snappedPoint = snapPointToGrid(point);
+
+        // Ruler Constraint
+        if (activeGuide === 'ruler' && rulerGuides.length > 0) {
+            const guide = rulerGuides[0]; // Assume first ruler is active for now, or find closest?
+            // Project snappedPoint onto the line defined by guide.start and guide.end
+            const A = guide.start;
+            const B = guide.end;
+            const P = snappedPoint;
+            const AB = { x: B.x - A.x, y: B.y - A.y };
+            const AP = { x: P.x - A.x, y: P.y - A.y };
+            const ab2 = AB.x * AB.x + AB.y * AB.y;
+            if (ab2 > 0) {
+                const t = (AP.x * AB.x + AP.y * AB.y) / ab2;
+                snappedPoint = { x: A.x + AB.x * t, y: A.y + AB.y * t };
+            }
+        }
+
         const isPressureSensitive = strokeMode === 'freehand';
         const pressure = (isPressureSensitive && e.pointerType === 'pen') ? e.pressure : 1.0;
         const snappedPointWithPressure = { ...snappedPoint, pressure };
-        
+
         strokeLockInfo.current = null;
         orthogonalLock.current = null;
 
@@ -355,14 +414,11 @@ export function usePointerEvents({
                         setGuideDragState({ type: 'ruler', id: guide.id, part: 'end', offset: { x: 0, y: 0 } });
                         return;
                     }
-                    if (distanceToLineSegment(point, guide.start, guide.end) < threshold) {
-                         setGuideDragState({ type: 'ruler', id: guide.id, part: 'line', offset: { x: guide.start.x - point.x, y: guide.start.y - point.y } });
-                         return;
-                    }
+
                 }
             }
             if (activeGuide === 'mirror') {
-                 for (const guide of mirrorGuides) {
+                for (const guide of mirrorGuides) {
                     if (isNearPoint(point, guide.start, threshold)) {
                         setGuideDragState({ type: 'mirror', id: guide.id, part: 'start', offset: { x: 0, y: 0 } });
                         return;
@@ -395,7 +451,7 @@ export function usePointerEvents({
                         }
                     }
                     for (const extra of extraGuideLines[color]) {
-                         if (isNearPoint(point, extra.handle, threshold)) {
+                        if (isNearPoint(point, extra.handle, threshold)) {
                             setGuideDragState({ type: 'perspective-extra', color, id: extra.id });
                             return;
                         }
@@ -403,7 +459,7 @@ export function usePointerEvents({
                 }
             }
         }
-        
+
         if (tool === 'crop' && cropRect) {
             const getCropHandles = (rect: CropRect) => ({
                 tl: { x: rect.x, y: rect.y }, tr: { x: rect.x + rect.width, y: rect.y }, bl: { x: rect.x, y: rect.y + rect.height }, br: { x: rect.x + rect.width, y: rect.y + rect.height },
@@ -438,7 +494,7 @@ export function usePointerEvents({
                 const handles = {
                     tl: rotate({ x, y }), tr: rotate({ x: x + width, y }), bl: rotate({ x, y: y + height }), br: rotate({ x: x + width, y: y + height }),
                     t: rotate({ x: x + width / 2, y }), b: rotate({ x: x + width / 2, y: y + height }), l: rotate({ x, y: y + height / 2 }), r: rotate({ x: x + width, y: y + height / 2 }),
-                    rotate: rotate({x: x + width/2, y: y - 25 / viewTransform.zoom}),
+                    rotate: rotate({ x: x + width / 2, y: y - 25 / viewTransform.zoom }),
                 };
 
                 for (const [handle, pos] of Object.entries(handles)) {
@@ -449,27 +505,27 @@ export function usePointerEvents({
                 }
             } else if (transformState.type === 'free') {
                 const handles = transformState.corners;
-                 for (const [handle, pos] of Object.entries(handles)) {
+                for (const [handle, pos] of Object.entries(handles)) {
                     if (pos && isNearPoint(point, pos as Point, threshold)) {
                         setDragAction({ type: 'transform', handle, startState: transformState, startPoint: point });
                         return;
                     }
                 }
             }
-            if(transformState.type === 'free' && pointInPolygon(point, Object.values(transformState.corners))) {
+            if (transformState.type === 'free' && pointInPolygon(point, Object.values(transformState.corners))) {
                 setDragAction({ type: 'transform', handle: 'move', startState: transformState, startPoint: point });
                 return;
             }
-            if(transformState.type === 'affine') {
+            if (transformState.type === 'affine') {
                 const localPoint = { x: point.x - (transformState.x + transformState.width / 2), y: point.y - (transformState.y + transformState.height / 2) };
                 const rotatedPoint = { x: localPoint.x * Math.cos(-transformState.rotation) - localPoint.y * Math.sin(-transformState.rotation), y: localPoint.x * Math.sin(-transformState.rotation) + localPoint.y * Math.cos(-transformState.rotation) };
-                if(Math.abs(rotatedPoint.x) < transformState.width / 2 && Math.abs(rotatedPoint.y) < transformState.height / 2) {
+                if (Math.abs(rotatedPoint.x) < transformState.width / 2 && Math.abs(rotatedPoint.y) < transformState.height / 2) {
                     setDragAction({ type: 'transform', handle: 'move', startState: transformState, startPoint: point });
                     return;
                 }
             }
         }
-        
+
         if (tool === 'text') {
             if (textEditState) onCommitText(textEditState);
             setDragAction({ type: 'text-place' });
@@ -486,14 +542,14 @@ export function usePointerEvents({
                     const canvas = (activeItem as SketchObject).canvas!;
                     const ctx = canvas.getContext('2d', { willReadFrequently: true });
                     if (!ctx) return;
-                    
+
                     try {
                         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                         const startX = Math.floor(snappedPoint.x);
                         const startY = Math.floor(snappedPoint.y);
-                        
+
                         const selectionData = createMagicWandSelection(imageData, startX, startY, magicWandSettings.tolerance, magicWandSettings.contiguous);
-                        
+
                         if (selectionData) {
                             setSelection({
                                 path: selectionData.path,
@@ -536,7 +592,7 @@ export function usePointerEvents({
                     longPressTimerRef.current = null;
                 }, 700);
             }
-        
+
             if (!strokeState) {
                 setStrokeState({ mode: strokeMode, points: [snappedPointWithPressure] });
                 if (strokeMode === 'arc') {
@@ -545,11 +601,11 @@ export function usePointerEvents({
             } else {
                 const newPoints = [...strokeState.points, snappedPointWithPressure];
                 setStrokeState({ ...strokeState, points: newPoints });
-        
+
                 let strokeComplete = false;
                 if (strokeMode === 'curve' && newPoints.length === 3) strokeComplete = true;
                 if (strokeMode === 'arc' && newPoints.length === 3) strokeComplete = true;
-        
+
                 if (strokeComplete && activeItem?.type === 'object') {
                     const beforeCanvas = cloneCanvas(activeItem.canvas!);
                     const mainCtx = activeItem.context!;
@@ -561,7 +617,7 @@ export function usePointerEvents({
                         if (strokeMode === 'arc') {
                             pointsToDraw = generateArcPoints(newPoints, arcDrawingState.current?.totalAngle);
                         }
-                        
+
                         (brush as any).drawWithMirroring(mainCtx, pointsToDraw, brushContext);
                         onDrawCommit(activeItem.id, beforeCanvas);
                     }
@@ -576,19 +632,19 @@ export function usePointerEvents({
             e.currentTarget.style.cursor = 'grabbing';
             return;
         }
-        
+
         if (isDrawingTool && activeItem && activeItem.type === 'object' && strokeMode === 'freehand') {
             if (tool === 'eraser') {
                 setLivePreviewLayerId(activeItem.id);
             }
             const brush = getBrushForTool(tool);
             if (!brush) return;
-            
+
             brush.updateSmoothing(strokeSmoothing);
             activeBrushRef.current = brush;
             setDragAction({ type: 'draw' });
-            
-            orthogonalLock.current = { axis: 'x', startPoint: snappedPoint }; 
+
+            orthogonalLock.current = { axis: 'x', startPoint: snappedPoint };
             if (isPerspectiveStrokeLockEnabled && activeGuide === 'perspective' && perspectiveVPs.current) {
                 const { vpGreen, vpRed, vpBlue } = perspectiveVPs.current;
                 const vps = [vpGreen, vpRed, vpBlue].filter(Boolean) as Point[];
@@ -596,7 +652,7 @@ export function usePointerEvents({
                 let min_dist_sq = Infinity;
                 vps.forEach(vp => {
                     if (vp) {
-                        const d_sq = (snappedPoint.x - vp.x)**2 + (snappedPoint.y - vp.y)**2;
+                        const d_sq = (snappedPoint.x - vp.x) ** 2 + (snappedPoint.y - vp.y) ** 2;
                         if (d_sq < min_dist_sq) {
                             min_dist_sq = d_sq;
                             closestVP = vp;
@@ -617,7 +673,7 @@ export function usePointerEvents({
 
     const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
         if (!uiCanvasRef.current) return;
-    
+
         // Use coalesced events (if available) to update pointer positions for
         // improved responsiveness on high-frequency input (touch/pen).
         const nativeEv = (e.nativeEvent as any);
@@ -627,11 +683,16 @@ export function usePointerEvents({
                 activePointers.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
             }
         }
-        setDebugPointers(new Map(activePointers.current));
-    
+
+        const now = Date.now();
+        if (now - lastDebugUpdateRef.current > 16) { // ~60fps Limit
+            setDebugPointers(new Map(activePointers.current));
+            lastDebugUpdateRef.current = now;
+        }
+
         if (activePointers.current.size >= 2) {
             // Use two-finger gesture: combine pinch (zoom) and two-finger pan.
-            const pointers: {x: number, y: number}[] = Array.from(activePointers.current.values());
+            const pointers: { x: number, y: number }[] = Array.from(activePointers.current.values());
             if (pointers.length < 2) return;
             const [p1, p2] = pointers;
             const midpoint = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
@@ -655,8 +716,8 @@ export function usePointerEvents({
             // Keep the world point under the gesture midpoint stable while zooming and panning.
             // Formula: newPan = newMidpoint - ((baseMidpoint - basePan) * (newZoom / baseZoom))
             const r = base.zoom > 0 ? (newZoom / base.zoom) : 1;
-            const newPanX = midpoint.x - ( (base.midpoint.x - base.pan.x) * r );
-            const newPanY = midpoint.y - ( (base.midpoint.y - base.pan.y) * r );
+            const newPanX = midpoint.x - ((base.midpoint.x - base.pan.x) * r);
+            const newPanY = midpoint.y - ((base.midpoint.y - base.pan.y) * r);
 
             setViewTransform(v => ({ ...v, zoom: newZoom, pan: { x: newPanX, y: newPanY } }));
 
@@ -665,9 +726,9 @@ export function usePointerEvents({
             return;
         }
 
-    // Reuse coalesced events for drawing; this returns an array of
-    // low-level PointerEvent objects for higher fidelity input.
-    const events = nativeEv.getCoalescedEvents ? nativeEv.getCoalescedEvents() : [nativeEv];
+        // Reuse coalesced events for drawing; this returns an array of
+        // low-level PointerEvent objects for higher fidelity input.
+        const events = nativeEv.getCoalescedEvents ? nativeEv.getCoalescedEvents() : [nativeEv];
         const lastEvent = events[events.length - 1];
         const currentAction = dragAction.current;
 
@@ -678,66 +739,66 @@ export function usePointerEvents({
             if (mainCtx && previewCtx && activeItem) {
                 const brushContext: BrushContext = { mainCtx, previewCtx, viewTransform, onDrawCommit, activeItemId: activeItem.id, activeGuide, mirrorGuides, strokeModifier };
                 for (const event of events) {
-                    const point = getCanvasPoint(event, viewTransform, uiCanvasRef.current!) as Point;
-                    
+                    const point = getPoint(event, viewTransform) as Point;
+
                     let pointToDraw = point;
                     let didSnapToGuideForPoint = false;
-    
+
                     if (isOrthogonalVisible && orthogonalLock.current) {
                         const { startPoint } = orthogonalLock.current;
                         const dx = Math.abs(point.x - startPoint.x);
                         const dy = Math.abs(point.y - startPoint.y);
-        
+
                         if (dx > 5 || dy > 5) {
                             if (dx > dy) orthogonalLock.current.axis = 'x';
                             else orthogonalLock.current.axis = 'y';
                         }
-        
+
                         if (orthogonalLock.current.axis === 'x') pointToDraw = { ...point, y: startPoint.y };
                         else pointToDraw = { ...point, x: startPoint.x };
                         didSnapToGuideForPoint = true;
-        
+
                     } else if (activeGuide === 'ruler' && rulerGuides.length > 0) {
-                        let closestDist = Infinity;
-                        let closestGuide: RulerGuide | null = null;
-                        rulerGuides.forEach(g => {
-                            const dist = distanceToLineSegment(point, g.start, g.end);
-                            if (dist < closestDist) {
-                                closestDist = dist;
-                                closestGuide = g;
-                            }
-                        });
-                        if (closestGuide) {
-                            pointToDraw = projectPointOnLine(point, closestGuide.start, closestGuide.end);
-                            didSnapToGuideForPoint = true;
+                        const guide = rulerGuides[0]; // Assume first ruler is active
+                        const A = guide.start;
+                        const B = guide.end;
+                        const P = point; // Use raw point before grid snap
+                        const AB = { x: B.x - A.x, y: B.y - A.y };
+                        const AP = { x: P.x - A.x, y: P.y - A.y };
+                        const ab2 = AB.x * AB.x + AB.y * AB.y;
+                        if (ab2 > 0) {
+                            const t = (AP.x * AB.x + AP.y * AB.y) / ab2;
+                            pointToDraw = { x: A.x + AB.x * t, y: A.y + AB.y * t };
                         }
+                        didSnapToGuideForPoint = true;
                     } else if (isPerspectiveStrokeLockEnabled && activeGuide === 'perspective' && strokeLockInfo.current?.targetVP) {
                         pointToDraw = projectPointOnLine(point, strokeLockInfo.current.startPoint, strokeLockInfo.current.targetVP);
                         didSnapToGuideForPoint = true;
                     }
-        
+
                     if (!didSnapToGuideForPoint) {
                         pointToDraw = snapPointToGrid(point);
                     }
-                    
+
                     const isPressureSensitive = strokeMode === 'freehand';
                     const pressure = (isPressureSensitive && event.pointerType === 'pen') ? event.pressure : 1.0;
                     const newPoint = { ...pointToDraw, pressure };
-                    
+
                     activeBrushRef.current.onPointerMove(newPoint, brushContext);
                 }
             }
             return;
         }
-    
+
         // All other actions use the last event's position
-        const rawPoint = getCanvasPoint(lastEvent, viewTransform, uiCanvasRef.current!) as Point;
+        // All other actions use the last event's position
+        const rawPoint = getPoint(lastEvent, viewTransform) as Point;
         let finalPoint = rawPoint;
         let didSnapToGuide = false;
 
         if (guideDragState) {
             if (guideDragState.type === 'ruler') {
-                 setRulerGuides(guides => guides.map(g => {
+                setRulerGuides(guides => guides.map(g => {
                     if (g.id === guideDragState.id) {
                         const newGuide = { ...g };
                         if (guideDragState.part === 'start') newGuide.start = rawPoint;
@@ -756,23 +817,23 @@ export function usePointerEvents({
                 }));
             } else if (guideDragState.type === 'mirror') {
                 setMirrorGuides(guides => guides.map(g => {
-                   if (g.id === guideDragState.id) {
-                       const newGuide = { ...g };
-                       if (guideDragState.part === 'start') newGuide.start = rawPoint;
-                       else if (guideDragState.part === 'end') newGuide.end = rawPoint;
-                       else if (guideDragState.part === 'line') {
-                           const originalDx = g.end.x - g.start.x;
-                           const originalDy = g.end.y - g.start.y;
-                           newGuide.start.x = rawPoint.x + guideDragState.offset.x;
-                           newGuide.start.y = rawPoint.y + guideDragState.offset.y;
-                           newGuide.end.x = newGuide.start.x + originalDx;
-                           newGuide.end.y = newGuide.start.y + originalDy;
-                       }
-                       return newGuide;
-                   }
-                   return g;
-               }));
-           } else if (guideDragState.type === 'perspective' || guideDragState.type === 'perspective-point' || guideDragState.type === 'perspective-extra') {
+                    if (g.id === guideDragState.id) {
+                        const newGuide = { ...g };
+                        if (guideDragState.part === 'start') newGuide.start = rawPoint;
+                        else if (guideDragState.part === 'end') newGuide.end = rawPoint;
+                        else if (guideDragState.part === 'line') {
+                            const originalDx = g.end.x - g.start.x;
+                            const originalDy = g.end.y - g.start.y;
+                            newGuide.start.x = rawPoint.x + guideDragState.offset.x;
+                            newGuide.start.y = rawPoint.y + guideDragState.offset.y;
+                            newGuide.end.x = newGuide.start.x + originalDx;
+                            newGuide.end.y = newGuide.start.y + originalDy;
+                        }
+                        return newGuide;
+                    }
+                    return g;
+                }));
+            } else if (guideDragState.type === 'perspective' || guideDragState.type === 'perspective-point' || guideDragState.type === 'perspective-extra') {
                 setPerspectiveGuide(g => {
                     if (!g) return null;
                     const newGuide = JSON.parse(JSON.stringify(g)) as PerspectiveGuide;
@@ -780,7 +841,7 @@ export function usePointerEvents({
                         newGuide.guidePoint = rawPoint;
                     } else if (guideDragState.type === 'perspective-extra') {
                         const handle = newGuide.extraGuideLines[guideDragState.color].find(h => h.id === guideDragState.id);
-                        if(handle) handle.handle = rawPoint;
+                        if (handle) handle.handle = rawPoint;
                     } else if (guideDragState.type === 'perspective') {
                         const line = newGuide.lines[guideDragState.color].find(l => l.id === guideDragState.lineId);
                         if (line) line[guideDragState.part] = rawPoint;
@@ -803,26 +864,26 @@ export function usePointerEvents({
             clearCanvas(previewCtx);
             previewCtx.save();
             previewCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
-        
+
             const brush = getBrushForTool(tool);
             if (brush && activeItem) {
                 const brushContext: BrushContext = { mainCtx: (activeItem as SketchObject).context!, previewCtx, viewTransform, onDrawCommit, activeItemId: activeItem.id, activeGuide, mirrorGuides, strokeModifier };
-                
+
                 let pointsToDraw: Point[];
                 if (strokeState.mode === 'line') {
                     pointsToDraw = [strokeState.points[0], currentPointWithPressure];
                 } else {
                     pointsToDraw = [...strokeState.points, currentPointWithPressure];
                 }
-                
+
                 if (strokeState.mode === 'curve' && pointsToDraw.length >= 2) {
-                    if (pointsToDraw.length === 3) { 
-                       pointsToDraw = generateCurvePoints(pointsToDraw);
+                    if (pointsToDraw.length === 3) {
+                        pointsToDraw = generateCurvePoints(pointsToDraw);
                     }
                 } else if (strokeState.mode === 'arc' && pointsToDraw.length >= 2) {
                     const [center, p1] = pointsToDraw;
                     const radius = Math.hypot(p1.x - center.x, p1.y - center.y);
-                    
+
                     previewCtx.strokeStyle = 'rgba(0,0,0,0.4)';
                     previewCtx.lineWidth = 1 / viewTransform.zoom;
                     previewCtx.setLineDash([4 / viewTransform.zoom, 2 / viewTransform.zoom]);
@@ -830,7 +891,7 @@ export function usePointerEvents({
                     previewCtx.arc(center.x, center.y, radius, 0, 2 * Math.PI);
                     previewCtx.stroke();
                     previewCtx.setLineDash([]);
-                    
+
                     if (pointsToDraw.length === 3) {
                         const p2 = pointsToDraw[2];
                         const currentAngle = Math.atan2(p2.y - center.y, p2.x - center.x);
@@ -841,7 +902,7 @@ export function usePointerEvents({
                             let deltaAngle = currentAngle - arcDrawingState.current.lastAngle;
                             if (deltaAngle > Math.PI) deltaAngle -= 2 * Math.PI;
                             if (deltaAngle < -Math.PI) deltaAngle += 2 * Math.PI;
-            
+
                             arcDrawingState.current.totalAngle += deltaAngle;
                             arcDrawingState.current.lastAngle = currentAngle;
                         }
@@ -850,7 +911,7 @@ export function usePointerEvents({
                         pointsToDraw = [p1, finalPoint];
                     }
                 }
-                
+
                 (brush as any).drawWithMirroring(previewCtx, pointsToDraw, brushContext);
             }
             previewCtx.restore();
@@ -859,7 +920,7 @@ export function usePointerEvents({
 
 
         if (currentAction.type === 'pan') {
-             setViewTransform(v => ({ ...v, pan: { x: v.pan.x + lastEvent.movementX, y: v.pan.y + lastEvent.movementY }}));
+            setViewTransform(v => ({ ...v, pan: { x: v.pan.x + lastEvent.movementX, y: v.pan.y + lastEvent.movementY } }));
         }
         if (currentAction.type === 'selection') {
             let newPoints: Point[];
@@ -876,14 +937,14 @@ export function usePointerEvents({
 
             const previewCtx = previewCanvasRef.current?.getContext('2d');
             if (!previewCtx) return;
-        
+
             clearCanvas(previewCtx);
             previewCtx.save();
             previewCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
             previewCtx.lineWidth = 1 / viewTransform.zoom;
             previewCtx.strokeStyle = 'black';
             previewCtx.setLineDash([4 / viewTransform.zoom, 4 / viewTransform.zoom]);
-            
+
             previewCtx.beginPath();
             if (currentAction.tool === 'marquee-rect') {
                 const { startPoint } = currentAction;
@@ -895,7 +956,7 @@ export function usePointerEvents({
                 }
             }
             previewCtx.stroke();
-        
+
             previewCtx.restore();
             return;
         }
@@ -908,7 +969,7 @@ export function usePointerEvents({
                 const center = (currentAction as { center?: Point }).center;
                 let dx = pointToUse.x - startPoint.x;
                 let dy = pointToUse.y - startPoint.y;
-    
+
                 if (handle === 'rotate' && center) {
                     const angle1 = Math.atan2(startPoint.y - center.y, startPoint.x - center.x);
                     const angle2 = Math.atan2(pointToUse.y - center.y, pointToUse.x - center.x);
@@ -980,7 +1041,7 @@ export function usePointerEvents({
             }
         }
     }, [
-        viewTransform, setViewTransform, activeItem, tool, strokeState, setStrokeState, guideDragState, 
+        viewTransform, setViewTransform, activeItem, tool, strokeState, setStrokeState, guideDragState,
         setGuideDragState, setRulerGuides, setMirrorGuides, setPerspectiveGuide,
         setCropRect, setTransformState, snapPointToGrid, getMinZoom, MAX_ZOOM,
         isAspectRatioLocked, isAngleSnapEnabled, angleSnapValue, isDrawingTool, activeGuide,
@@ -996,14 +1057,14 @@ export function usePointerEvents({
         if (activePointers.current.size === 0) {
             wasInGestureRef.current = false;
         }
-    
+
         if (pointerCountBeforeUp > 1) {
             if (activePointers.current.size < 2) {
                 lastGestureState.current = null;
                 gestureBaseRef.current = null;
                 setDragAction({ type: 'none' });
             }
-            return; 
+            return;
         }
 
         if (wasInGestureRef.current) {
@@ -1025,7 +1086,7 @@ export function usePointerEvents({
             }
             activeBrushRef.current = null;
         }
-        
+
         if (tool === 'eraser') {
             setLivePreviewLayerId(null);
         }
@@ -1039,7 +1100,7 @@ export function usePointerEvents({
             const pressure = (e.pointerType === 'pen') ? e.pressure : 1.0;
             const finalPointWithPressure = { ...finalPoint, pressure };
             const finalPoints = [strokeState.points[0], finalPointWithPressure];
-        
+
             if (brush && finalPoints.length > 1) {
                 const brushContext: BrushContext = { mainCtx, previewCtx: previewCanvasRef.current!.getContext('2d')!, viewTransform, onDrawCommit, activeItemId: activeItem.id, activeGuide, mirrorGuides, strokeModifier };
                 (brush as any).drawWithMirroring(mainCtx, finalPoints, brushContext);
@@ -1050,18 +1111,18 @@ export function usePointerEvents({
 
         if (dragAction.current.type === 'selection' && activeItem) {
             const { tool, points, startPoint } = dragAction.current;
-            
+
             if (points.length > 1) {
                 let path: Path2D;
                 let boundingBox: CropRect;
-                
+
                 if (tool === 'marquee-rect') {
                     const endPoint = points[points.length - 1];
                     const x = Math.min(startPoint.x, endPoint.x);
                     const y = Math.min(startPoint.y, endPoint.y);
                     const width = Math.abs(startPoint.x - endPoint.x);
                     const height = Math.abs(startPoint.y - endPoint.y);
-                    
+
                     path = new Path2D();
                     path.rect(x, y, width, height);
                     boundingBox = { x, y, width, height };
@@ -1072,7 +1133,7 @@ export function usePointerEvents({
                         path.lineTo(points[i].x, points[i].y);
                     }
                     path.closePath();
-            
+
                     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
                     points.forEach(p => {
                         minX = Math.min(minX, p.x);
@@ -1082,7 +1143,7 @@ export function usePointerEvents({
                     });
                     boundingBox = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
                 }
-                
+
                 setSelection({ path, boundingBox, sourceItemId: activeItem.id });
             }
         }
@@ -1095,7 +1156,7 @@ export function usePointerEvents({
         if (tool === 'pan' || (e.button === 1 && e.pointerType === 'mouse')) {
             e.currentTarget.style.cursor = 'grab';
         }
-        
+
         const previewCtx = previewCanvasRef.current?.getContext('2d');
         if (previewCtx && !strokeState) {
             clearCanvas(previewCtx);
@@ -1137,9 +1198,9 @@ export function usePointerEvents({
             const point = getCanvasPoint(e.nativeEvent, viewTransform, uiCanvasRef.current!) as Point;
             let foundItem = false;
             [...items].reverse().forEach(item => {
-                if(foundItem || item.type !== 'object' || !item.isVisible || !item.canvas) return;
+                if (foundItem || item.type !== 'object' || !item.isVisible || !item.canvas) return;
                 const ctx = item.context;
-                if(ctx && ctx.getImageData(Math.floor(point.x), Math.floor(point.y), 1, 1).data[3] > 0) {
+                if (ctx && ctx.getImageData(Math.floor(point.x), Math.floor(point.y), 1, 1).data[3] > 0) {
                     onSelectItem(item.id);
                     foundItem = true;
                 }
