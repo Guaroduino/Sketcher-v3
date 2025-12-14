@@ -22,28 +22,28 @@ export function useCanvasModes(
         if (!libraryItem || libraryItem.type !== 'image' || !libraryItem.dataUrl) return;
 
         const newItemId = `object-${Date.now()}`;
-        
+
         const img = new Image();
         img.crossOrigin = 'anonymous';
         img.onload = () => {
             const itemScaleFactor = libraryItem.scaleFactor || 5;
-            const scale = itemScaleFactor / globalScaleFactor;
+            const scale = globalScaleFactor / itemScaleFactor;
             const initialDimensions = {
                 width: img.width * scale,
                 height: img.height * scale,
             };
 
-            dispatch({ 
-                type: 'ADD_ITEM', 
-                payload: { 
-                    type: 'object', 
-                    activeItemId, 
+            dispatch({
+                type: 'ADD_ITEM',
+                payload: {
+                    type: 'object',
+                    activeItemId,
                     newItemId,
                     imageElement: img,
                     canvasSize,
                     name: libraryItem.name,
                     initialDimensions,
-                } 
+                }
             });
             setSelectedItemIds([newItemId]);
             setTool('transform');

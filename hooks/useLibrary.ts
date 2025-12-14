@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { LibraryItem, RgbColor, LibraryFolder, LibraryImage, ScaleUnit } from '../types';
-import { User } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
+import { User } from 'firebase/auth';
 import { db, storage } from '../firebaseConfig';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy, serverTimestamp, where, getDocs } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy, serverTimestamp, where, getDocs } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 
 const dataURLtoBlob = (dataurl: string): Blob | null => {
@@ -16,11 +16,11 @@ const dataURLtoBlob = (dataurl: string): Blob | null => {
         const bstr = atob(arr[1]);
         let n = bstr.length;
         const u8arr = new Uint8Array(n);
-        while(n--){
+        while (n--) {
             u8arr[n] = bstr.charCodeAt(n);
         }
-        return new Blob([u8arr], {type:mime});
-    } catch(e) {
+        return new Blob([u8arr], { type: mime });
+    } catch (e) {
         console.error("Error converting data URL to blob", e);
         return null;
     }
@@ -73,7 +73,7 @@ export function useLibrary(user: User | null) {
         }
     }, [user]);
 
-    const handleImportToLibrary = useCallback(async (file: File, parentId: string | null) => {
+    const handleImportToLibrary = useCallback(async (file: File, parentId: string | null, options?: { scaleFactor?: number }) => {
         if (!user) {
             alert("Please log in to save items to your library.");
             return;
@@ -89,13 +89,14 @@ export function useLibrary(user: User | null) {
                 createdAt: serverTimestamp(),
                 type: 'image',
                 parentId,
+                scaleFactor: options?.scaleFactor || 5, // Default to 5 if not provided
             });
         } catch (error) {
             console.error("Error uploading file to library:", error);
             alert("Failed to upload image.");
         }
     }, [user]);
-    
+
     const handleCreateFolder = useCallback(async (name: string, parentId: string | null) => {
         if (!user) {
             alert("Please log in to create folders.");
@@ -179,10 +180,10 @@ export function useLibrary(user: User | null) {
             alert("Error processing image data.");
             return;
         }
-        
+
         const storageRef = ref(storage, imageToEdit.storagePath);
         const docRef = doc(db, `users/${user.uid}/libraryItems`, imageToEdit.id);
-        
+
         try {
             await uploadBytes(storageRef, blob);
             const newDownloadURL = await getDownloadURL(storageRef);
@@ -223,10 +224,10 @@ export function useLibrary(user: User | null) {
             // Delete Firestore document
             await deleteDoc(doc(collectionRef, itemId));
         };
-        
+
         try {
             await recursiveDelete(deletingLibraryItem.id);
-        } catch(error) {
+        } catch (error) {
             console.error("Error deleting item:", error);
             alert("Failed to delete item.");
         } finally {
@@ -235,7 +236,7 @@ export function useLibrary(user: User | null) {
     }, [deletingLibraryItem, user, libraryItems]);
 
     const handleCancelDeleteLibraryItem = () => setDeletingLibraryItem(null);
-    
+
     return {
         libraryItems,
         imageToEdit,

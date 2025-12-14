@@ -40,14 +40,7 @@ interface ToolbarProps {
     isOrthogonalVisible: boolean;
     onToggleOrthogonal: () => void;
     onExportClick: () => void;
-    onEnhance: (payload: any) => void;
-    isEnhancing: boolean;
-    enhancementPreview: { fullDataUrl: string; croppedDataUrl: string | null; bbox: CropRect | null } | null;
-    onGenerateEnhancementPreview: () => void;
-    objects: CanvasItem[];
-    libraryItems: LibraryItem[];
-    backgroundDataUrl: string | null;
-    debugInfo: { prompt: string; images: { name: string; url: string }[] } | null;
+
     strokeMode: StrokeMode;
     setStrokeMode: (mode: StrokeMode) => void;
     strokeModifier: StrokeModifier;
@@ -60,12 +53,7 @@ interface ToolbarProps {
     onDeletePreset: (id: string) => void;
 }
 
-type SavedPrompts = {
-    description: string[];
-    style: string[];
-    negative: string[];
-}
-type PromptType = keyof SavedPrompts;
+
 
 const Accordion: React.FC<{ title: string, children: React.ReactNode, defaultOpen?: boolean }> = ({ title, children, defaultOpen = false }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -129,16 +117,16 @@ const toolIconMap: Record<Tool, React.FC<{ className?: string }>> = {
     'simple-marker': SolidMarkerIcon,
     'transform': TransformIcon,
     'free-transform': FreeTransformIcon,
-    'enhance': SparklesIcon,
-    'crop': CropIcon,
-    'pan': () => null,
-    'debug-brush': BrushIcon,
-    'text': TextIcon,
+    'advanced-marker': AdvancedMarkerIcon,
+    'watercolor': WatercolorIcon,
     'natural-marker': NaturalMarkerIcon,
     'airbrush': AirbrushIcon,
     'fx-brush': FXBrushIcon,
-    'advanced-marker': AdvancedMarkerIcon,
-    'watercolor': WatercolorIcon,
+    'text': TextIcon,
+    'crop': CropIcon,
+    'enhance': SparklesIcon,
+    'pan': SelectIcon, // Using SelectIcon as placeholder for Pan
+    'debug-brush': BrushIcon, // Using BrushIcon as placeholder for Debug Brush
 };
 
 
@@ -170,10 +158,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     isOrthogonalVisible,
     onToggleOrthogonal,
     onExportClick,
-    onEnhance,
-    isEnhancing,
-    enhancementPreview,
-    onGenerateEnhancementPreview,
     objects,
     libraryItems,
     backgroundDataUrl,
@@ -185,6 +169,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     brushPresets,
     ...props
 }) => {
+
     const [openSettings, setOpenSettings] = useState<Tool | null>(null);
     const [settingsPanelAnchor, setSettingsPanelAnchor] = useState<HTMLElement | null>(null);
     const [settingsPanelPosition, setSettingsPanelPosition] = useState<{ top: number; left: number } | null>(null);
@@ -204,56 +189,11 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     const [lastActiveSelectionTool, setLastActiveSelectionTool] = useState<Tool>('marquee-rect');
     const [lastActiveDrawingTool, setLastActiveDrawingTool] = useState<Tool>('brush');
 
-    // AI Panel State
-    const [activeAiTab, setActiveAiTab] = useState<'object' | 'composition' | 'free'>('object');
-    // Object
-    const [enhancementPrompt, setEnhancementPrompt] = useState('');
-    const [enhancementStylePrompt, setEnhancementStylePrompt] = useState('');
-    const [enhancementNegativePrompt, setEnhancementNegativePrompt] = useState('');
-    const [enhancementCreativity, setEnhancementCreativity] = useState(100);
-    const [enhancementChromaKey, setEnhancementChromaKey] = useState<'none' | 'green' | 'blue'>('none');
-    const [enhancementInputMode, setEnhancementInputMode] = useState<'full' | 'bbox'>('full');
-    const [enhancementPreviewBgColor, setEnhancementPreviewBgColor] = useState('#FFFFFF');
-    // Composition
-    const [compositionPrompt, setCompositionPrompt] = useState('');
-    const [styleRef, setStyleRef] = useState<{ url: string; name: string } | null>(null);
-    const [isStyleRefHover, setIsStyleRefHover] = useState(false);
-    // Free
-    const [freeFormPrompt, setFreeFormPrompt] = useState('');
-    const [addEnhancedImageToLibrary, setAddEnhancedImageToLibrary] = useState(true);
-    const [freeFormSlots, setFreeFormSlots] = useState<{
-        main: { id: string, type: 'outliner' | 'library' | 'file', url: string, name: string } | null,
-        a: { id: string, type: 'outliner' | 'library' | 'file', url: string, name: string } | null,
-        b: { id: string, type: 'outliner' | 'library' | 'file', url: string, name: string } | null,
-        c: { id: string, type: 'outliner' | 'library' | 'file', url: string, name: string } | null
-    }>({ main: null, a: null, b: null, c: null });
-    const slotFileInputRef = useRef<HTMLInputElement>(null);
-    const currentlyEditingSlot = useRef<'main' | 'a' | 'b' | 'c' | null>(null);
 
-
-    // Saved Prompts State
-    const [savedPrompts, setSavedPrompts] = useState<SavedPrompts>({ description: [], style: [], negative: [] });
-    const [promptLoader, setPromptLoader] = useState<{ openFor: PromptType | null, anchorEl: HTMLElement | null }>({ openFor: null, anchorEl: null });
-    const promptLoaderRef = useRef<HTMLDivElement>(null);
-
-    // Load saved prompts from localStorage on mount
-    useEffect(() => {
-        try {
-            const storedPrompts = localStorage.getItem('sketcher-ai-prompts');
-            if (storedPrompts) {
-                setSavedPrompts(JSON.parse(storedPrompts));
-            }
-        } catch (error) {
-            console.error("Failed to load prompts from localStorage", error);
-        }
-    }, []);
 
     // Effect to close popovers when clicking outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (promptLoaderRef.current && !promptLoaderRef.current.contains(event.target as Node)) {
-                setPromptLoader({ openFor: null, anchorEl: null });
-            }
             if (strokeModeMenuRef.current && !strokeModeMenuRef.current.contains(event.target as Node)) {
                 setIsStrokeModeMenuOpen(false);
             }
@@ -282,16 +222,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [settingsPanelAnchor, openSettings]);
 
-    // Link Chroma Key state to parent toggles and its own state
-    useEffect(() => {
-        if (isChromaKeyEnabled) {
-            if (enhancementChromaKey === 'none') {
-                setEnhancementChromaKey('green');
-            }
-        } else {
-            setEnhancementChromaKey('none');
-        }
-    }, [isChromaKeyEnabled, setEnhancementChromaKey]);
+
 
     // Track last active tool in each group
     useEffect(() => {
@@ -313,9 +244,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     };
 
     const handleToolDoubleClick = (t: Tool, e: React.MouseEvent) => {
-        if (t === 'enhance' && openSettings !== 'enhance') {
-            onGenerateEnhancementPreview();
-        }
         setOpenSettings(prev => {
             const currentTarget = e.currentTarget as HTMLElement;
             if (prev === t && settingsPanelAnchor === currentTarget) {
@@ -361,167 +289,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         `p-3 rounded-lg transition-colors ${tool === t ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'
         }`;
 
-    const handleStyleRefDrop = (e: React.DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        setIsStyleRefHover(false);
-        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-            const file = e.dataTransfer.files[0];
-            if (file.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    setStyleRef({ url: event.target?.result as string, name: file.name });
-                };
-                reader.readAsDataURL(file);
-            }
-        }
-    };
 
-    const handleFreeFormSlotDrop = (e: React.DragEvent<HTMLDivElement>, slot: 'main' | 'a' | 'b' | 'c') => {
-        e.preventDefault();
-        e.stopPropagation();
 
-        // Case 1: Dropping a file from the user's desktop
-        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            const file = e.dataTransfer.files[0];
-            if (file.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const url = event.target?.result as string;
-                    setFreeFormSlots(prev => ({ ...prev, [slot]: { id: `file-${Date.now()}`, type: 'file', url, name: file.name } }));
-                };
-                reader.readAsDataURL(file);
-            }
-            return;
-        }
 
-        // Case 2: Dropping from Outliner or Library
-        try {
-            const jsonData = e.dataTransfer.getData('application/json');
-            if (!jsonData) return;
-            const data = JSON.parse(jsonData);
-
-            if (data.type === 'outliner-item') {
-                const item = objects.find(o => o.id === data.id);
-                if (item && item.type === 'object' && item.canvas) {
-                    const dataUrl = item.canvas.toDataURL();
-                    setFreeFormSlots(prev => ({ ...prev, [slot]: { id: item.id, type: 'outliner', url: dataUrl, name: item.name } }));
-                }
-            } else if (data.type === 'library-item') {
-                const item = libraryItems.find(i => i.id === data.id);
-                if (item && item.type === 'image' && item.dataUrl) {
-                    setFreeFormSlots(prev => ({ ...prev, [slot]: { id: item.id, type: 'library', url: item.dataUrl, name: item.name } }));
-                }
-            }
-        } catch (error) {
-            console.error("Error handling drop:", error);
-        }
-    };
-
-    const handleSlotFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0] && currentlyEditingSlot.current) {
-            const file = e.target.files[0];
-            const slot = currentlyEditingSlot.current;
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const url = event.target?.result as string;
-                setFreeFormSlots(prev => ({ ...prev, [slot]: { id: `file-${Date.now()}`, type: 'file', url, name: file.name } }));
-            };
-            reader.readAsDataURL(file);
-        }
-        // Reset file input to allow uploading the same file again
-        if (e.target) e.target.value = '';
-        currentlyEditingSlot.current = null;
-    };
-
-    // --- Prompt Save/Load Logic ---
-    const savePrompt = (type: PromptType, value: string) => {
-        if (!value.trim() || savedPrompts[type].includes(value.trim())) return;
-        const newPrompts = { ...savedPrompts, [type]: [...savedPrompts[type], value.trim()] };
-        setSavedPrompts(newPrompts);
-        localStorage.setItem('sketcher-ai-prompts', JSON.stringify(newPrompts));
-    };
-
-    const deletePrompt = (type: PromptType, valueToDelete: string) => {
-        const newPrompts = { ...savedPrompts, [type]: savedPrompts[type].filter(p => p !== valueToDelete) };
-        setSavedPrompts(newPrompts);
-        localStorage.setItem('sketcher-ai-prompts', JSON.stringify(newPrompts));
-    };
-
-    const loadPrompt = (type: PromptType, value: string) => {
-        if (type === 'description') setEnhancementPrompt(value);
-        if (type === 'style') setEnhancementStylePrompt(value);
-        if (type === 'negative') setEnhancementNegativePrompt(value);
-        setPromptLoader({ openFor: null, anchorEl: null });
-    };
-
-    const promptSetters: Record<PromptType, React.Dispatch<React.SetStateAction<string>>> = {
-        description: setEnhancementPrompt,
-        style: setEnhancementStylePrompt,
-        negative: setEnhancementNegativePrompt,
-    };
-
-    const PromptManager: React.FC<{ type: PromptType; value: string; }> = ({ type, value }) => (
-        <div className="flex justify-end gap-2 mt-1">
-            <button onClick={() => savePrompt(type, value)} className="text-xs px-2 py-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover]">Guardar</button>
-            <button onClick={(e) => setPromptLoader({ openFor: type, anchorEl: e.currentTarget })} className="text-xs px-2 py-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover]">Cargar</button>
-        </div>
-    );
-
-    const FreeFormSlot: React.FC<{
-        slotData: { url: string, name: string } | null;
-        onDrop: (e: React.DragEvent<HTMLDivElement>) => void;
-        onClear: () => void;
-        onFileSelect: () => void;
-        placeholder: string;
-        className?: string;
-    }> = ({ slotData, onDrop, onClear, onFileSelect, placeholder, className = '' }) => {
-        const [isDragOver, setIsDragOver] = useState(false);
-
-        const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-            e.preventDefault();
-            e.stopPropagation();
-            e.dataTransfer.dropEffect = 'copy';
-            setIsDragOver(true);
-        };
-
-        const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setIsDragOver(false);
-        };
-
-        const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-            handleDragLeave(e);
-            onDrop(e);
-        };
-
-        return (
-            <div
-                onClick={!slotData ? onFileSelect : undefined}
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDragEnd={handleDragLeave}
-                className={`relative bg-[--bg-tertiary] rounded-md flex items-center justify-center text-center text-xs text-[--text-secondary] p-2 transition-all ${isDragOver ? 'border-2 border-dashed border-[--accent-primary]' : 'border-2 border-dashed border-transparent'
-                    } ${!slotData ? 'cursor-pointer' : ''} ${className}`}
-            >
-                {slotData ? (
-                    <>
-                        <img src={slotData.url} alt={slotData.name} className="max-w-full max-h-full object-contain rounded-md" />
-                        <button onClick={onClear} className="absolute top-1 right-1 p-0.5 w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-red-600 rounded-full text-white text-base">
-                            <XIcon className="w-3 h-3" />
-                        </button>
-                    </>
-                ) : (
-                    <div className="flex flex-col items-center gap-1 pointer-events-none">
-                        <UploadIcon className="w-5 h-5" />
-                        <span>{placeholder}</span>
-                        <span className="text-[10px]">(Arrastra o haz clic para cargar)</span>
-                    </div>
-                )}
-            </div>
-        );
-    };
 
     const BlendModeSelector: React.FC<{
         value: BlendMode;
@@ -549,6 +319,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             case 'lasso':
                 return null;
             case 'text':
+                // ... (rest of text case)
                 return (
                     <div className="p-4 space-y-4">
                         <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Herramienta de Texto</h4>
@@ -616,388 +387,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         </div>
                     </div>
                 );
-            case 'enhance':
-                return (
-                    <div className="space-y-4">
-                        {/* Tabs */}
-                        <div className="flex border-b border-[--bg-tertiary]">
-                            <button onClick={() => setActiveAiTab('object')} className={`flex-1 p-2 text-sm font-semibold transition-colors ${activeAiTab === 'object' ? 'text-[--accent-primary] border-b-2 border-[--accent-primary]' : 'text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}>
-                                OBJETO
-                            </button>
-                            <button onClick={() => setActiveAiTab('composition')} className={`flex-1 p-2 text-sm font-semibold transition-colors ${activeAiTab === 'composition' ? 'text-[--accent-primary] border-b-2 border-[--accent-primary]' : 'text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}>
-                                COMPOSICIÓN
-                            </button>
-                            <button onClick={() => setActiveAiTab('free')} className={`flex-1 p-2 text-sm font-semibold transition-colors ${activeAiTab === 'free' ? 'text-[--accent-primary] border-b-2 border-[--accent-primary]' : 'text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}>
-                                LIBRE
-                            </button>
-                        </div>
 
-                        {/* Object Tab */}
-                        {activeAiTab === 'object' && (
-                            <div className="space-y-4">
-                                <div style={{ backgroundColor: enhancementPreviewBgColor }} className="rounded-md p-2 aspect-video flex items-center justify-center">
-                                    {!enhancementPreview ? (
-                                        <span className="text-xs text-[--text-secondary]">Generando vista previa...</span>
-                                    ) : (
-                                        <img
-                                            src={
-                                                enhancementInputMode === 'bbox' && enhancementPreview.croppedDataUrl
-                                                    ? enhancementPreview.croppedDataUrl
-                                                    : enhancementPreview.fullDataUrl
-                                            }
-                                            alt="AI Input Preview"
-                                            className="max-w-full max-h-full object-contain"
-                                        />
-                                    )}
-                                </div>
-
-                                <div>
-                                    <label htmlFor="preview-bg-color" className="text-xs font-bold text-[--text-secondary] block mb-1">Fondo</label>
-                                    <input
-                                        type="color"
-                                        id="preview-bg-color"
-                                        value={enhancementPreviewBgColor}
-                                        onChange={(e) => setEnhancementPreviewBgColor(e.target.value)}
-                                        className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer"
-                                        disabled={isEnhancing}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-2">Imagen de Entrada</label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button
-                                            onClick={() => setEnhancementInputMode('full')}
-                                            disabled={isEnhancing}
-                                            className={`text-xs p-2 rounded transition-colors ${enhancementInputMode === 'full' ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'
-                                                }`}
-                                        >
-                                            Lienzo Completo
-                                        </button>
-                                        <button
-                                            onClick={() => setEnhancementInputMode('bbox')}
-                                            disabled={isEnhancing || !enhancementPreview?.bbox}
-                                            className={`text-xs p-2 rounded transition-colors ${enhancementInputMode === 'bbox' ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed'
-                                                }`}
-                                        >
-                                            Ajustar a Contenido
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Descripción del Objeto (Necesario)</label>
-                                    <textarea
-                                        value={enhancementPrompt}
-                                        onChange={(e) => setEnhancementPrompt(e.target.value)}
-                                        placeholder="Ej: 'añade un castillo de fantasía en el fondo'"
-                                        className="w-full h-20 p-2 bg-[--bg-tertiary] text-[--text-primary] text-sm rounded-md resize-none"
-                                        disabled={isEnhancing}
-                                    />
-                                    <PromptManager type="description" value={enhancementPrompt} />
-                                </div>
-
-                                <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Estilo (Necesario)</label>
-                                    <textarea
-                                        value={enhancementStylePrompt}
-                                        onChange={(e) => setEnhancementStylePrompt(e.target.value)}
-                                        placeholder="Ej: 'fotorrealista, colores vivos, pintura al óleo'"
-                                        className="w-full h-16 p-2 bg-[--bg-tertiary] text-[--text-primary] text-sm rounded-md resize-none"
-                                        disabled={isEnhancing}
-                                    />
-                                    <PromptManager type="style" value={enhancementStylePrompt} />
-                                </div>
-
-                                <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Negativo/Evitar (Opcional)</label>
-                                    <textarea
-                                        value={enhancementNegativePrompt}
-                                        onChange={(e) => setEnhancementNegativePrompt(e.target.value)}
-                                        placeholder="Ej: 'borroso, baja resolución, texto, marcas de agua'"
-                                        className="w-full h-16 p-2 bg-[--bg-tertiary] text-[--text-primary] text-sm rounded-md resize-none"
-                                        disabled={isEnhancing}
-                                    />
-                                    <PromptManager type="negative" value={enhancementNegativePrompt} />
-                                </div>
-
-                                <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Creatividad: {enhancementCreativity}</label>
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="150"
-                                        value={enhancementCreativity}
-                                        onChange={(e) => setEnhancementCreativity(parseInt(e.target.value))}
-                                        className="w-full"
-                                        disabled={isEnhancing}
-                                    />
-                                    <div className="flex justify-between text-xs text-[--text-secondary] mt-1">
-                                        <span>Fiel</span>
-                                        <span>Equilibrado</span>
-                                        <span>Imaginativo</span>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center justify-between py-1">
-                                    <label htmlFor="chroma-key-toggle" className="text-xs font-bold text-[--text-secondary]">
-                                        Forzar Fondo Chroma
-                                    </label>
-                                    <button
-                                        id="chroma-key-toggle"
-                                        role="switch"
-                                        aria-checked={isChromaKeyEnabled}
-                                        onClick={() => setIsChromaKeyEnabled(prev => !prev)}
-                                        className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[--accent-primary] focus:ring-offset-[--bg-primary] ${isChromaKeyEnabled ? 'bg-[--accent-primary]' : 'bg-[--bg-tertiary]'
-                                            }`}
-                                        disabled={isEnhancing}
-                                    >
-                                        <span
-                                            className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${isChromaKeyEnabled ? 'translate-x-6' : 'translate-x-1'
-                                                }`}
-                                        />
-                                    </button>
-                                </div>
-                                {isChromaKeyEnabled && (
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button
-                                            onClick={() => setEnhancementChromaKey('green')}
-                                            disabled={isEnhancing}
-                                            className={`text-xs p-2 rounded transition-colors ${enhancementChromaKey === 'green' ? 'bg-green-600 text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'
-                                                }`}
-                                        >
-                                            Verde
-                                        </button>
-                                        <button
-                                            onClick={() => setEnhancementChromaKey('blue')}
-                                            disabled={isEnhancing}
-                                            className={`text-xs p-2 rounded transition-colors ${enhancementChromaKey === 'blue' ? 'bg-blue-600 text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'
-                                                }`}
-                                        >
-                                            Azul
-                                        </button>
-                                    </div>
-                                )}
-
-                                <button
-                                    onClick={() => onEnhance({
-                                        activeAiTab,
-                                        enhancementPrompt,
-                                        enhancementStylePrompt,
-                                        enhancementNegativePrompt,
-                                        enhancementCreativity,
-                                        enhancementInputMode,
-                                        enhancementChromaKey: isChromaKeyEnabled ? enhancementChromaKey : 'none',
-                                        enhancementPreviewBgColor,
-                                    })}
-                                    disabled={!enhancementPrompt.trim() || !enhancementStylePrompt.trim() || isEnhancing}
-                                    className="w-full bg-[--accent-primary] hover:bg-[--accent-hover] text-white font-bold py-2 px-4 rounded-md disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed mt-2"
-                                >
-                                    {isEnhancing ? 'Generando...' : 'Generar'}
-                                </button>
-                                {isEnhancing && <div className="text-center text-xs text-[--text-secondary]">Esto puede tardar unos momentos...</div>}
-                            </div>
-                        )}
-
-                        {/* Composition Tab */}
-                        {activeAiTab === 'composition' && (
-                            <div className="space-y-4">
-                                <h5 className="font-bold text-md">Composición de Escena</h5>
-                                <p className="text-xs text-[--text-secondary]">
-                                    Describe cómo combinar, estilizar o modificar la escena actual. La IA usará todos los objetos visibles y el fondo como base. El resultado reemplazará el fondo actual.
-                                </p>
-                                <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Preview de Entrada</label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div className="bg-[--bg-tertiary] p-1 rounded-md text-center aspect-video flex items-center justify-center flex-col">
-                                            {enhancementPreview?.fullDataUrl ? (
-                                                <img src={enhancementPreview.fullDataUrl} alt="Composite Preview" className="max-w-full max-h-[80%] object-contain" />
-                                            ) : <span className="text-xs text-[--text-secondary]">Cargando...</span>}
-                                            <span className="text-xs text-[--text-secondary] mt-1">Objetos Visibles</span>
-                                        </div>
-                                        <div className="bg-[--bg-tertiary] p-1 rounded-md text-center aspect-video flex items-center justify-center flex-col">
-                                            {backgroundDataUrl ? (
-                                                <img src={backgroundDataUrl} alt="Background Preview" className="max-w-full max-h-[80%] object-contain" />
-                                            ) : <span className="text-xs text-[--text-secondary]">Sin Fondo</span>}
-                                            <span className="text-xs text-[--text-secondary] mt-1">Fondo</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Instrucciones de Composición (Necesario)</label>
-                                    <textarea
-                                        value={compositionPrompt}
-                                        onChange={(e) => setCompositionPrompt(e.target.value)}
-                                        placeholder="Ej: 'mezcla los objetos en un estilo de acuarela, con una iluminación suave desde la izquierda'"
-                                        className="w-full h-24 p-2 bg-[--bg-tertiary] text-[--text-primary] text-sm rounded-md resize-none"
-                                        disabled={isEnhancing}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Referencia de Estilo (Opcional)</label>
-                                    <div
-                                        onDrop={handleStyleRefDrop}
-                                        onDragOver={(e) => { e.preventDefault(); setIsStyleRefHover(true); }}
-                                        onDragLeave={() => setIsStyleRefHover(false)}
-                                        className={`w-full h-24 p-2 bg-[--bg-tertiary] rounded-md flex items-center justify-center text-center transition-colors ${isStyleRefHover ? 'border-2 border-dashed border-[--accent-primary]' : 'border-2 border-dashed border-transparent'}`}
-                                    >
-                                        {styleRef ? (
-                                            <div className="relative">
-                                                <img src={styleRef.url} alt="Style reference" className="max-h-20 object-contain" />
-                                                <button onClick={() => setStyleRef(null)} className="absolute -top-1 -right-1 p-0.5 w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-red-600 rounded-full text-white text-base">
-                                                    <XIcon className="w-3 h-3" />
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <span className="text-xs text-[--text-secondary]">Arrastra una imagen de referencia aquí</span>
-                                        )}
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => onEnhance({
-                                        activeAiTab,
-                                        compositionPrompt,
-                                        styleRef,
-                                    })}
-                                    disabled={!compositionPrompt.trim() || isEnhancing}
-                                    className="w-full bg-[--accent-primary] hover:bg-[--accent-hover] text-white font-bold py-2 px-4 rounded-md disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed mt-2"
-                                >
-                                    {isEnhancing ? 'Generando...' : 'Generar'}
-                                </button>
-                            </div>
-                        )}
-
-                        {/* Free Tab */}
-                        {activeAiTab === 'free' && (
-                            <div className="space-y-4">
-                                <h5 className="font-bold text-md">Creación Libre</h5>
-                                <p className="text-xs text-[--text-secondary]">
-                                    Arrastra objetos desde el Outliner/Librería o haz clic para cargar imágenes en las ranuras. Luego, describe cómo combinarlos.
-                                </p>
-                                <input type="file" accept="image/*" className="hidden" ref={slotFileInputRef} onChange={handleSlotFileChange} />
-                                <div className="space-y-2">
-                                    <FreeFormSlot
-                                        slotData={freeFormSlots.main}
-                                        onDrop={(e) => handleFreeFormSlotDrop(e, 'main')}
-                                        onClear={() => setFreeFormSlots(p => ({ ...p, main: null }))}
-                                        onFileSelect={() => { currentlyEditingSlot.current = 'main'; slotFileInputRef.current?.click(); }}
-                                        placeholder="[Objeto 1] Principal"
-                                        className="h-28"
-                                    />
-                                    <div className="grid grid-cols-3 gap-2">
-                                        <FreeFormSlot
-                                            slotData={freeFormSlots.a}
-                                            onDrop={(e) => handleFreeFormSlotDrop(e, 'a')}
-                                            onClear={() => setFreeFormSlots(p => ({ ...p, a: null }))}
-                                            onFileSelect={() => { currentlyEditingSlot.current = 'a'; slotFileInputRef.current?.click(); }}
-                                            placeholder="[Añadido A]"
-                                            className="h-20"
-                                        />
-                                        <FreeFormSlot
-                                            slotData={freeFormSlots.b}
-                                            onDrop={(e) => handleFreeFormSlotDrop(e, 'b')}
-                                            onClear={() => setFreeFormSlots(p => ({ ...p, b: null }))}
-                                            onFileSelect={() => { currentlyEditingSlot.current = 'b'; slotFileInputRef.current?.click(); }}
-                                            placeholder="[Añadido B]"
-                                            className="h-20"
-                                        />
-                                        <FreeFormSlot
-                                            slotData={freeFormSlots.c}
-                                            onDrop={(e) => handleFreeFormSlotDrop(e, 'c')}
-                                            onClear={() => setFreeFormSlots(p => ({ ...p, c: null }))}
-                                            onFileSelect={() => { currentlyEditingSlot.current = 'c'; slotFileInputRef.current?.click(); }}
-                                            placeholder="[Añadido C]"
-                                            className="h-20"
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Instrucciones</label>
-                                    <textarea
-                                        value={freeFormPrompt}
-                                        onChange={(e) => setFreeFormPrompt(e.target.value)}
-                                        placeholder="Ej: Coloca [Objeto 1] en un paisaje similar a [Añadido A]"
-                                        className="w-full h-24 p-2 bg-[--bg-tertiary] text-[--text-primary] text-sm rounded-md resize-none"
-                                        disabled={isEnhancing}
-                                    />
-                                </div>
-                                <div className="flex items-center justify-between py-1">
-                                    <label htmlFor="add-to-library-toggle-free" className="text-xs font-bold text-[--text-secondary]">
-                                        Añadir a la Librería
-                                    </label>
-                                    <button
-                                        id="add-to-library-toggle-free"
-                                        role="switch"
-                                        aria-checked={addEnhancedImageToLibrary}
-                                        onClick={() => setAddEnhancedImageToLibrary(prev => !prev)}
-                                        className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[--accent-primary] focus:ring-offset-[--bg-primary] ${addEnhancedImageToLibrary ? 'bg-[--accent-primary]' : 'bg-[--bg-tertiary]'
-                                            }`}
-                                        disabled={isEnhancing}
-                                    >
-                                        <span
-                                            className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${addEnhancedImageToLibrary ? 'translate-x-6' : 'translate-x-1'
-                                                }`}
-                                        />
-                                    </button>
-                                </div>
-                                <div className="flex items-center justify-between py-1">
-                                    <label htmlFor="chroma-key-toggle-free" className="text-xs font-bold text-[--text-secondary]">
-                                        Forzar Fondo Chroma
-                                    </label>
-                                    <button
-                                        id="chroma-key-toggle-free"
-                                        role="switch"
-                                        aria-checked={isChromaKeyEnabled}
-                                        onClick={() => setIsChromaKeyEnabled(prev => !prev)}
-                                        className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[--accent-primary] focus:ring-offset-[--bg-primary] ${isChromaKeyEnabled ? 'bg-[--accent-primary]' : 'bg-[--bg-tertiary]'
-                                            }`}
-                                        disabled={isEnhancing}
-                                    >
-                                        <span
-                                            className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${isChromaKeyEnabled ? 'translate-x-6' : 'translate-x-1'
-                                                }`}
-                                        />
-                                    </button>
-                                </div>
-                                <button
-                                    onClick={() => onEnhance({
-                                        activeAiTab,
-                                        freeFormPrompt,
-                                        freeFormSlots,
-                                        addEnhancedImageToLibrary,
-                                        enhancementChromaKey: isChromaKeyEnabled ? enhancementChromaKey : 'none'
-                                    })}
-                                    disabled={!freeFormPrompt.trim() || isEnhancing}
-                                    className="w-full bg-[--accent-primary] hover:bg-[--accent-hover] text-white font-bold py-2 px-4 rounded-md disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed mt-2"
-                                >
-                                    {isEnhancing ? 'Generando...' : 'Generar'}
-                                </button>
-                            </div>
-                        )}
-                        {/* DEBUG PREVIEW PANEL */}
-                        {debugInfo && (
-                            <Accordion title="Debug Preview" defaultOpen>
-                                <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Prompt Final Enviada</label>
-                                    <pre className="text-xs p-2 bg-[--bg-tertiary] rounded-md whitespace-pre-wrap font-sans">
-                                        {debugInfo.prompt}
-                                    </pre>
-                                </div>
-                                <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Imágenes Enviadas</label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {debugInfo.images.map((img, index) => (
-                                            <div key={index} className="bg-[--bg-tertiary] p-1 rounded-md text-center">
-                                                <img src={img.url} alt={img.name} className="max-w-full max-h-24 object-contain mx-auto" />
-                                                <span className="text-xs text-[--text-secondary] mt-1 block">{img.name}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </Accordion>
-                        )}
-                    </div>
-                );
             case 'brush':
                 return (
                     <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
@@ -1300,24 +690,35 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
         if (settingsPanelPosition) {
             return {
-                position: 'absolute',
+                position: 'fixed',
                 left: `${settingsPanelPosition.left}px`,
                 top: `${settingsPanelPosition.top}px`,
                 maxHeight: `calc(100vh - ${settingsPanelPosition.top + 16}px)`,
             };
         }
 
-        if (!settingsPanelAnchor || !toolbarWrapperRef.current) {
+        if (!settingsPanelAnchor) {
             return { display: 'none' };
         }
         const anchorRect = settingsPanelAnchor.getBoundingClientRect();
-        const wrapperRect = toolbarWrapperRef.current.getBoundingClientRect();
 
         return {
-            position: 'absolute',
-            left: `${anchorRect.right - wrapperRect.left + 8}px`,
-            top: `${anchorRect.top - wrapperRect.top}px`,
-            maxHeight: `calc(100vh - ${anchorRect.top - wrapperRect.top + 16}px)`,
+            position: 'fixed',
+            left: `${anchorRect.right + 8}px`,
+            top: `${anchorRect.top}px`,
+            maxHeight: `calc(100vh - ${anchorRect.top}px - 16px)`,
+        };
+    };
+
+    const getMenuPositionStyle = (anchorEl: HTMLElement | null): React.CSSProperties => {
+        if (!anchorEl) return {};
+        const rect = anchorEl.getBoundingClientRect();
+        return {
+            position: 'fixed',
+            left: `${rect.right + 8}px`,
+            top: `${rect.top}px`,
+            maxHeight: `calc(100vh - ${rect.top}px - 16px)`,
+            overflowY: 'auto'
         };
     };
 
@@ -1349,7 +750,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                             <ActiveSelectionIcon className="w-6 h-6" />
                         </button>
                         {isSelectionToolsMenuOpen && (
-                            <div className="absolute left-full top-0 ml-2 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-60 z-20 p-2 space-y-1">
+                            <div
+                                className="z-20 p-2 space-y-1 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-60"
+                                style={getMenuPositionStyle(selectionToolsMenuRef.current)}
+                            >
                                 {selectionToolsGroup.map(({ tool: t, name, icon: Icon }) => (
                                     <div key={t} className={`flex items-center justify-between rounded-md text-sm ${tool === t ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}>
                                         <button onClick={() => { handleToolClick(t); setIsSelectionToolsMenuOpen(false); }} className="flex items-center gap-3 p-2 flex-grow text-left">
@@ -1380,7 +784,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         </button>
 
                         {isStrokeModeMenuOpen && (
-                            <div className="absolute left-full top-0 ml-2 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-60 z-20 p-2 space-y-1">
+                            <div
+                                className="z-20 p-2 space-y-1 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-60"
+                                style={getMenuPositionStyle(strokeModeMenuRef.current)}
+                            >
                                 <h4 className="px-2 pb-1 text-sm font-bold uppercase text-[--text-secondary]">Modos de Trazo</h4>
                                 {strokeModesList.map(({ mode, label, icon: Icon }) => (
                                     <button
@@ -1414,7 +821,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         </button>
 
                         {isStrokeModifierMenuOpen && (
-                            <div className="absolute left-full top-0 ml-2 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-60 z-20 p-2 space-y-2">
+                            <div
+                                className="z-20 p-2 space-y-2 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-60"
+                                style={getMenuPositionStyle(strokeModifierMenuRef.current)}
+                            >
                                 <h4 className="px-2 pb-1 text-sm font-bold uppercase text-[--text-secondary]">Estilo de Trazo</h4>
                                 <div className="space-y-1">
                                     {strokeModifierList.map(({ style, label, icon: Icon }) => (
@@ -1465,7 +875,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                             <ActiveDrawingIcon className="w-6 h-6" />
                         </button>
                         {isDrawingToolsMenuOpen && (
-                            <div className="absolute left-full top-0 ml-2 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-60 z-20 p-2 space-y-1">
+                            <div
+                                className="z-20 p-2 space-y-1 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-60"
+                                style={getMenuPositionStyle(drawingToolsMenuRef.current)}
+                            >
                                 {drawingToolsGroup.map(({ tool: t, name, icon: Icon }) => (
                                     <div key={t} className={`flex items-center justify-between rounded-md text-sm ${tool === t ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}>
                                         <button onClick={() => { handleToolClick(t); setIsDrawingToolsMenuOpen(false); }} className="flex items-center gap-3 p-2 flex-grow text-left">
@@ -1522,13 +935,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                     </button>
                 </div>
 
-                {/* AI Tools */}
-                <div className="w-10/12 h-px bg-[--bg-tertiary] my-2 self-center" />
-                <div className="flex flex-col items-center space-y-2">
-                    <button onClick={() => handleToolClick('enhance')} onDoubleClick={(e) => handleToolDoubleClick('enhance', e)} className={toolButtonClasses('enhance')} title="Mejora con IA (doble clic para opciones)">
-                        <SparklesIcon className="w-6 h-6" />
-                    </button>
-                </div>
+
 
 
                 {/* Other Tools */}
@@ -1543,70 +950,17 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             </div>
 
             {/* Popovers for non-AI tools */}
-            {openSettings && openSettings !== 'enhance' && (
+            {openSettings && settingsPanelPosition && (
                 <div
                     ref={settingsPanelRef}
-                    className="bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-80 z-20 overflow-y-auto"
-                    style={getSettingsPanelStyle()}
-                >
-                    {renderSettings(openSettings)}
-                </div>
-            )}
-
-            {/* Modal for AI tool */}
-            {openSettings === 'enhance' && (
-                <>
-                    <div
-                        className="fixed inset-0 bg-black/50 z-40"
-                        onClick={() => {
-                            setOpenSettings(null);
-                            setSettingsPanelAnchor(null);
-                        }}
-                    />
-                    <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
-                        <div
-                            ref={settingsPanelRef}
-                            className="bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-[500px] max-h-[90vh] flex flex-col pointer-events-auto"
-                        >
-                            <div className="flex-shrink-0 p-4 border-b border-[--bg-tertiary] flex justify-between items-center">
-                                <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Mejora con IA</h4>
-                                <button onClick={() => { setOpenSettings(null); setSettingsPanelAnchor(null); }} className="p-1 rounded-full hover:bg-[--bg-hover]">
-                                    <XIcon className="w-5 h-5" />
-                                </button>
-                            </div>
-                            <div className="flex-grow overflow-y-auto p-4">
-                                {renderSettings(openSettings)}
-                            </div>
-                        </div>
-                    </div>
-                </>
-            )}
-
-            {promptLoader.openFor && promptLoader.anchorEl && (
-                <div
-                    ref={promptLoaderRef}
-                    className="absolute z-30 bg-[--bg-secondary] border border-[--bg-tertiary] rounded-lg shadow-lg w-64 max-h-60 overflow-y-auto"
+                    className="fixed z-50 bg-[--bg-secondary] border border-[--bg-tertiary] rounded-lg shadow-xl w-64 overflow-hidden"
                     style={{
-                        left: promptLoader.anchorEl.getBoundingClientRect().right + 8,
-                        top: promptLoader.anchorEl.getBoundingClientRect().top
+                        top: settingsPanelPosition.top,
+                        left: settingsPanelPosition.left,
+                        maxHeight: '80vh',
                     }}
                 >
-                    <ul className="p-1">
-                        {savedPrompts[promptLoader.openFor].length > 0 ? (
-                            savedPrompts[promptLoader.openFor].map((prompt, i) => (
-                                <li key={i} className="group flex items-center justify-between text-sm text-[--text-primary] rounded-md hover:bg-[--bg-hover]">
-                                    <button onClick={() => loadPrompt(promptLoader.openFor!, prompt)} className="flex-grow text-left p-2 truncate">
-                                        {prompt}
-                                    </button>
-                                    <button onClick={() => deletePrompt(promptLoader.openFor!, prompt)} className="p-2 text-[--text-secondary] opacity-0 group-hover:opacity-100 hover:text-red-500">
-                                        <TrashIcon className="w-4 h-4" />
-                                    </button>
-                                </li>
-                            ))
-                        ) : (
-                            <li className="p-2 text-center text-xs text-[--text-secondary]">No hay prompts guardados.</li>
-                        )}
-                    </ul>
+                    {renderSettings(openSettings)}
                 </div>
             )}
         </div>

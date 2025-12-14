@@ -1,9 +1,9 @@
 import React, { useState, useCallback, useEffect, useRef, useReducer, useMemo, useLayoutEffect } from 'react';
 import { GoogleGenAI, Modality } from "@google/genai";
-import { User, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
+import { User, onAuthStateChanged } from 'firebase/auth';
 import { auth, db, storage } from './firebaseConfig';
-import { collection, query, orderBy, onSnapshot, addDoc, doc, deleteDoc, serverTimestamp, getDocs, where } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
+import { collection, query, orderBy, onSnapshot, addDoc, doc, deleteDoc, serverTimestamp, getDocs, where } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 import { Toolbar } from './components/Toolbar';
 import { Outliner } from './components/Outliner';
@@ -22,15 +22,17 @@ import { useCanvasView, MAX_ZOOM } from './hooks/useCanvasView';
 import { useCanvasModes } from './hooks/useCanvasModes';
 import { useWorkspaceTemplates } from './hooks/useWorkspaceTemplates';
 import { useQuickAccess } from './hooks/useQuickAccess';
+import { useAIPanel } from './hooks/useAIPanel';
 import { QuickAccessBar } from './components/QuickAccessBar';
 import { ToolSelectorModal } from './components/modals/ToolSelectorModal';
 import { WorkspaceTemplatesPopover } from './components/WorkspaceTemplatesPopover';
+import { AIPanel } from './components/AIPanel';
 import { ConfirmDeleteModal } from './components/modals/ConfirmDeleteModal';
 import { CanvasSizeModal } from './components/modals/CanvasSizeModal';
 import { ConfirmClearModal } from './components/modals/ConfirmClearModal';
 import { ConfirmDeleteLibraryItemModal } from './components/modals/ConfirmDeleteLibraryItemModal';
 import { ConfirmResetModal } from './components/modals/ConfirmResetModal';
-import { SunIcon, MoonIcon, ChevronLeftIcon, ChevronRightIcon, BookmarkIcon, GalleryIcon, XIcon, UserIcon, TrashIcon, FolderOpenIcon, SaveIcon, ExpandIcon, MinimizeIcon, DownloadIcon } from './components/icons';
+import { SunIcon, MoonIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, ChevronDownIcon, SparklesIcon, BookmarkIcon, GalleryIcon, XIcon, UserIcon, TrashIcon, FolderOpenIcon, SaveIcon, ExpandIcon, MinimizeIcon, DownloadIcon } from './components/icons';
 import type { SketchObject, ItemType, Tool, CropRect, TransformState, WorkspaceTemplate, QuickAccessTool, ProjectFile, Project, StrokeMode, StrokeState, CanvasItem, StrokeModifier, ScaleUnit, Selection, ClipboardData, AppState, Point } from './types';
 import { getContentBoundingBox, createNewCanvas, createThumbnail, cloneCanvas } from './utils/canvasUtils';
 
@@ -54,7 +56,9 @@ function useAppUI() {
     const [isCanvasSizeModalOpen, setCanvasSizeModalOpen] = useState(false);
     const [isProjectGalleryOpen, setProjectGalleryOpen] = useState(false);
     const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
-    const [isRightSidebarVisible, setIsRightSidebarVisible] = useState(window.innerWidth > 1024);
+    const [isRightSidebarVisible, setIsRightSidebarVisible] = useState(false);
+    const [isLeftSidebarVisible, setIsLeftSidebarVisible] = useState(false);
+    const [isHeaderVisible, setIsHeaderVisible] = useState(false);
     const [rightSidebarTopHeight, setRightSidebarTopHeight] = useState<number | undefined>(undefined);
     const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -192,6 +196,8 @@ function useAppUI() {
         isProjectGalleryOpen, setProjectGalleryOpen,
         isResetConfirmOpen, setIsResetConfirmOpen,
         isRightSidebarVisible, setIsRightSidebarVisible,
+        isLeftSidebarVisible, setIsLeftSidebarVisible,
+        isHeaderVisible, setIsHeaderVisible,
         rightSidebarTopHeight,
         rightSidebarRef,
         handlePointerDownResize,
@@ -459,9 +465,10 @@ function useProjectManager(
  */
 function useAI(
     dispatch: React.Dispatch<any>,
-    onImportToLibrary: (file: File, parentId: string | null) => void,
+    onImportToLibrary: (file: File, parentId: string | null, options?: { scaleFactor?: number }) => void,
     handleSelectItem: (id: string | null) => void,
-    setTool: (tool: Tool) => void
+    setTool: (tool: Tool) => void,
+    currentScaleFactor: number
 ) {
     const [isEnhancing, setIsEnhancing] = useState(false);
     const [enhancementPreview, setEnhancementPreview] = useState<{
@@ -562,6 +569,7 @@ function useAI(
         let finalPrompt = '';
         const parts: any[] = [];
         const debugImages: { name: string; url: string }[] = [];
+        let referenceWidth = canvasSize.width;
 
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -575,17 +583,17 @@ function useAI(
                     if (!compositeCanvas) throw new Error("Could not create composite canvas.");
 
                     let imageCanvas = compositeCanvas;
-                    if (enhancementInputMode === 'bbox') {
-                        const visibleObjects = getDrawableObjects().filter((obj): obj is SketchObject => obj.type === 'object' && !obj.isBackground && obj.isVisible && !!obj.canvas);
-                        const combinedBbox = getCombinedBbox(visibleObjects);
-                        if (combinedBbox && combinedBbox.width > 0 && combinedBbox.height > 0) {
-                            const cropCanvas = document.createElement('canvas');
-                            cropCanvas.width = combinedBbox.width;
-                            cropCanvas.height = combinedBbox.height;
-                            cropCanvas.getContext('2d')?.drawImage(compositeCanvas, combinedBbox.x, combinedBbox.y, combinedBbox.width, combinedBbox.height, 0, 0, combinedBbox.width, combinedBbox.height);
-                            imageCanvas = cropCanvas;
-                        }
+                    const visibleObjects = getDrawableObjects().filter((obj): obj is SketchObject => obj.type === 'object' && !obj.isBackground && obj.isVisible && !!obj.canvas);
+                    const combinedBbox = getCombinedBbox(visibleObjects);
+                    if (combinedBbox && combinedBbox.width > 0 && combinedBbox.height > 0) {
+                        referenceWidth = combinedBbox.width;
+                        const cropCanvas = document.createElement('canvas');
+                        cropCanvas.width = combinedBbox.width;
+                        cropCanvas.height = combinedBbox.height;
+                        cropCanvas.getContext('2d')?.drawImage(compositeCanvas, combinedBbox.x, combinedBbox.y, combinedBbox.width, combinedBbox.height, 0, 0, combinedBbox.width, combinedBbox.height);
+                        imageCanvas = cropCanvas;
                     }
+
 
                     let finalImageCanvas = document.createElement('canvas');
                     finalImageCanvas.width = imageCanvas.width;
@@ -654,7 +662,7 @@ function useAI(
             setDebugInfo({ prompt: finalPrompt, images: debugImages });
 
             const textPart = { text: finalPrompt };
-            const model = 'gemini-2.5-flash-image';
+            const model = 'gemini-3-pro-image-preview';
             const config = { responseModalities: [Modality.IMAGE, Modality.TEXT] };
             const contents = (parts.length > 0) ? { parts: [...parts, textPart] } : { parts: [textPart] };
 
@@ -669,16 +677,27 @@ function useAI(
                 const img = new Image();
                 img.onload = () => {
                     const newName = `IA: ${finalPrompt.substring(0, 20)}...`;
+                    // Calculate new scale factor to match physical dimensions
+                    // Physical width = referenceWidth / currentScaleFactor
+                    // New Scale Factor (px/unit) = New Width / Physical Width = (New Width * currentScaleFactor) / referenceWidth
+                    const newScaleFactor = (img.width * currentScaleFactor) / (referenceWidth || 1);
 
                     if (payload.activeAiTab === 'object' || (payload.activeAiTab === 'free' && payload.addEnhancedImageToLibrary)) {
                         const dataUrl = `data:image/png;base64,${newImageBase64}`;
                         fetch(dataUrl).then(res => res.blob()).then(blob => {
-                            if (blob) onImportToLibrary(new File([blob], `${newName}.png`, { type: 'image/png' }), null);
+                            if (blob) onImportToLibrary(new File([blob], `${newName}.png`, { type: 'image/png' }), null, { scaleFactor: newScaleFactor });
                         });
                     } else if (payload.activeAiTab === 'composition') {
                         dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: img } });
                     } else {
                         const newItemId = `object-${Date.now()}`;
+                        // When adding directly to canvas, we might want to set initialDimensions or scaleFactor?
+                        // ADD_ITEM payload can accept scaleFactor if we update the reducer? Or we can pre-scale?
+                        // Actually, for immediate insertion, we usually use 'ADD_ITEM' with defaults.
+                        // Ideally we pass scaleFactor so it's rendered correctly. But ADD_ITEM for 'object' takes 'imageElement'.
+                        // We might need to handle this in ADD_ITEM or pass 'initialDimensions'.
+                        // But let's first fix Library import which is what the user complained about (saving to library).
+
                         dispatch({ type: 'ADD_ITEM', payload: { type: 'object', activeItemId: null, newItemId, imageElement: img, canvasSize, name: newName } });
                         handleSelectItem(newItemId);
                         setTool('select');
@@ -754,7 +773,8 @@ export function App() {
         }
     }, [selection]);
 
-    const ai = useAI(dispatch, library.onImportToLibrary, handleSelectItem, setTool);
+    const ai = useAI(dispatch, library.onImportToLibrary, handleSelectItem, setTool, scaleFactor);
+    const aiPanelState = useAIPanel();
 
     const loadAllToolSettings = useCallback((settings: any) => {
         toolSettings.setBrushSettings(settings.brushSettings);
@@ -1209,63 +1229,92 @@ export function App() {
             />
 
             {/* Main Header */}
-            <header className="flex-shrink-0 flex items-center justify-between p-2 bg-[--bg-primary] border-b border-[--bg-tertiary] z-20">
-                <div className="flex items-center gap-4">
-                    <h1 className="text-xl font-bold">Sketcher</h1>
-                    <button onClick={() => ui.setProjectGalleryOpen(true)} className="flex items-center gap-2 p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] border border-[--bg-tertiary] transition-colors text-sm">
-                        <GalleryIcon className="w-5 h-5" />
-                        <span>Galería</span>
-                    </button>
-                    <button ref={workspaceButtonRef} onClick={() => setWorkspacePopoverOpen(p => !p)} className="flex items-center gap-2 p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] border border-[--bg-tertiary] transition-colors text-sm relative">
-                        <BookmarkIcon className="w-5 h-5" />
-                        <span>Plantillas</span>
-                        <WorkspaceTemplatesPopover isOpen={isWorkspacePopoverOpen} onClose={() => setWorkspacePopoverOpen(false)} templates={templates.templates} onSave={handleSaveWorkspace} onLoad={handleLoadWorkspace} onDelete={templates.deleteTemplate} onResetPreferences={() => ui.setIsResetConfirmOpen(true)} />
-                    </button>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 mr-2 px-2 py-1 bg-[--bg-secondary] rounded-md border border-[--bg-tertiary]">
-                        {ui.deferredPrompt && (
-                            <>
-                                <button onClick={ui.handleInstallClick} className="flex items-center gap-1 p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Instalar Aplicación">
-                                    <DownloadIcon className="w-4 h-4" />
-                                    <span className="text-xs font-bold hidden sm:inline">Instalar</span>
-                                </button>
-                                <div className="w-px h-4 bg-[--bg-tertiary] mx-1"></div>
-                            </>
-                        )}
-                        <button onClick={() => ui.setUiScale(ui.uiScale - 0.1)} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Reducir Interfaz">
-                            <span className="text-xs font-bold">A-</span>
+            {ui.isHeaderVisible && (
+                <header className="flex-shrink-0 flex items-center justify-between p-2 bg-[--bg-primary] border-b border-[--bg-tertiary] z-20">
+                    <div className="flex items-center gap-4">
+                        <h1 className="text-xl font-bold">Sketcher</h1>
+                        <button onClick={() => ui.setProjectGalleryOpen(true)} className="flex items-center gap-2 p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] border border-[--bg-tertiary] transition-colors text-sm">
+                            <GalleryIcon className="w-5 h-5" />
+                            <span>Galería</span>
                         </button>
-                        <span className="text-xs font-mono w-8 text-center">{Math.round(ui.uiScale * 100)}%</span>
-                        <button onClick={() => ui.setUiScale(ui.uiScale + 0.1)} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Aumentar Interfaz">
-                            <span className="text-xs font-bold">A+</span>
-                        </button>
-                        <div className="w-px h-4 bg-[--bg-tertiary] mx-1"></div>
-                        <button onClick={ui.handleSaveUiScale} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Guardar configuración de tamaño">
-                            <SaveIcon className="w-4 h-4" />
+                        <button ref={workspaceButtonRef} onClick={() => setWorkspacePopoverOpen(p => !p)} className="flex items-center gap-2 p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] border border-[--bg-tertiary] transition-colors text-sm relative">
+                            <BookmarkIcon className="w-5 h-5" />
+                            <span>Plantillas</span>
+                            <WorkspaceTemplatesPopover isOpen={isWorkspacePopoverOpen} onClose={() => setWorkspacePopoverOpen(false)} templates={templates.templates} onSave={handleSaveWorkspace} onLoad={handleLoadWorkspace} onDelete={templates.deleteTemplate} onResetPreferences={() => ui.setIsResetConfirmOpen(true)} />
                         </button>
                     </div>
+                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 mr-2 px-2 py-1 bg-[--bg-secondary] rounded-md border border-[--bg-tertiary]">
+                            {ui.deferredPrompt && (
+                                <>
+                                    <button onClick={ui.handleInstallClick} className="flex items-center gap-1 p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Instalar Aplicación">
+                                        <DownloadIcon className="w-4 h-4" />
+                                        <span className="text-xs font-bold hidden sm:inline">Instalar</span>
+                                    </button>
+                                    <div className="w-px h-4 bg-[--bg-tertiary] mx-1"></div>
+                                </>
+                            )}
+                            <button onClick={() => ui.setUiScale(ui.uiScale - 0.1)} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Reducir Interfaz">
+                                <span className="text-xs font-bold">A-</span>
+                            </button>
+                            <span className="text-xs font-mono w-8 text-center">{Math.round(ui.uiScale * 100)}%</span>
+                            <button onClick={() => ui.setUiScale(ui.uiScale + 0.1)} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Aumentar Interfaz">
+                                <span className="text-xs font-bold">A+</span>
+                            </button>
+                            <div className="w-px h-4 bg-[--bg-tertiary] mx-1"></div>
+                            <button onClick={ui.handleSaveUiScale} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Guardar configuración de tamaño">
+                                <SaveIcon className="w-4 h-4" />
+                            </button>
+                        </div>
 
-                    <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] text-[--text-secondary]">
-                        {theme === 'dark' ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
-                    </button>
-                    <Auth user={user} />
-                </div>
-            </header>
+                        <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] text-[--text-secondary]">
+                            {theme === 'dark' ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
+                        </button>
+                        <Auth user={user} />
+                    </div>
+                </header>
+            )}
+
 
             {/* Main Content Area */}
             <div className="flex flex-grow min-h-0 relative">
-                <Toolbar
-                    tool={tool} setTool={setTool} {...toolSettings} brushPresets={toolSettings.brushPresets} onSavePreset={toolSettings.onSavePreset}
-                    onUpdatePreset={toolSettings.onUpdatePreset} onLoadPreset={toolSettings.onLoadPreset} onDeletePreset={toolSettings.onDeletePreset}
-                    activeGuide={guides.activeGuide} setActiveGuide={guides.onSetActiveGuide} isOrthogonalVisible={guides.isOrthogonalVisible}
-                    onToggleOrthogonal={guides.toggleOrthogonal} onExportClick={() => ui.setExportModalOpen(true)}
+                {ui.isLeftSidebarVisible && (
+                    <Toolbar
+                        tool={tool} setTool={setTool} {...toolSettings} brushPresets={toolSettings.brushPresets} onSavePreset={toolSettings.onSavePreset}
+                        onUpdatePreset={toolSettings.onUpdatePreset} onLoadPreset={toolSettings.onLoadPreset} onDeletePreset={toolSettings.onDeletePreset}
+                        activeGuide={guides.activeGuide} setActiveGuide={guides.onSetActiveGuide} isOrthogonalVisible={guides.isOrthogonalVisible}
+                        onToggleOrthogonal={guides.toggleOrthogonal} onExportClick={() => ui.setExportModalOpen(true)}
+                        objects={objects} libraryItems={library.libraryItems} backgroundDataUrl={ai.backgroundDataUrl} debugInfo={ai.debugInfo}
+                        strokeMode={strokeMode} setStrokeMode={setStrokeMode} strokeModifier={strokeModifier} setStrokeModifier={setStrokeModifier}
+                    />
+                )}
+                <button
+                    onClick={() => ui.setIsLeftSidebarVisible(!ui.isLeftSidebarVisible)}
+                    className="absolute top-1/2 -translate-y-1/2 bg-[--bg-secondary] p-2 rounded-full shadow-xl z-40 border border-[--bg-tertiary] hover:bg-[--bg-tertiary] transition-all"
+                    style={{ left: ui.isLeftSidebarVisible ? '4.25rem' : '0.25rem' }}
+                    title={ui.isLeftSidebarVisible ? "Ocultar Herramientas" : "Mostrar Herramientas"}
+                >
+                    {ui.isLeftSidebarVisible ? <ChevronLeftIcon className="w-5 h-5" /> : <ChevronRightIcon className="w-5 h-5" />}
+                </button>
+
+                <AIPanel
+                    isOpen={aiPanelState.isOpen}
+                    onClose={() => aiPanelState.setIsOpen(false)}
+                    aiPanelState={aiPanelState}
                     onEnhance={(payload) => ai.handleEnhance(payload, canvasSize, getDrawableObjects, backgroundObject)}
-                    isEnhancing={ai.isEnhancing} enhancementPreview={ai.enhancementPreview}
+                    isEnhancing={ai.isEnhancing}
+                    enhancementPreview={ai.enhancementPreview}
                     onGenerateEnhancementPreview={() => ai.generateEnhancementPreview(canvasSize, getDrawableObjects, backgroundObject)}
-                    objects={objects} libraryItems={library.libraryItems} backgroundDataUrl={ai.backgroundDataUrl} debugInfo={ai.debugInfo}
-                    strokeMode={strokeMode} setStrokeMode={setStrokeMode} strokeModifier={strokeModifier} setStrokeModifier={setStrokeModifier}
                 />
+
+                <button
+                    onClick={() => aiPanelState.setIsOpen(true)}
+                    className="absolute bottom-6 left-6 p-4 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-2xl hover:scale-110 transition-transform z-40 flex items-center justify-center border-2 border-white/20"
+                    title="Mejorar con IA"
+                    style={{ left: ui.isLeftSidebarVisible ? '6.5rem' : '1.5rem' }}
+                >
+                    <SparklesIcon className="w-8 h-8" />
+                </button>
                 <main ref={mainAreaRef} className="flex-grow relative" onDrop={(e) => { e.preventDefault(); try { const data = JSON.parse(e.dataTransfer.getData('application/json')); if (data.type === 'library-item') { onDropOnCanvas(data, activeItemId, setSelectedItemIds); } } catch (error) { /* Ignore */ } }} onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }} >
                     <CanvasContainer
                         items={drawableObjects} activeItemId={activeItemId} {...toolSettings} tool={tool} setTool={setTool}
@@ -1311,8 +1360,8 @@ export function App() {
                         onSelectColor={handleSelectColor} onSelectSize={handleSelectSize} onSelectTool={(qaTool) => { if (qaTool.type === 'tool') setTool(qaTool.tool); else if (qaTool.type === 'fx-preset') { setTool('fx-brush'); toolSettings.onLoadPreset(qaTool.id); } }}
                         onOpenToolSelector={(index) => { setIsToolSelectorOpen(true); setEditingToolSlotIndex(index); }}
                         activeTool={tool} activeColor={activeColor} activeSize={activeSize}
-                        onIncreaseUiScale={() => ui.setUiScale(ui.uiScale + 0.1)}
-                        onDecreaseUiScale={() => ui.setUiScale(ui.uiScale - 0.1)}
+                        onToggleHeader={() => ui.setIsHeaderVisible(!ui.isHeaderVisible)}
+                        isHeaderVisible={ui.isHeaderVisible}
                     />
                 </main>
                 {ui.isRightSidebarVisible && (

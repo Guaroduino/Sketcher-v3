@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import type { QuickAccessSettings, QuickAccessTool, Tool } from '../types';
 // FIX: Replaced MarkerIcon with SolidMarkerIcon and NaturalMarkerIcon
 // FIX: Added missing icons for new tool types.
-import { SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, NaturalMarkerIcon, AirbrushIcon, FXBrushIcon, TransformIcon, FreeTransformIcon, SparklesIcon, CropIcon, PlusIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon, TextIcon, AdvancedMarkerIcon, WatercolorIcon } from './icons';
+import { SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, NaturalMarkerIcon, AirbrushIcon, FXBrushIcon, TransformIcon, FreeTransformIcon, SparklesIcon, CropIcon, PlusIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon, TextIcon, AdvancedMarkerIcon, WatercolorIcon, ChevronUpIcon, ChevronDownIcon } from './icons';
 
 interface QuickAccessBarProps {
   settings: QuickAccessSettings;
@@ -15,6 +15,8 @@ interface QuickAccessBarProps {
   onSelectSize: (size: number) => void;
   onSelectTool: (tool: QuickAccessTool) => void;
   onOpenToolSelector: (index: number) => void;
+  onToggleHeader: () => void;
+  isHeaderVisible: boolean;
   activeTool?: Tool;
   activeColor?: string;
   activeSize?: number;
@@ -155,6 +157,8 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
   onSelectSize,
   onSelectTool,
   onOpenToolSelector,
+  onToggleHeader,
+  isHeaderVisible,
   activeTool,
   activeColor,
   activeSize,
@@ -230,6 +234,17 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
   return (
     <>
       <div className="absolute top-4 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:w-auto md:right-auto bg-[--bg-primary]/80 backdrop-blur-sm rounded-lg p-1 flex flex-wrap items-center justify-center gap-2 shadow-lg z-10">
+        {/* Header Toggle */}
+        <button
+          onClick={onToggleHeader}
+          className="p-1 rounded-md text-[--text-secondary] hover:bg-[--bg-tertiary] hover:text-[--text-primary] transition-colors"
+          title={isHeaderVisible ? "Ocultar Encabezado" : "Mostrar Encabezado"}
+        >
+          {isHeaderVisible ? <ChevronUpIcon className="w-5 h-5" /> : <ChevronDownIcon className="w-5 h-5" />}
+        </button>
+
+        <div className="h-6 w-px bg-[--bg-hover]" />
+
         {/* Color Palette */}
         <div className="flex items-center gap-2">
           {settings.colors.map((color, index) => {

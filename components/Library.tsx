@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import type { LibraryItem } from '../types';
 import { UploadIcon, CubeIcon, MagicWandIcon, TrashIcon, UserIcon, PlusIcon, FolderIcon, ChevronRightIcon, ArrowUpIcon, CheckIcon } from './icons';
-import { User } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
+import { User } from 'firebase/auth';
 
 interface LibraryProps {
   user: User | null;
@@ -30,8 +30,8 @@ export const Library: React.FC<LibraryProps> = ({ user, items, onImportImage, on
 
   const handleDragStart = (e: React.DragEvent, item: LibraryItem) => {
     if (item.type === 'folder') {
-        e.preventDefault();
-        return;
+      e.preventDefault();
+      return;
     }
     e.stopPropagation();
     e.dataTransfer.effectAllowed = 'copy';
@@ -45,33 +45,33 @@ export const Library: React.FC<LibraryProps> = ({ user, items, onImportImage, on
     setNewFolderName('');
     setIsCreatingFolder(false);
   };
-  
+
   const handleToggleSelection = (itemId: string) => {
     setSelectedItemIds(prev => {
-        const newSelection = new Set(prev);
-        if (newSelection.has(itemId)) {
-            newSelection.delete(itemId);
-        } else {
-            newSelection.add(itemId);
-        }
-        return newSelection;
+      const newSelection = new Set(prev);
+      if (newSelection.has(itemId)) {
+        newSelection.delete(itemId);
+      } else {
+        newSelection.add(itemId);
+      }
+      return newSelection;
     });
   };
 
   const handleFolderNavigation = (folderId: string | null) => {
-      setCurrentFolderId(folderId);
+    setCurrentFolderId(folderId);
   };
 
   const handleMove = () => {
-      if (selectedItemIds.size === 0) return;
-      onMoveItems(Array.from(selectedItemIds), currentFolderId);
-      setSelectedItemIds(new Set());
+    if (selectedItemIds.size === 0) return;
+    onMoveItems(Array.from(selectedItemIds), currentFolderId);
+    setSelectedItemIds(new Set());
   };
 
   const breadcrumbs = useMemo(() => {
     const path: LibraryItem[] = [];
     let currentId = currentFolderId;
-    while(currentId) {
+    while (currentId) {
       const folder = items.find(item => item.id === currentId);
       if (folder) {
         path.unshift(folder);
@@ -82,7 +82,7 @@ export const Library: React.FC<LibraryProps> = ({ user, items, onImportImage, on
     }
     return path;
   }, [currentFolderId, items]);
-  
+
   const displayedItems = useMemo(() => {
     const children = items.filter(item => item.parentId === currentFolderId);
     // Sort folders first, then alphabetically
@@ -92,7 +92,7 @@ export const Library: React.FC<LibraryProps> = ({ user, items, onImportImage, on
       return a.name.localeCompare(b.name);
     });
   }, [items, currentFolderId]);
-  
+
   const handleItemDoubleClick = (item: LibraryItem) => {
     if (item.type === 'folder') {
       handleFolderNavigation(item.id);
@@ -105,24 +105,24 @@ export const Library: React.FC<LibraryProps> = ({ user, items, onImportImage, on
     <div className="p-4 flex flex-col h-full bg-[--bg-primary]">
       <div className="flex-shrink-0 mb-3">
         <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-bold uppercase text-[--text-secondary]">Libreria</h3>
-            {selectedItemIds.size > 0 && (
-              <button onClick={handleMove} className="text-sm px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-500">
-                Mover {selectedItemIds.size} aquí
-              </button>
-            )}
+          <h3 className="text-sm font-bold uppercase text-[--text-secondary]">Libreria</h3>
+          {selectedItemIds.size > 0 && (
+            <button onClick={handleMove} className="text-sm px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-500">
+              Mover {selectedItemIds.size} aquí
+            </button>
+          )}
         </div>
-        
+
         {/* Breadcrumbs */}
         <div className="flex items-center text-sm text-[--text-secondary] flex-wrap">
           {currentFolderId !== null && (
-              <button
-                  onClick={() => handleFolderNavigation(breadcrumbs.length > 1 ? breadcrumbs[breadcrumbs.length - 2].id : null)}
-                  className="p-1 rounded-md hover:bg-[--bg-tertiary] mr-1"
-                  title="Subir un nivel"
-              >
-                  <ArrowUpIcon className="w-4 h-4" />
-              </button>
+            <button
+              onClick={() => handleFolderNavigation(breadcrumbs.length > 1 ? breadcrumbs[breadcrumbs.length - 2].id : null)}
+              className="p-1 rounded-md hover:bg-[--bg-tertiary] mr-1"
+              title="Subir un nivel"
+            >
+              <ArrowUpIcon className="w-4 h-4" />
+            </button>
           )}
           <button onClick={() => handleFolderNavigation(null)} className="hover:text-[--text-primary]">Raíz</button>
           {breadcrumbs.map(folder => (
@@ -133,7 +133,7 @@ export const Library: React.FC<LibraryProps> = ({ user, items, onImportImage, on
           ))}
         </div>
       </div>
-      
+
       <div className="flex-grow overflow-y-auto pr-2">
         {!user ? (
           <div className="h-full flex flex-col items-center justify-center text-center text-[--text-secondary] p-4">
@@ -184,10 +184,10 @@ export const Library: React.FC<LibraryProps> = ({ user, items, onImportImage, on
                   >
                     {isSelected && <CheckIcon className="w-4 h-4 text-white" />}
                   </button>
-                  
+
                   {/* Main content */}
                   {item.type === 'image' && item.dataUrl ? (
-                      <img src={item.dataUrl} alt={item.name} className="max-w-full max-h-full object-contain pointer-events-none" />
+                    <img src={item.dataUrl} alt={item.name} className="max-w-full max-h-full object-contain pointer-events-none" />
                   ) : item.type === 'folder' ? (
                     <FolderIcon className="w-10 h-10 text-red-400" />
                   ) : (
@@ -228,7 +228,7 @@ export const Library: React.FC<LibraryProps> = ({ user, items, onImportImage, on
           </div>
         )}
       </div>
-      
+
       <div className="flex-shrink-0 mt-4 flex items-center gap-2">
         <label htmlFor="library-image-upload" className="flex-grow flex items-center justify-center p-2 rounded-lg bg-[--bg-tertiary] hover:bg-[--bg-hover] cursor-pointer text-[--text-secondary] disabled:opacity-50 disabled:cursor-not-allowed">
           <UploadIcon className="w-5 h-5 mr-2" />

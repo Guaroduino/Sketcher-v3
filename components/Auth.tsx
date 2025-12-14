@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { auth } from '../firebaseConfig';
-import { GoogleAuthProvider, signInWithPopup, signOut, User } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
+import { GoogleAuthProvider, signInWithPopup, signOut, User } from 'firebase/auth';
 import { GoogleIcon, LogOutIcon } from './icons';
 
 interface AuthProps {
