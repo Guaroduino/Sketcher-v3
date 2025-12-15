@@ -14,6 +14,7 @@ import type {
     TransformState,
     GridGuide,
     Tool,
+    ScaleUnit,
 } from '../types';
 import { getLineIntersection } from '../utils/canvasUtils';
 
@@ -39,6 +40,8 @@ export function useCanvasRendering({
     transformState,
     transformSourceBbox,
     livePreviewLayerId,
+    scaleFactor,
+    scaleUnit,
 }: {
     mainCanvasRef: React.RefObject<HTMLCanvasElement>;
     guideCanvasRef: React.RefObject<HTMLCanvasElement>;
@@ -59,6 +62,8 @@ export function useCanvasRendering({
     transformState: TransformState | null;
     transformSourceBbox: CropRect | null;
     livePreviewLayerId: string | null;
+    scaleFactor: number;
+    scaleUnit: ScaleUnit;
 }) {
 
     const perspectiveVPs = useRef<PerspectiveVPs>({ vpGreen: null, vpRed: null, vpBlue: null });
@@ -67,7 +72,7 @@ export function useCanvasRendering({
         if (gridGuide.type === 'none' || gridGuide.spacing <= 0) {
             return;
         }
-        
+
         const worldView = {
             x: -viewTransform.pan.x / viewTransform.zoom,
             y: -viewTransform.pan.y / viewTransform.zoom,
@@ -86,7 +91,7 @@ export function useCanvasRendering({
             const endX = worldView.x + worldView.width;
             const startY = Math.floor(worldView.y / spacing) * spacing;
             const endY = worldView.y + worldView.height;
-            
+
             let i_x = Math.round(startX / spacing);
             for (let x = startX; x <= endX; x += spacing) {
                 ctx.strokeStyle = (i_x % majorLineFrequency === 0) ? majorLineColor : minorLineColor;
@@ -109,7 +114,7 @@ export function useCanvasRendering({
         } else if (type === 'isometric') {
             const canvasDiagonal = Math.hypot(worldView.width, worldView.height) * 1.2;
             const center = { x: worldView.x + worldView.width / 2, y: worldView.y + worldView.height / 2 };
-            
+
             const angles = [
                 90 * (Math.PI / 180), // Vertical
                 (90 - isoAngle) * (Math.PI / 180),
@@ -135,7 +140,7 @@ export function useCanvasRendering({
 
                     const start = { x: lineCenter.x - canvasDiagonal * cos, y: lineCenter.y - canvasDiagonal * sin };
                     const end = { x: lineCenter.x + canvasDiagonal * cos, y: lineCenter.y + canvasDiagonal * sin };
-                    
+
                     ctx.strokeStyle = (i % majorLineFrequency === 0) ? majorLineColor : minorLineColor;
                     ctx.beginPath();
                     ctx.moveTo(start.x, start.y);
@@ -154,10 +159,10 @@ export function useCanvasRendering({
         mainCtx.setTransform(1, 0, 0, 1, 0, 0);
         mainCtx.clearRect(0, 0, mainCtx.canvas.width, mainCtx.canvas.height);
         mainCtx.restore();
-        
+
         mainCtx.save();
         mainCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
-        
+
         const backgroundObject = items.find(item => item.type === 'object' && item.isBackground);
         const foregroundObjects = items.filter(item => item.type === 'object' && !item.isBackground);
 
@@ -173,7 +178,7 @@ export function useCanvasRendering({
         // 3. Draw foreground items
         foregroundObjects.forEach(item => {
             if (!item.isVisible) return;
-            
+
             const isBeingErased = item.id === livePreviewLayerId;
 
             if ((isTransforming && item.id === activeItemId) || isBeingErased) {
@@ -183,7 +188,7 @@ export function useCanvasRendering({
                 mainCtx.drawImage(item.canvas, item.offsetX || 0, item.offsetY || 0);
             }
         });
-        
+
         mainCtx.restore();
     }, [items, viewTransform, activeItemId, isTransforming, livePreviewLayerId, drawGridOnContext]);
 
@@ -201,14 +206,14 @@ export function useCanvasRendering({
         guideCtx.scale(viewTransform.zoom, viewTransform.zoom);
 
         const handleSize = 8 / viewTransform.zoom;
-        
+
         const worldView = {
             x: -viewTransform.pan.x / viewTransform.zoom,
             y: -viewTransform.pan.y / viewTransform.zoom,
             width: guideCtx.canvas.width / viewTransform.zoom,
             height: guideCtx.canvas.height / viewTransform.zoom
         };
-        
+
         // --- Guide Drawing Logic ---
 
         // Ruler
@@ -242,7 +247,7 @@ export function useCanvasRendering({
                 guideCtx.lineTo(guide.end.x, guide.end.y);
                 guideCtx.stroke();
                 guideCtx.setLineDash([]);
-                
+
                 guideCtx.fillStyle = 'rgba(139, 0, 255, 0.8)';
                 // Handles
                 const midPoint = { x: (guide.start.x + guide.end.x) / 2, y: (guide.start.y + guide.end.y) / 2 };
@@ -261,11 +266,11 @@ export function useCanvasRendering({
                 y: worldView.y + worldView.height / 2,
             };
             const length = Math.max(worldView.width, worldView.height) * 1.5;
-            
+
             guideCtx.save();
             guideCtx.translate(center.x, center.y);
             guideCtx.rotate(orthogonalGuide.angle * Math.PI / 180);
-            
+
             guideCtx.strokeStyle = 'rgba(255, 165, 0, 0.7)'; // Orange
             guideCtx.lineWidth = 1 / viewTransform.zoom;
             guideCtx.setLineDash([5 / viewTransform.zoom, 5 / viewTransform.zoom]);
@@ -346,7 +351,7 @@ export function useCanvasRendering({
                     guideCtx.fill();
                 });
             };
-            
+
             // --- 3. Draw each color set ---
             drawGuideSet('rgba(0, 255, 0, 0.5)', vpGreen, lines.green, extraGuideLines.green.map(g => g.handle));
             drawGuideSet('rgba(255, 0, 0, 0.5)', vpRed, lines.red, extraGuideLines.red.map(g => g.handle));
@@ -375,7 +380,7 @@ export function useCanvasRendering({
                     });
                 }
                 guideCtx.setLineDash([]);
-                
+
                 guideCtx.strokeStyle = blueColor;
                 guideCtx.lineWidth = 1 / viewTransform.zoom;
                 lines.blue.forEach(line => {
@@ -384,7 +389,7 @@ export function useCanvasRendering({
                     guideCtx.lineTo(line.end.x, line.end.y);
                     guideCtx.stroke();
                 });
-                
+
                 guideCtx.fillStyle = blueColor;
                 const allBlueHandles = [...lines.blue.flatMap(l => [l.start, l.end]), ...extraGuideLines.blue.map(g => g.handle)];
                 allBlueHandles.forEach(p => {
@@ -418,24 +423,117 @@ export function useCanvasRendering({
     const redrawUI = useCallback(() => {
         const uiCtx = uiCanvasRef.current?.getContext('2d');
         if (!uiCtx) return;
-    
+
         uiCtx.save();
         uiCtx.setTransform(1, 0, 0, 1, 0, 0);
         uiCtx.clearRect(0, 0, uiCtx.canvas.width, uiCtx.canvas.height);
         uiCtx.restore();
-    
+
         uiCtx.save();
         uiCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
-    
+
         const handleSize = 8 / viewTransform.zoom;
-    
+
+        // --- SCALE GUIDE ---
+        if (viewTransform.zoom > 0) {
+            uiCtx.save();
+            uiCtx.setTransform(1, 0, 0, 1, 0, 0); // Screen space
+
+            // Position below the canvas text. 
+            // Moved to y=82 to ensure it clears any UI overlays.
+            const barScreenX = 20;
+            const barScreenY = 82;
+
+            const unitMultipliers: Record<string, number> = { mm: 1, cm: 10, m: 1000 };
+
+            // User insists on showing physical units (mm, cm, m) as selected in settings.
+            // If scaleFactor is invalid (0/undefined), we default to 0.1 (1px = 1cm) to match standard grid defaults.
+            const validScaleFactor = (scaleFactor && scaleFactor > 0) ? scaleFactor : 0.1;
+
+            // Always respect the user's chosen unit for display
+            const validUnits = ['mm', 'cm', 'm'];
+
+            const targetUnit = validUnits.includes(scaleUnit) ? scaleUnit : 'mm';
+            const mmPerUnit = unitMultipliers[targetUnit]; // e.g. 10 for cm
+
+            // scaleFactor is (pixels / mm).
+            // Units per screen pixel:
+            // 1 screenPixel = (1 / (zoom * validScaleFactor * mmPerUnit)) Units.
+
+            const unitsPerScreenPixel = 1 / (viewTransform.zoom * validScaleFactor * mmPerUnit);
+
+            // Target visual length ~100px
+            const targetScreenLength = 100;
+            const targetUnitLength = targetScreenLength * unitsPerScreenPixel;
+
+            // Nice steps are now unit-agnostic (0.1 means 0.1 of whatever unit we are in)
+            const niceSteps = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 5000, 10000];
+            let bestStep = niceSteps[0];
+            for (const step of niceSteps) {
+                if (step > targetUnitLength) break;
+                bestStep = step;
+            }
+
+            // Calculate screen length
+            // screenLength = step / unitsPerScreenPixel
+            const finalScreenLength = bestStep / unitsPerScreenPixel;
+
+            // Format Label
+            // Avoid floating point nastiness
+            const decimals = bestStep < 1 ? (bestStep < 0.01 ? 4 : (bestStep < 0.1 ? 2 : 1)) : (bestStep < 10 ? 1 : 0);
+            const label = `${parseFloat(bestStep.toFixed(decimals))}${targetUnit}`;
+
+            uiCtx.lineJoin = 'round';
+            uiCtx.lineCap = 'round';
+
+            // Draw Bar Shadow (White Halo for contrast)
+            uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            uiCtx.lineWidth = 3;
+            uiCtx.beginPath();
+            uiCtx.moveTo(barScreenX, barScreenY);
+            uiCtx.lineTo(barScreenX, barScreenY - 5);
+            uiCtx.moveTo(barScreenX, barScreenY);
+            uiCtx.lineTo(barScreenX + finalScreenLength, barScreenY);
+            uiCtx.lineTo(barScreenX + finalScreenLength, barScreenY - 5);
+            uiCtx.stroke();
+
+            // Draw Bar Main (Black)
+            uiCtx.strokeStyle = 'rgba(0, 0, 0, 0.9)';
+            uiCtx.lineWidth = 1.5;
+            uiCtx.beginPath();
+            uiCtx.moveTo(barScreenX, barScreenY);
+            uiCtx.lineTo(barScreenX, barScreenY - 5);
+            uiCtx.moveTo(barScreenX, barScreenY);
+            uiCtx.lineTo(barScreenX + finalScreenLength, barScreenY);
+            uiCtx.lineTo(barScreenX + finalScreenLength, barScreenY - 5);
+            uiCtx.stroke();
+
+            // Draw Label
+            uiCtx.font = 'bold 11px sans-serif';
+            uiCtx.textAlign = 'center';
+            uiCtx.textBaseline = 'bottom';
+            const textX = barScreenX + finalScreenLength / 2;
+            const textY = barScreenY - 6;
+
+            // Halo/Shadow for text
+            uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            uiCtx.lineWidth = 3;
+            uiCtx.strokeText(label, textX, textY);
+
+            // Main Text
+            uiCtx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+            uiCtx.fillText(label, textX, textY);
+
+            uiCtx.restore();
+        }
+
         if (isCropping && cropRect) {
             uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
             uiCtx.lineWidth = 1 / viewTransform.zoom;
             uiCtx.setLineDash([4 / viewTransform.zoom, 2 / viewTransform.zoom]);
             uiCtx.strokeRect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
             uiCtx.setLineDash([]);
-    
+
             const { x, y, width, height } = cropRect;
             const handles = [
                 { x, y }, { x: x + width, y }, { x, y: y + height }, { x: x + width, y: y + height },
@@ -451,7 +549,7 @@ export function useCanvasRendering({
                 uiCtx.stroke();
             });
         }
-    
+
         if (isTransforming && transformState) {
             uiCtx.lineWidth = 1 / viewTransform.zoom;
             uiCtx.strokeStyle = '#00BFFF'; // DeepSkyBlue
@@ -469,7 +567,7 @@ export function useCanvasRendering({
                 uiCtx.fill();
                 uiCtx.stroke();
             };
-    
+
             if (transformState.type === 'affine') {
                 const { x, y, width, height, rotation } = transformState;
                 const center = { x: x + width / 2, y: y + height / 2 };
@@ -488,34 +586,34 @@ export function useCanvasRendering({
                     x: center.x + (p.x - center.x) * cos - (p.y - center.y) * sin,
                     y: center.y + (p.x - center.x) * sin + (p.y - center.y) * cos,
                 });
-                
+
                 const handles = {
-                    tl: rotate({ x, y }), 
+                    tl: rotate({ x, y }),
                     tr: rotate({ x: x + width, y }),
-                    bl: rotate({ x, y: y + height }), 
+                    bl: rotate({ x, y: y + height }),
                     br: rotate({ x: x + width, y: y + height }),
-                    t: rotate({ x: x + width / 2, y }), 
+                    t: rotate({ x: x + width / 2, y }),
                     b: rotate({ x: x + width / 2, y: y + height }),
-                    l: rotate({ x, y: y + height / 2 }), 
+                    l: rotate({ x, y: y + height / 2 }),
                     r: rotate({ x: x + width, y: y + height / 2 }),
                 };
                 Object.values(handles).forEach(p => drawHandle(p));
-                
-                const rotationHandleBase = rotate({ x: x + width/2, y: y - 25 / viewTransform.zoom });
+
+                const rotationHandleBase = rotate({ x: x + width / 2, y: y - 25 / viewTransform.zoom });
                 const rotationHandleMid = rotate({ x: x + width / 2, y });
-                
+
                 uiCtx.strokeStyle = '#00BFFF';
                 uiCtx.lineWidth = 1 / viewTransform.zoom;
                 uiCtx.beginPath();
                 uiCtx.moveTo(rotationHandleBase.x, rotationHandleBase.y);
                 uiCtx.lineTo(rotationHandleMid.x, rotationHandleMid.y);
                 uiCtx.stroke();
-                
+
                 drawHandle(rotationHandleBase, true);
 
             } else if (transformState.type === 'free') {
                 const { tl, tr, br, bl } = transformState.corners;
-                
+
                 uiCtx.strokeStyle = '#00BFFF';
                 uiCtx.lineWidth = 1 / viewTransform.zoom;
                 uiCtx.beginPath();
@@ -529,9 +627,9 @@ export function useCanvasRendering({
                 [tl, tr, br, bl].forEach(p => drawHandle(p));
             }
         }
-    
+
         uiCtx.restore();
-    }, [viewTransform, isCropping, cropRect, isTransforming, transformState]);
-    
+    }, [viewTransform, isCropping, cropRect, isTransforming, transformState, scaleFactor, scaleUnit]);
+
     return { redrawMainCanvas, redrawGuides, redrawUI, perspectiveVPs };
 }

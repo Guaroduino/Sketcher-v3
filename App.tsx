@@ -32,7 +32,7 @@ import { CanvasSizeModal } from './components/modals/CanvasSizeModal';
 import { ConfirmClearModal } from './components/modals/ConfirmClearModal';
 import { ConfirmDeleteLibraryItemModal } from './components/modals/ConfirmDeleteLibraryItemModal';
 import { ConfirmResetModal } from './components/modals/ConfirmResetModal';
-import { SunIcon, MoonIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, ChevronDownIcon, SparklesIcon, BookmarkIcon, GalleryIcon, XIcon, UserIcon, TrashIcon, FolderOpenIcon, SaveIcon, ExpandIcon, MinimizeIcon, DownloadIcon } from './components/icons';
+import { CropIcon, CheckIcon, XIcon, RulerIcon, PerspectiveIcon, ImageSquareIcon, OrthogonalIcon, MirrorIcon, GridIcon, IsometricIcon, LockIcon, LockOpenIcon, TransformIcon, FreeTransformIcon, SunIcon, MoonIcon, CopyIcon, CutIcon, PasteIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, GoogleIcon, LogOutIcon, ArrowUpIcon, ArrowDownIcon, SnapIcon, BookmarkIcon, SaveIcon, FolderOpenIcon, GalleryIcon, StrokeModeIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, ExpandIcon, MinimizeIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, HistoryIcon, MoreVerticalIcon, AddAboveIcon, AddBelowIcon, HandRaisedIcon, DownloadIcon, SparklesIcon } from './components/icons';
 import type { SketchObject, ItemType, Tool, CropRect, TransformState, WorkspaceTemplate, QuickAccessTool, ProjectFile, Project, StrokeMode, StrokeState, CanvasItem, StrokeModifier, ScaleUnit, Selection, ClipboardData, AppState, Point } from './types';
 import { getContentBoundingBox, createNewCanvas, createThumbnail, cloneCanvas } from './utils/canvasUtils';
 
@@ -528,17 +528,24 @@ function useAI(
     const generateEnhancementPreview = useCallback((
         canvasSize: { width: number, height: number },
         getDrawableObjects: () => CanvasItem[],
-        backgroundObject: SketchObject | undefined
+        backgroundObject: SketchObject | undefined,
+        includeBackground: boolean
     ) => {
         setEnhancementPreview(null);
         setTimeout(() => {
-            const compositeCanvas = getCompositeCanvas(false, canvasSize, getDrawableObjects, backgroundObject);
+            const compositeCanvas = getCompositeCanvas(includeBackground, canvasSize, getDrawableObjects, backgroundObject);
             if (!compositeCanvas) return;
 
             const visibleObjects = getDrawableObjects().filter((obj): obj is SketchObject => obj.type === 'object' && !obj.isBackground && obj.isVisible && !!obj.canvas);
             const combinedBbox = getCombinedBbox(visibleObjects);
             const fullDataUrl = compositeCanvas.toDataURL('image/png');
             let croppedDataUrl: string | null = null;
+
+            // For composition (includeBackground=true), we usually care about the full scene, 
+            // but we can still calculate crop if needed. However, usually composition prompt applies to whole scene.
+            // If includeBackground is true, bbox might be irrelevant or should be full canvas?
+            // Let's keep calculating bbox for "Solo Contenido" mode if user switches to it, 
+            // though for composition usually it implies full canvas.
 
             if (combinedBbox && combinedBbox.width > 0 && combinedBbox.height > 0) {
                 const cropCanvas = document.createElement('canvas');
@@ -558,11 +565,58 @@ function useAI(
         }, 10);
     }, [getCompositeCanvas, getCombinedBbox]);
 
+    const processChromaKey = (image: HTMLImageElement): HTMLCanvasElement => {
+        const canvas = document.createElement('canvas');
+        canvas.width = image.width;
+        canvas.height = image.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return canvas;
+
+        ctx.drawImage(image, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+
+        // Sample corners
+        const corners = [
+            { x: 0, y: 0 },
+            { x: canvas.width - 1, y: 0 },
+            { x: 0, y: canvas.height - 1 },
+            { x: canvas.width - 1, y: canvas.height - 1 }
+        ];
+
+        const cornerColors: { r: number, g: number, b: number }[] = [];
+        corners.forEach(p => {
+            const i = (p.y * canvas.width + p.x) * 4;
+            cornerColors.push({ r: data[i], g: data[i + 1], b: data[i + 2] });
+        });
+
+        const tolerance = 60;
+        const isMatch = (r: number, g: number, b: number, target: { r: number, g: number, b: number }) => {
+            return Math.abs(r - target.r) < tolerance &&
+                Math.abs(g - target.g) < tolerance &&
+                Math.abs(b - target.b) < tolerance;
+        };
+
+        for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            if (cornerColors.some(c => isMatch(r, g, b, c))) {
+                data[i + 3] = 0;
+            }
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+        return canvas;
+    };
+
     const handleEnhance = useCallback(async (
         payload: any,
         canvasSize: { width: number, height: number },
         getDrawableObjects: () => CanvasItem[],
-        backgroundObject: SketchObject | undefined
+        backgroundObject: SketchObject | undefined,
+        activeItemId: string | null,
+        allObjects: CanvasItem[]
     ) => {
         setDebugInfo(null);
         setIsEnhancing(true);
@@ -570,6 +624,15 @@ function useAI(
         const parts: any[] = [];
         const debugImages: { name: string; url: string }[] = [];
         let referenceWidth = canvasSize.width;
+
+        const visibleObjects = getDrawableObjects().filter((obj): obj is SketchObject => obj.type === 'object' && !obj.isBackground && obj.isVisible && !!obj.canvas);
+        let filteredObjects = visibleObjects;
+
+        if (payload.sourceScope === 'layer' && activeItemId) {
+            const activeItem = allObjects.find(i => i.id === activeItemId);
+            const parentId = activeItem?.type === 'group' ? activeItem.id : activeItem?.parentId;
+            filteredObjects = visibleObjects.filter(obj => obj.parentId === (parentId || null));
+        }
 
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -579,21 +642,38 @@ function useAI(
                     const { enhancementPrompt, enhancementStylePrompt, enhancementNegativePrompt, enhancementCreativity, enhancementInputMode, enhancementChromaKey, enhancementPreviewBgColor } = payload;
                     if (!enhancementPrompt) throw new Error("Description prompt is required.");
 
-                    const compositeCanvas = getCompositeCanvas(false, canvasSize, getDrawableObjects, backgroundObject);
-                    if (!compositeCanvas) throw new Error("Could not create composite canvas.");
+                    // Manual Composite Logic for filteredObjects
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = canvasSize.width;
+                    tempCanvas.height = canvasSize.height;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    if (!tempCtx) throw new Error("Canvas context error");
 
+                    [...filteredObjects].reverse().forEach(obj => {
+                        if (obj.canvas) {
+                            tempCtx.globalAlpha = obj.opacity;
+                            tempCtx.drawImage(obj.canvas, 0, 0);
+                        }
+                    });
+                    tempCtx.globalAlpha = 1.0;
+
+                    const compositeCanvas = tempCanvas;
                     let imageCanvas = compositeCanvas;
-                    const visibleObjects = getDrawableObjects().filter((obj): obj is SketchObject => obj.type === 'object' && !obj.isBackground && obj.isVisible && !!obj.canvas);
-                    const combinedBbox = getCombinedBbox(visibleObjects);
+
+                    // Bbox Logic
+                    const combinedBbox = getCombinedBbox(filteredObjects);
+
                     if (combinedBbox && combinedBbox.width > 0 && combinedBbox.height > 0) {
                         referenceWidth = combinedBbox.width;
                         const cropCanvas = document.createElement('canvas');
                         cropCanvas.width = combinedBbox.width;
                         cropCanvas.height = combinedBbox.height;
-                        cropCanvas.getContext('2d')?.drawImage(compositeCanvas, combinedBbox.x, combinedBbox.y, combinedBbox.width, combinedBbox.height, 0, 0, combinedBbox.width, combinedBbox.height);
-                        imageCanvas = cropCanvas;
+                        const cropCtx = cropCanvas.getContext('2d');
+                        if (cropCtx) {
+                            cropCtx.drawImage(compositeCanvas, combinedBbox.x, combinedBbox.y, combinedBbox.width, combinedBbox.height, 0, 0, combinedBbox.width, combinedBbox.height);
+                            imageCanvas = cropCanvas;
+                        }
                     }
-
 
                     let finalImageCanvas = document.createElement('canvas');
                     finalImageCanvas.width = imageCanvas.width;
@@ -606,6 +686,7 @@ function useAI(
                     } else {
                         finalImageCanvas = imageCanvas;
                     }
+
                     const dataUrl = finalImageCanvas.toDataURL('image/jpeg');
                     debugImages.push({ name: 'Imagen de Entrada', url: dataUrl });
                     parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(dataUrl) } });
@@ -645,12 +726,14 @@ function useAI(
                     break;
                 }
                 case 'free': {
-                    const slots = ['main', 'a', 'b', 'c'];
-                    const slotNames = ['Objeto 1', 'Añadido A', 'Añadido B', 'Añadido C'];
+                    const slots: ('main' | 'a' | 'b' | 'c')[] = ['main', 'a', 'b', 'c'];
+                    const slotNames = ['Objeto Principal', 'Elemento A', 'Elemento B', 'Elemento C'];
                     slots.forEach((slot, index) => {
                         const slotData = payload.freeFormSlots[slot];
                         if (slotData?.url) {
                             debugImages.push({ name: slotNames[index], url: slotData.url });
+                            // Add a text label identifying this image
+                            parts.push({ text: `[Imagen: ${slotNames[index]}]` });
                             parts.push({ inlineData: { mimeType: 'image/png', data: dataURLtoBase64(slotData.url) } });
                         }
                     });
@@ -675,32 +758,85 @@ function useAI(
 
             if (newImageBase64) {
                 const img = new Image();
-                img.onload = () => {
+                img.onload = async () => {
                     const newName = `IA: ${finalPrompt.substring(0, 20)}...`;
-                    // Calculate new scale factor to match physical dimensions
-                    // Physical width = referenceWidth / currentScaleFactor
-                    // New Scale Factor (px/unit) = New Width / Physical Width = (New Width * currentScaleFactor) / referenceWidth
                     const newScaleFactor = (img.width * currentScaleFactor) / (referenceWidth || 1);
 
-                    if (payload.activeAiTab === 'object' || (payload.activeAiTab === 'free' && payload.addEnhancedImageToLibrary)) {
-                        const dataUrl = `data:image/png;base64,${newImageBase64}`;
-                        fetch(dataUrl).then(res => res.blob()).then(blob => {
-                            if (blob) onImportToLibrary(new File([blob], `${newName}.png`, { type: 'image/png' }), null, { scaleFactor: newScaleFactor });
-                        });
-                    } else if (payload.activeAiTab === 'composition') {
-                        dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: img } });
-                    } else {
-                        const newItemId = `object-${Date.now()}`;
-                        // When adding directly to canvas, we might want to set initialDimensions or scaleFactor?
-                        // ADD_ITEM payload can accept scaleFactor if we update the reducer? Or we can pre-scale?
-                        // Actually, for immediate insertion, we usually use 'ADD_ITEM' with defaults.
-                        // Ideally we pass scaleFactor so it's rendered correctly. But ADD_ITEM for 'object' takes 'imageElement'.
-                        // We might need to handle this in ADD_ITEM or pass 'initialDimensions'.
-                        // But let's first fix Library import which is what the user complained about (saving to library).
+                    let finalImg = img;
+                    let finalScaleFactor = newScaleFactor;
+                    let processedDataUrl = `data:image/png;base64,${newImageBase64}`;
 
-                        dispatch({ type: 'ADD_ITEM', payload: { type: 'object', activeItemId: null, newItemId, imageElement: img, canvasSize, name: newName } });
+                    // Auto-Chroma Processing
+                    if (payload.enhancementChromaKey && payload.enhancementChromaKey !== 'none') {
+                        const processedCanvas = processChromaKey(img);
+                        processedDataUrl = processedCanvas.toDataURL('image/png');
+                        const processedImg = new Image();
+                        await new Promise((resolve) => {
+                            processedImg.onload = resolve;
+                            processedImg.src = processedDataUrl;
+                        });
+                        finalImg = processedImg;
+                    }
+
+                    if (payload.activeAiTab === 'composition') {
+                        if (payload.shouldUpdateBackground !== false) { // Default to true if undefined
+                            dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: finalImg } });
+                        }
+                    }
+
+                    // Common Handling for All Tabs (Library, Canvas Layer, Delete Content)
+
+                    // 1. Add to Library (Default or Checked)
+                    // Note: Composition images might be large, but user might still want them in library.
+                    if (payload.shouldAddToLibrary) {
+                        fetch(processedDataUrl).then(res => res.blob()).then(blob => {
+                            if (blob) onImportToLibrary(new File([blob], `${newName}.png`, { type: 'image/png' }), null, { scaleFactor: finalScaleFactor });
+                        });
+                    }
+
+                    // 2. Add to Canvas (If Checked)
+                    // For composition, this means adding the full scene as a new layer object.
+                    if (payload.shouldAddToCanvas) {
+                        const newItemId = `object-${Date.now()}`;
+                        dispatch({
+                            type: 'ADD_ITEM',
+                            payload: {
+                                type: 'object',
+                                activeItemId: null,
+                                newItemId,
+                                imageElement: finalImg,
+                                canvasSize,
+                                name: newName,
+                                initialDimensions: {
+                                    width: referenceWidth, // For composition, referenceWidth is usually canvas width
+                                    height: referenceWidth * (img.height / img.width)
+                                }
+                            }
+                        });
                         handleSelectItem(newItemId);
                         setTool('select');
+                    }
+
+                    // 3. Remove Content Logic
+                    // For composition, "Quitar Contenido Usado" might mean clearing the layers used for composition?
+                    // User request: "para borrar contenido usado".
+                    // Logic: If shouldRemoveContent is true, remove visibleObjects (which are the input).
+                    if (payload.shouldRemoveContent && visibleObjects.length > 0) {
+                        // Apply Source Scope Filter again to be safe? 
+                        // Actually visibleObjects in scope should determine what is "used content".
+                        // Wait, 'visibleObjects' was calculated at start of handleEnhance. 
+                        // But 'filteredObjects' is what we actually used if sourceScope was 'layer'.
+                        // We should probably delete 'filteredObjects' if sourceScope was active.
+                        // Let's use 'filteredObjects' which respects the scope.
+
+                        // Wait, current implementation uses 'visibleObjects' for deletion in the else block.
+                        // We should consistently use 'filteredObjects' for deletion if we want to delete ONLY what was used.
+                        // If sourceScope='all', visibleObjects === filteredObjects.
+                        // If sourceScope='layer', we only delete the layer used.
+
+                        filteredObjects.forEach(obj => {
+                            dispatch({ type: 'DELETE_ITEM', payload: { id: obj.id } });
+                        });
                     }
                 };
                 img.src = `data:image/png;base64,${newImageBase64}`;
@@ -733,7 +869,9 @@ function useAI(
 export function App() {
     const [historyState, dispatch] = useReducer(historyReducer, initialHistoryState);
     const { present: currentState, past, future } = historyState;
-    const { objects, canvasSize, scaleFactor, scaleUnit } = currentState;
+    // Fix: Fallback for legacy states (undefined/null/0)
+    const { objects, canvasSize, scaleUnit = 'mm' } = currentState;
+    const scaleFactor = (currentState.scaleFactor && currentState.scaleFactor > 0) ? currentState.scaleFactor : 0.1;
 
     const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
     const [tool, setTool] = useState<Tool>('brush');
@@ -748,7 +886,10 @@ export function App() {
     const [strokeMode, setStrokeMode] = useState<StrokeMode>('freehand');
     const [strokeState, setStrokeState] = useState<StrokeState | null>(null);
     const [strokeModifier, setStrokeModifier] = useState<StrokeModifier>({ style: 'solid', scale: 1 });
+    const [isPalmRejectionEnabled, setIsPalmRejectionEnabled] = useState(false); // Default: Disabled (Touch can draw)
+    const [debugPointers, setDebugPointers] = useState<Map<number, { x: number, y: number }>>(new Map());
 
+    // -- 3. CUSTOM HOOKS --
     const [selection, setSelection] = useState<Selection | null>(null);
     const [clipboard, setClipboard] = useState<ClipboardData | null>(null);
 
@@ -1204,6 +1345,9 @@ export function App() {
 
     return (
         <div className="w-screen h-screen bg-[--bg-primary] text-[--text-primary] flex flex-col font-sans overflow-hidden">
+            <div className="absolute bottom-4 right-4 z-50 pointer-events-none opacity-50 text-[10px] text-[--text-secondary]">
+                v0.5.2-debug
+            </div>
             {/* Modals & Overlays */}
             {ui.isExportModalOpen && <ExportModal isOpen={ui.isExportModalOpen} onClose={() => ui.setExportModalOpen(false)} drawableObjects={drawableObjects.filter((o): o is SketchObject => o.type === 'object')} canvasSize={canvasSize} />}
             {ui.isSingleExportModalOpen && <SingleObjectExportModal isOpen={ui.isSingleExportModalOpen} onClose={() => ui.setSingleExportModalOpen(false)} item={activeItem as SketchObject} canvasSize={canvasSize} onSaveToLibrary={handleSaveItemToLibrary} />}
@@ -1301,10 +1445,10 @@ export function App() {
                     isOpen={aiPanelState.isOpen}
                     onClose={() => aiPanelState.setIsOpen(false)}
                     aiPanelState={aiPanelState}
-                    onEnhance={(payload) => ai.handleEnhance(payload, canvasSize, getDrawableObjects, backgroundObject)}
+                    onEnhance={(payload) => ai.handleEnhance(payload, canvasSize, getDrawableObjects, backgroundObject, activeItemId, objects)}
                     isEnhancing={ai.isEnhancing}
                     enhancementPreview={ai.enhancementPreview}
-                    onGenerateEnhancementPreview={() => ai.generateEnhancementPreview(canvasSize, getDrawableObjects, backgroundObject)}
+                    onGenerateEnhancementPreview={(includeBackground) => ai.generateEnhancementPreview(canvasSize, getDrawableObjects, backgroundObject, includeBackground)}
                 />
 
                 <button
@@ -1328,9 +1472,21 @@ export function App() {
                         isAngleSnapEnabled={isAngleSnapEnabled} angleSnapValue={angleSnapValue} onAddItem={addItem}
                         textEditState={textEditState} setTextEditState={setTextEditState} onCommitText={handleCommitText}
                         strokeSmoothing={strokeSmoothing}
+                        setDebugPointers={setDebugPointers}
+                        isPalmRejectionEnabled={isPalmRejectionEnabled}
+                        scaleFactor={scaleFactor}
+                        scaleUnit={scaleUnit}
                     />
                     <div className="absolute top-36 left-4 md:top-2 md:left-2 flex items-center gap-2 z-10">
                         {dimensionDisplay && <button ref={scaleButtonRef} onClick={() => setIsScalePopoverOpen(p => !p)} className="bg-[--bg-primary]/80 backdrop-blur-sm text-[--text-secondary] text-xs rounded-md px-2 py-1 pointer-events-auto hover:bg-[--bg-secondary] transition-colors" title="Ajustar escala del lienzo">{dimensionDisplay}</button>}
+                        <button
+                            onClick={() => setIsPalmRejectionEnabled(prev => !prev)}
+                            className={`bg-[--bg-primary]/80 backdrop-blur-sm text-xs rounded-md px-2 py-1 pointer-events-auto hover:bg-[--bg-secondary] transition-colors flex items-center gap-1 ${isPalmRejectionEnabled ? 'text-[--accent-primary] font-bold' : 'text-[--text-secondary]'}`}
+                            title={isPalmRejectionEnabled ? "Rechazo de Palma: ACTIVADO (Solo Lápiz)" : "Rechazo de Palma: DESACTIVADO (Lápiz y Dedo)"}
+                        >
+                            <HandRaisedIcon className="w-4 h-4" />
+                            <span className="hidden md:inline">{isPalmRejectionEnabled ? "Solo Lápiz" : "Táctil + Lápiz"}</span>
+                        </button>
                     </div>
                     <button onClick={ui.handleToggleFullscreen} className="absolute top-2 right-2 p-2 rounded-md bg-[--bg-primary]/80 backdrop-blur-sm hover:bg-[--bg-secondary] text-[--text-primary] transition-colors z-10" title={ui.isFullscreen ? "Salir de Pantalla Completa" : "Entrar en Pantalla Completa"}>
                         {ui.isFullscreen ? <MinimizeIcon className="w-5 h-5" /> : <ExpandIcon className="w-5 h-5" />}
@@ -1356,7 +1512,8 @@ export function App() {
                     />
                     <QuickAccessBar
                         settings={quickAccess.quickAccessSettings} onUpdateColor={quickAccess.updateColor} onAddColor={quickAccess.addColor}
-                        onRemoveColor={quickAccess.removeColor} onUpdateSize={quickAccess.updateSize} onUpdateTool={() => { }}
+                        onRemoveColor={quickAccess.removeColor} onUpdateSize={quickAccess.updateSize} onUpdateTool={quickAccess.updateTool}
+                        onAddToolSlot={quickAccess.addToolSlot}
                         onSelectColor={handleSelectColor} onSelectSize={handleSelectSize} onSelectTool={(qaTool) => { if (qaTool.type === 'tool') setTool(qaTool.tool); else if (qaTool.type === 'fx-preset') { setTool('fx-brush'); toolSettings.onLoadPreset(qaTool.id); } }}
                         onOpenToolSelector={(index) => { setIsToolSelectorOpen(true); setEditingToolSlotIndex(index); }}
                         activeTool={tool} activeColor={activeColor} activeSize={activeSize}

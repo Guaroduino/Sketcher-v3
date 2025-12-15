@@ -1,14 +1,14 @@
 import React, { useRef, useEffect, useState, useLayoutEffect, useReducer } from 'react';
 // FIX: Corrected relative import paths for modules outside the components directory.
-import type { 
+import type {
     CanvasItem,
-    SketchObject, 
-    Tool, 
-    Guide, 
-    Point, 
-    RulerGuide, 
-    PerspectiveGuide, 
-    MirrorGuide, 
+    SketchObject,
+    Tool,
+    Guide,
+    Point,
+    RulerGuide,
+    PerspectiveGuide,
+    MirrorGuide,
     OrthogonalGuide,
     CropRect,
     TransformState,
@@ -28,7 +28,8 @@ import type {
     MagicWandSettings,
     TextSettings,
     AdvancedMarkerSettings,
-    WatercolorSettings
+    WatercolorSettings,
+    ScaleUnit,
 } from '../types';
 // FIX: Corrected relative import paths for hooks.
 import { useBrushManager } from '../hooks/useBrushManager';
@@ -40,70 +41,73 @@ import { getCssMatrix3d, clearCanvas } from '../utils/canvasUtils';
 import { SelectionToolbar } from './SelectionToolbar';
 
 interface CanvasContainerProps {
-  items: CanvasItem[];
-  activeItemId: string | null;
-  brushSettings: BrushSettings;
-  eraserSettings: EraserSettings;
-  // FIX: Changed solidMarkerSettings to simpleMarkerSettings to match type definitions.
-  simpleMarkerSettings: SimpleMarkerSettings;
-  naturalMarkerSettings: NaturalMarkerSettings;
-  airbrushSettings: AirbrushSettings;
-  fxBrushSettings: FXBrushSettings;
-  // FIX: Added advancedMarkerSettings to props to support the new tool.
-  advancedMarkerSettings: AdvancedMarkerSettings;
-  // FIX: Add watercolor settings to props
-  watercolorSettings: WatercolorSettings;
-  magicWandSettings: MagicWandSettings;
-  textSettings: TextSettings;
-  tool: Tool;
-  setTool: (tool: Tool) => void;
-  onDrawCommit: (activeItemId: string, beforeCanvas: HTMLCanvasElement) => void;
-  onUpdateItem: (id: string, updates: Partial<CanvasItem>) => void;
-  viewTransform: ViewTransform;
-  setViewTransform: React.Dispatch<React.SetStateAction<ViewTransform>>;
-  activeGuide: Guide;
-  isSnapToGridEnabled: boolean;
-  isOrthogonalVisible: boolean;
-  rulerGuides: RulerGuide[];
-  setRulerGuides: React.Dispatch<React.SetStateAction<RulerGuide[]>>;
-  mirrorGuides: MirrorGuide[];
-  setMirrorGuides: React.Dispatch<React.SetStateAction<MirrorGuide[]>>;
-  perspectiveGuide: PerspectiveGuide | null;
-  setPerspectiveGuide: React.Dispatch<React.SetStateAction<PerspectiveGuide | null>>;
-  orthogonalGuide: OrthogonalGuide;
-  gridGuide: GridGuide;
-  onSelectItem: (id: string | null) => void;
-  isCropping: boolean;
-  cropRect: CropRect | null;
-  setCropRect: React.Dispatch<React.SetStateAction<CropRect | null>>;
-  isTransforming: boolean;
-  transformState: TransformState | null;
-  setTransformState: React.Dispatch<React.SetStateAction<TransformState | null>>;
-  transformSourceBbox: CropRect | null;
-  isAspectRatioLocked: boolean;
-  isAngleSnapEnabled: boolean;
-  angleSnapValue: 1 | 5 | 10 | 15;
-  areGuidesLocked: boolean;
-  isPerspectiveStrokeLockEnabled: boolean;
-  setIsPerspectiveStrokeLockEnabled: React.Dispatch<React.SetStateAction<boolean>>;
-  strokeMode: StrokeMode;
-  strokeState: StrokeState | null;
-  setStrokeState: React.Dispatch<React.SetStateAction<StrokeState | null>>;
-  selection: Selection | null;
-  setSelection: React.Dispatch<React.SetStateAction<Selection | null>>;
-  onCutSelection: () => void;
-  onCopySelection: () => void;
-  onDeleteSelection: () => void;
-  onDeselect: () => void;
-  getMinZoom: () => number;
-  MAX_ZOOM: number;
-  onAddItem: (type: 'group' | 'object') => string;
-  textEditState: { position: Point; value: string; activeItemId: string; } | null;
-  setTextEditState: React.Dispatch<React.SetStateAction<{ position: Point; value: string; activeItemId: string; } | null>>;
-  onCommitText: (textState: { position: Point; value: string; activeItemId: string; }) => void;
-// FIX: Add missing strokeSmoothing and strokeModifier props to fix type errors.
-  strokeSmoothing: number;
-  strokeModifier: StrokeModifier;
+    items: CanvasItem[];
+    activeItemId: string | null;
+    brushSettings: BrushSettings;
+    eraserSettings: EraserSettings;
+    // FIX: Changed solidMarkerSettings to simpleMarkerSettings to match type definitions.
+    simpleMarkerSettings: SimpleMarkerSettings;
+    naturalMarkerSettings: NaturalMarkerSettings;
+    airbrushSettings: AirbrushSettings;
+    fxBrushSettings: FXBrushSettings;
+    // FIX: Added advancedMarkerSettings to props to support the new tool.
+    advancedMarkerSettings: AdvancedMarkerSettings;
+    // FIX: Add watercolor settings to props
+    watercolorSettings: WatercolorSettings;
+    magicWandSettings: MagicWandSettings;
+    textSettings: TextSettings;
+    tool: Tool;
+    setTool: (tool: Tool) => void;
+    onDrawCommit: (activeItemId: string, beforeCanvas: HTMLCanvasElement) => void;
+    onUpdateItem: (id: string, updates: Partial<CanvasItem>) => void;
+    viewTransform: ViewTransform;
+    setViewTransform: React.Dispatch<React.SetStateAction<ViewTransform>>;
+    activeGuide: Guide;
+    isSnapToGridEnabled: boolean;
+    isOrthogonalVisible: boolean;
+    rulerGuides: RulerGuide[];
+    setRulerGuides: React.Dispatch<React.SetStateAction<RulerGuide[]>>;
+    mirrorGuides: MirrorGuide[];
+    setMirrorGuides: React.Dispatch<React.SetStateAction<MirrorGuide[]>>;
+    perspectiveGuide: PerspectiveGuide | null;
+    setPerspectiveGuide: React.Dispatch<React.SetStateAction<PerspectiveGuide | null>>;
+    orthogonalGuide: OrthogonalGuide;
+    gridGuide: GridGuide;
+    onSelectItem: (id: string | null) => void;
+    isCropping: boolean;
+    cropRect: CropRect | null;
+    setCropRect: React.Dispatch<React.SetStateAction<CropRect | null>>;
+    isTransforming: boolean;
+    transformState: TransformState | null;
+    setTransformState: React.Dispatch<React.SetStateAction<TransformState | null>>;
+    transformSourceBbox: CropRect | null;
+    isAspectRatioLocked: boolean;
+    isAngleSnapEnabled: boolean;
+    angleSnapValue: 1 | 5 | 10 | 15;
+    areGuidesLocked: boolean;
+    isPerspectiveStrokeLockEnabled: boolean;
+    setIsPerspectiveStrokeLockEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+    strokeMode: StrokeMode;
+    strokeState: StrokeState | null;
+    setStrokeState: React.Dispatch<React.SetStateAction<StrokeState | null>>;
+    selection: Selection | null;
+    setSelection: React.Dispatch<React.SetStateAction<Selection | null>>;
+    onCutSelection: () => void;
+    onCopySelection: () => void;
+    onDeleteSelection: () => void;
+    onDeselect: () => void;
+    getMinZoom: () => number;
+    MAX_ZOOM: number;
+    onAddItem: (type: 'group' | 'object') => string;
+    textEditState: { position: Point; value: string; activeItemId: string; } | null;
+    setTextEditState: React.Dispatch<React.SetStateAction<{ position: Point; value: string; activeItemId: string; } | null>>;
+    onCommitText: (textState: { position: Point; value: string; activeItemId: string; }) => void;
+    // FIX: Add missing strokeSmoothing and strokeModifier props to fix type errors.
+    strokeSmoothing: number;
+    strokeModifier: StrokeModifier;
+    isPalmRejectionEnabled: boolean;
+    scaleFactor: number;
+    scaleUnit: ScaleUnit;
 }
 
 type GuideDragState =
@@ -117,7 +121,7 @@ type GuideDragState =
 
 export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
     const {
-        items, activeItemId, tool, viewTransform, setViewTransform, 
+        items, activeItemId, tool, viewTransform, setViewTransform,
         onDrawCommit, onSelectItem, onUpdateItem,
         activeGuide, isOrthogonalVisible, rulerGuides, setRulerGuides, mirrorGuides, setMirrorGuides,
         perspectiveGuide, setPerspectiveGuide, orthogonalGuide, gridGuide, areGuidesLocked,
@@ -139,9 +143,12 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         textEditState,
         setTextEditState,
         onCommitText,
-// FIX: Destructure missing strokeSmoothing and strokeModifier props.
+        // FIX: Destructure missing strokeSmoothing and strokeModifier props.
         strokeSmoothing,
         strokeModifier,
+        isPalmRejectionEnabled,
+        scaleFactor,
+        scaleUnit,
     } = props;
 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -152,24 +159,22 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
     const selectionCanvasRef = useRef<HTMLCanvasElement>(null);
     const guideCanvasRef = useRef<HTMLCanvasElement>(null);
     const textAreaRef = useRef<HTMLTextAreaElement>(null);
-    
+
     const [renderTrigger, forceRender] = useReducer(c => c + 1, 0);
     const [pointerPosition, setPointerPosition] = useState<Point | null>(null);
     const isDrawingRef = useRef(false);
     const [guideDragState, setGuideDragState] = useState<GuideDragState>(null);
     const [transformPreviewDataUrl, setTransformPreviewDataUrl] = useState<string | null>(null);
     const [livePreviewLayerId, setLivePreviewLayerId] = useState<string | null>(null);
-    const [debugPointers, setDebugPointers] = useState<Map<number, {x: number, y: number}>>(new Map());
+    const [debugPointers, setDebugPointers] = useState<Map<number, { x: number, y: number }>>(new Map());
 
     const activeItem = items.find(i => i.id === activeItemId);
-    // FIX: Replaced 'solid-marker' with 'simple-marker' and added 'advanced-marker' and 'watercolor'.
     const isDrawingTool = ['brush', 'eraser', 'simple-marker', 'natural-marker', 'airbrush', 'fx-brush', 'debug-brush', 'advanced-marker', 'watercolor'].includes(tool);
     const isSelectionTool = ['marquee-rect', 'lasso', 'magic-wand'].includes(tool);
 
     const { getBrushForTool } = useBrushManager({
         brushSettings: props.brushSettings,
         eraserSettings: props.eraserSettings,
-        // FIX: Replaced 'solidMarkerSettings' with 'simpleMarkerSettings'.
         simpleMarkerSettings: props.simpleMarkerSettings,
         naturalMarkerSettings: props.naturalMarkerSettings,
         airbrushSettings: props.airbrushSettings,
@@ -178,35 +183,35 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         watercolorSettings: props.watercolorSettings,
     });
 
-    const { 
-        redrawMainCanvas, 
-        redrawGuides, 
-        redrawUI, 
-        perspectiveVPs 
+    const {
+        redrawMainCanvas,
+        redrawGuides,
+        redrawUI,
+        perspectiveVPs
     } = useCanvasRendering({
         mainCanvasRef, guideCanvasRef, uiCanvasRef, items, viewTransform, isTransforming,
-        activeItemId, activeGuide, 
-        isOrthogonalVisible, 
+        activeItemId, activeGuide,
+        isOrthogonalVisible,
         rulerGuides, mirrorGuides, perspectiveGuide, orthogonalGuide,
         gridGuide,
-        isCropping, cropRect, transformState, transformSourceBbox, 
-        // FIX: Removed isDrawing and tool props which are not expected. Added livePreviewLayerId.
+        isCropping, cropRect, transformState, transformSourceBbox,
         livePreviewLayerId,
+        scaleFactor,
+        scaleUnit,
     });
 
     const { dragActionRef, ...basePointerHandlers } = usePointerEvents({
         items,
         uiCanvasRef, previewCanvasRef, viewTransform, setViewTransform, activeItem, tool, isDrawingTool, isSelectionTool,
         onDrawCommit, onSelectItem, onUpdateItem,
-        getBrushForTool, areGuidesLocked, activeGuide, 
-        isOrthogonalVisible, 
+        getBrushForTool, areGuidesLocked, activeGuide,
+        isOrthogonalVisible,
         rulerGuides,
         setRulerGuides, mirrorGuides, setMirrorGuides, perspectiveGuide, setPerspectiveGuide,
         perspectiveVPs, orthogonalGuide, guideDragState, setGuideDragState, cropRect,
-        setCropRect, 
+        setCropRect,
         transformState, setTransformState, isAspectRatioLocked,
         isAngleSnapEnabled, angleSnapValue,
-        // FIX: Pass missing livePreviewLayerId and setLivePreviewLayerId props.
         livePreviewLayerId,
         setLivePreviewLayerId,
         isPerspectiveStrokeLockEnabled,
@@ -224,13 +229,12 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         textEditState,
         setTextEditState,
         onCommitText,
-// FIX: Pass missing strokeSmoothing and strokeModifier props to usePointerEvents.
         strokeSmoothing,
         strokeModifier,
-        // FIX: Pass the setDebugPointers function to the usePointerEvents hook.
         setDebugPointers,
+        isPalmRejectionEnabled,
     });
-    
+
     const pointerHandlers = {
         onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
             isDrawingRef.current = true;
@@ -299,7 +303,7 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         cursorCtx.clearRect(0, 0, cursorCtx.canvas.width, cursorCtx.canvas.height);
 
         // Note: debug pointer rendering removed to avoid drawing red debug circles on the cursor canvas.
-        
+
         // Only draw the brush cursor if there's no multi-touch gesture happening
         if (debugPointers.size <= 1 && isDrawingTool && pointerPosition && (!isDrawingRef.current || tool === 'eraser')) {
             let size = 0;
@@ -318,7 +322,7 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
 
             if (size > 0) {
                 const scaledSize = size * viewTransform.zoom;
-                
+
                 const drawOutline = (shape: 'circle' | 'square') => {
                     cursorCtx.lineWidth = 1;
                     cursorCtx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
@@ -330,11 +334,11 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
                         cursorCtx.rect(pointerPosition.x - scaledSize / 2, pointerPosition.y - scaledSize / 2, scaledSize, scaledSize);
                     }
                     cursorCtx.stroke();
-                    
+
                     cursorCtx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
                     cursorCtx.setLineDash([2, 2]);
                     cursorCtx.beginPath();
-                     if (shape === 'circle') {
+                    if (shape === 'circle') {
                         cursorCtx.arc(pointerPosition.x, pointerPosition.y, scaledSize / 2, 0, 2 * Math.PI);
                     } else {
                         cursorCtx.rect(pointerPosition.x - scaledSize / 2, pointerPosition.y - scaledSize / 2, scaledSize, scaledSize);
@@ -357,37 +361,37 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
             if (selectionCtx) clearCanvas(selectionCtx);
             return;
         }
-    
+
         let animationFrameId: number;
         let offset = 0;
-        
+
         const animate = () => {
             offset = (offset + 0.5) % 8;
-            
+
             clearCanvas(selectionCtx);
-            
+
             selectionCtx.save();
             selectionCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
-            
+
             selectionCtx.lineWidth = 1 / viewTransform.zoom;
             selectionCtx.strokeStyle = 'white';
             selectionCtx.setLineDash([4 / viewTransform.zoom, 4 / viewTransform.zoom]);
             selectionCtx.lineDashOffset = -offset;
             selectionCtx.stroke(selection.path);
-            
+
             selectionCtx.strokeStyle = 'black';
             selectionCtx.lineDashOffset = 4 - offset;
             selectionCtx.stroke(selection.path);
-            
+
             selectionCtx.restore();
-    
+
             animationFrameId = requestAnimationFrame(animate);
         };
         animate();
-    
+
         return () => {
             cancelAnimationFrame(animationFrameId);
-            if(selectionCtx) clearCanvas(selectionCtx);
+            if (selectionCtx) clearCanvas(selectionCtx);
         };
     }, [selection, viewTransform, activeItemId]);
 
@@ -396,7 +400,7 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         redrawGuides();
         redrawUI();
     }, [redrawMainCanvas, redrawGuides, redrawUI, isTransforming, transformState, activeItem, transformSourceBbox, viewTransform, renderTrigger, livePreviewLayerId]);
-    
+
     useEffect(() => {
         const container = containerRef.current;
         const canvases = [mainCanvasRef.current, previewCanvasRef.current, previewCursorCanvasRef.current, uiCanvasRef.current, guideCanvasRef.current, selectionCanvasRef.current];
@@ -419,7 +423,7 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         resizeObserver.observe(container);
         return () => resizeObserver.disconnect();
     }, [redrawMainCanvas, redrawGuides, redrawUI]);
-    
+
     useEffect(() => {
         if (textEditState && textAreaRef.current) {
             textAreaRef.current.focus();
@@ -436,19 +440,19 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
 
     let transformPreviewStyle: React.CSSProperties = { display: 'none' };
     if (isTransforming && transformState && transformSourceBbox && transformPreviewDataUrl) {
-        
+
         if (transformState.type === 'affine') {
-             const { x, y, width, height, rotation } = transformState;
-             const scaleX = width / transformSourceBbox.width;
-             const scaleY = height / transformSourceBbox.height;
-             const finalTransform = `
+            const { x, y, width, height, rotation } = transformState;
+            const scaleX = width / transformSourceBbox.width;
+            const scaleY = height / transformSourceBbox.height;
+            const finalTransform = `
                 matrix(${viewTransform.zoom}, 0, 0, ${viewTransform.zoom}, ${viewTransform.pan.x}, ${viewTransform.pan.y})
-                translate(${x + width/2}px, ${y + height/2}px)
+                translate(${x + width / 2}px, ${y + height / 2}px)
                 rotate(${rotation}rad)
                 scale(${scaleX}, ${scaleY})
-                translate(-${transformSourceBbox.width/2}px, -${transformSourceBbox.height/2}px)
+                translate(-${transformSourceBbox.width / 2}px, -${transformSourceBbox.height / 2}px)
              `;
-             
+
             transformPreviewStyle = {
                 position: 'absolute',
                 top: 0,
@@ -468,12 +472,12 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
                 { x: 0, y: 0 }, { x: width, y: 0 },
                 { x: width, y: height }, { x: 0, y: height },
             ];
-            
-            const dstPoints = [ corners.tl, corners.tr, corners.br, corners.bl ].map(p => ({
+
+            const dstPoints = [corners.tl, corners.tr, corners.br, corners.bl].map(p => ({
                 x: p.x * viewTransform.zoom + viewTransform.pan.x,
                 y: p.y * viewTransform.zoom + viewTransform.pan.y,
             }));
-            
+
             const finalTransform = getCssMatrix3d(srcPoints, dstPoints);
 
             transformPreviewStyle = {
@@ -563,7 +567,7 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
             <canvas ref={mainCanvasRef} className="absolute inset-0" />
             <canvas ref={guideCanvasRef} className="absolute inset-0 pointer-events-none" />
             <canvas ref={previewCanvasRef} className="absolute inset-0 pointer-events-none" />
-            
+
             <img
                 src={transformPreviewDataUrl || ''}
                 alt="Transform preview"

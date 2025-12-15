@@ -22,9 +22,10 @@ export default defineConfig(({ mode }) => {
           name: 'Sketcher',
           short_name: 'Sketcher',
           start_url: repoBase,
-          display: 'standalone',
-          background_color: '#ffffff',
-          theme_color: '#ffffff',
+          display: 'fullscreen',
+          orientation: 'any',
+          background_color: '#000000',
+          theme_color: '#000000',
           icons: [
             { src: '/pwa-192.svg', sizes: '192x192', type: 'image/svg+xml' },
             { src: '/pwa-512.svg', sizes: '512x512', type: 'image/svg+xml' }

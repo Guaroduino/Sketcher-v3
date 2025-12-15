@@ -55,6 +55,13 @@ export function useQuickAccess() {
     });
   }, []);
 
+  const addToolSlot = useCallback(() => {
+    setSettings(prev => ({
+      ...prev,
+      tools: [...prev.tools, null],
+    }));
+  }, []);
+
   const loadState = useCallback((loadedSettings: WorkspaceTemplate['quickAccessSettings']) => {
     // More flexible validation
     if (
@@ -83,6 +90,7 @@ export function useQuickAccess() {
     removeColor,
     updateSize,
     updateTool,
+    addToolSlot,
     loadState,
   };
 }

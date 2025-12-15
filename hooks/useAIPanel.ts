@@ -21,6 +21,11 @@ export function useAIPanel() {
     const [isChromaKeyEnabled, setIsChromaKeyEnabled] = useState(false);
     const [enhancementInputMode, setEnhancementInputMode] = useState<'full' | 'bbox'>('full');
     const [enhancementPreviewBgColor, setEnhancementPreviewBgColor] = useState('#FFFFFF');
+    const [shouldAddToCanvas, setShouldAddToCanvas] = useState(false);
+    const [shouldAddToLibrary, setShouldAddToLibrary] = useState(true);
+    const [shouldRemoveContent, setShouldRemoveContent] = useState(false);
+    const [sourceScope, setSourceScope] = useState<'all' | 'layer'>('all');
+    const [shouldUpdateBackground, setShouldUpdateBackground] = useState(true);
 
     // Composition Tab State
     const [compositionPrompt, setCompositionPrompt] = useState('');
@@ -85,6 +90,11 @@ export function useAIPanel() {
         isChromaKeyEnabled, setIsChromaKeyEnabled,
         enhancementInputMode, setEnhancementInputMode,
         enhancementPreviewBgColor, setEnhancementPreviewBgColor,
+        shouldAddToCanvas, setShouldAddToCanvas,
+        shouldAddToLibrary, setShouldAddToLibrary,
+        shouldRemoveContent, setShouldRemoveContent,
+        sourceScope, setSourceScope,
+        shouldUpdateBackground, setShouldUpdateBackground,
         compositionPrompt, setCompositionPrompt,
         styleRef, setStyleRef,
         freeFormPrompt, setFreeFormPrompt,

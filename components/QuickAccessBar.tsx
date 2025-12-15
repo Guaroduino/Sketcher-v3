@@ -11,6 +11,7 @@ interface QuickAccessBarProps {
   onRemoveColor: (index: number) => void;
   onUpdateSize: (index: number, newSize: number) => void;
   onUpdateTool: (index: number, newTool: QuickAccessTool) => void;
+  onAddToolSlot: () => void;
   onSelectColor: (color: string) => void;
   onSelectSize: (size: number) => void;
   onSelectTool: (tool: QuickAccessTool) => void;
@@ -156,6 +157,7 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
   onSelectColor,
   onSelectSize,
   onSelectTool,
+  onAddToolSlot,
   onOpenToolSelector,
   onToggleHeader,
   isHeaderVisible,
@@ -231,6 +233,46 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
   };
 
 
+  // Long press hook implementation inline
+  const useLongPress = (
+    onLongPress: (e: React.MouseEvent | React.TouchEvent) => void,
+    onClick: () => void,
+    defaultOptions = { shouldPreventDefault: true, delay: 500 }
+  ) => {
+    const [longPressTriggered, setLongPressTriggered] = useState(false);
+    const timeout = useRef<NodeJS.Timeout>();
+    const target = useRef<EventTarget>();
+
+    const start = (event: React.MouseEvent | React.TouchEvent) => {
+      if (defaultOptions.shouldPreventDefault && event.target) {
+        target.current = event.target;
+      }
+      timeout.current = setTimeout(() => {
+        onLongPress(event);
+        setLongPressTriggered(true);
+      }, defaultOptions.delay);
+    };
+
+    const clear = (event: React.MouseEvent | React.TouchEvent, shouldTriggerClick = true) => {
+      if (timeout.current) {
+        clearTimeout(timeout.current);
+      }
+      if (shouldTriggerClick && !longPressTriggered) {
+        onClick();
+      }
+      setLongPressTriggered(false);
+      target.current = undefined;
+    };
+
+    return {
+      onMouseDown: (e: React.MouseEvent) => start(e),
+      onTouchStart: (e: React.TouchEvent) => start(e),
+      onMouseUp: (e: React.MouseEvent) => clear(e),
+      onMouseLeave: (e: React.MouseEvent) => clear(e, false),
+      onTouchEnd: (e: React.TouchEvent) => clear(e),
+    };
+  };
+
   return (
     <>
       <div className="absolute top-4 left-2 right-2 md:left-1/2 md:-translate-x-1/2 md:w-auto md:right-auto bg-[--bg-primary]/80 backdrop-blur-sm rounded-lg p-1 flex flex-nowrap md:flex-wrap overflow-x-auto md:overflow-visible items-center justify-start md:justify-center gap-2 shadow-lg z-10 scrollbar-hide">
@@ -249,6 +291,8 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
         <div className="flex items-center gap-2">
           {settings.colors.map((color, index) => {
             const isActive = activeColor && color.toLowerCase() === activeColor.toLowerCase();
+            // Colors logic remains mostly same but could benefit from long press too. 
+            // For now, keeping double click/context menu as requested only for tools.
             return (
               <button
                 key={index}
@@ -320,22 +364,38 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
               (tool.type === 'tool' && tool.tool === activeTool) ||
               (tool.type === 'fx-preset' && activeTool === 'fx-brush')
             );
+
+            // Construct handlers for this specific tool button using the hook
+            const longPressHandlers = useLongPress(
+              () => { if (tool) onOpenToolSelector(index); }, // On Long Press
+              () => { if (tool) onSelectTool(tool); },       // On Click
+              { shouldPreventDefault: true, delay: 500 }
+            );
+
             return (
               <button
                 key={index}
-                onClick={() => tool && onSelectTool(tool)}
+                {...longPressHandlers}
                 onContextMenu={(e) => {
                   e.preventDefault();
+                  // Fallback: Right click STILL opens it, for desktop users who prefer it.
                   onOpenToolSelector(index);
                 }}
                 className={`p-2 rounded-lg text-[--text-primary] transition-colors ${isActive ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'
-                  }`}
-                title={`${getToolTitle(tool)} (clic derecho para cambiar)`}
+                  } select-none touch-manipulation`} // Add touch-manipulation to improve mobile response
+                title={`${getToolTitle(tool)} (mantén presionado para cambiar)`}
               >
                 {renderToolIcon(tool)}
               </button>
             );
           })}
+          <button
+            onClick={onAddToolSlot}
+            className="w-9 h-9 rounded-lg border-2 border-dashed border-[--bg-hover] flex items-center justify-center text-[--text-secondary] hover:bg-[--bg-tertiary] hover:border-[--accent-primary] transition-colors"
+            title="Agregar ranura de herramienta"
+          >
+            <PlusIcon className="w-5 h-5" />
+          </button>
         </div>
 
       </div>

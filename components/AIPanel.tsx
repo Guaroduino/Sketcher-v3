@@ -11,7 +11,7 @@ interface AIPanelProps {
     onEnhance: (payload: any) => void;
     isEnhancing: boolean;
     enhancementPreview: { fullDataUrl: string; croppedDataUrl: string | null; bbox: CropRect | null } | null;
-    onGenerateEnhancementPreview: () => void;
+    onGenerateEnhancementPreview: (includeBackground: boolean) => void;
 }
 
 const PromptManager: React.FC<{
@@ -45,6 +45,15 @@ export const AIPanel: React.FC<AIPanelProps> = ({
         isChromaKeyEnabled, setIsChromaKeyEnabled,
         enhancementInputMode, setEnhancementInputMode,
         enhancementPreviewBgColor, setEnhancementPreviewBgColor,
+        shouldAddToCanvas, setShouldAddToCanvas,
+        shouldAddToLibrary, setShouldAddToLibrary,
+        shouldRemoveContent, setShouldRemoveContent,
+        sourceScope, setSourceScope,
+        shouldUpdateBackground, setShouldUpdateBackground,
+        compositionPrompt, setCompositionPrompt,
+        styleRef, setStyleRef,
+        freeFormPrompt, setFreeFormPrompt,
+        freeFormSlots, setFreeFormSlots,
         savedPrompts, savePrompt, deletePrompt,
         // ... other state
     } = aiPanelState;
@@ -65,13 +74,13 @@ export const AIPanel: React.FC<AIPanelProps> = ({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Generate preview when panel opens
+    // Generate preview when active tab changes
     useEffect(() => {
         if (isOpen) {
-            onGenerateEnhancementPreview();
+            const includeBg = activeAiTab === 'composition';
+            onGenerateEnhancementPreview(includeBg);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen]);
+    }, [isOpen, activeAiTab]);
 
     // Load prompt handler
     const loadPrompt = (type: PromptType, value: string) => {
@@ -235,6 +244,42 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                     </div>
                                 )}
 
+                                <div className="flex items-center gap-4 mt-2">
+                                    <div className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            id="add-to-canvas"
+                                            checked={shouldAddToCanvas}
+                                            onChange={(e) => setShouldAddToCanvas(e.target.checked)}
+                                            className="h-4 w-4 bg-[--bg-tertiary] border-[--bg-hover] rounded"
+                                            disabled={isEnhancing}
+                                        />
+                                        <label htmlFor="add-to-canvas" className="ml-2 text-xs text-[--text-secondary]">Añadir a Canvas</label>
+                                    </div>
+                                    <div className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            id="add-to-library"
+                                            checked={shouldAddToLibrary}
+                                            onChange={(e) => setShouldAddToLibrary(e.target.checked)}
+                                            className="h-4 w-4 bg-[--bg-tertiary] border-[--bg-hover] rounded"
+                                            disabled={isEnhancing}
+                                        />
+                                        <label htmlFor="add-to-library" className="ml-2 text-xs text-[--text-secondary]">Añadir a Librería</label>
+                                    </div>
+                                    <div className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            id="remove-content"
+                                            checked={shouldRemoveContent}
+                                            onChange={(e) => setShouldRemoveContent(e.target.checked)}
+                                            className="h-4 w-4 bg-[--bg-tertiary] border-[--bg-hover] rounded"
+                                            disabled={isEnhancing}
+                                        />
+                                        <label htmlFor="remove-content" className="ml-2 text-xs text-[--text-secondary]">Quitar Contenido</label>
+                                    </div>
+                                </div>
+
                                 <button
                                     onClick={() => onEnhance({
                                         activeAiTab,
@@ -245,15 +290,212 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                         enhancementInputMode,
                                         enhancementChromaKey: isChromaKeyEnabled ? enhancementChromaKey : 'none',
                                         enhancementPreviewBgColor,
+                                        shouldAddToCanvas,
+                                        shouldAddToLibrary,
+                                        shouldRemoveContent,
+                                        sourceScope,
                                     })}
                                     disabled={!enhancementPrompt.trim() || !enhancementStylePrompt.trim() || isEnhancing}
-                                    className="w-full bg-[--accent-primary] hover:bg-[--accent-hover] text-white font-bold py-2 px-4 rounded-md disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                                    className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-1 px-3 text-sm rounded-md disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed mt-2"
                                 >
                                     {isEnhancing ? 'Generando...' : 'Generar'}
                                 </button>
                             </div>
                         )}
-                        {/* Note: I am not porting 'composition' and 'free' modes for brevity in this step, but I should if the user uses them. The prompt only mentioned moving the button, I will assume basic functionality is crucial. I will add placeholders or just simple message if tabs are switched, or better yet, I should check if I missed them. The view_file output was truncated so I might not have all 'composition' code. I'll stick to 'object' mode being fully functional for now as it's the default and most complex appearing one. */}
+                        {/* Composition Tab Implementation */}
+                        {activeAiTab === 'composition' && (
+                            <div className="space-y-4">
+                                <div className="rounded-md p-2 aspect-video flex items-center justify-center bg-gray-800 border border-gray-700">
+                                    {!enhancementPreview ? (
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-xs text-[--text-secondary]">Generando vista previa...</span>
+                                        </div>
+                                    ) : (
+                                        <img
+                                            src={enhancementPreview.fullDataUrl}
+                                            alt="Composition Preview"
+                                            className="max-w-full max-h-full object-contain"
+                                        />
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Descripción de la Composición</label>
+                                    <textarea
+                                        value={compositionPrompt}
+                                        onChange={(e) => setCompositionPrompt(e.target.value)}
+                                        placeholder="Describe la escena completa..."
+                                        className="w-full h-24 p-2 bg-[--bg-tertiary] text-[--text-primary] text-sm rounded-md resize-none"
+                                        disabled={isEnhancing}
+                                    />
+                                    <PromptManager type="description" value={compositionPrompt} savePrompt={savePrompt} setPromptLoader={setPromptLoader} />
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Referencia de Estilo (Opcional)</label>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                    const reader = new FileReader();
+                                                    reader.onload = (ev) => {
+                                                        if (ev.target?.result) setStyleRef({ url: ev.target.result as string, name: file.name });
+                                                    };
+                                                    reader.readAsDataURL(file);
+                                                }
+                                            }}
+                                            className="text-xs text-[--text-secondary] file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:bg-[--bg-tertiary] file:text-[--text-primary] hover:file:bg-[--bg-hover]"
+                                            disabled={isEnhancing}
+                                        />
+                                        {styleRef && (
+                                            <button onClick={() => setStyleRef(null)} className="text-red-500 hover:text-red-400">
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                    {styleRef && <div className="mt-2 h-20 w-full bg-cover bg-center rounded-md border border-[--bg-tertiary]" style={{ backgroundImage: `url(${styleRef.url})` }}></div>}
+                                </div>
+
+                                <div className="flex items-center gap-4 mt-2 flex-wrap">
+                                    <div className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            id="comp-update-bg"
+                                            checked={shouldUpdateBackground}
+                                            onChange={(e) => setShouldUpdateBackground(e.target.checked)}
+                                            className="h-4 w-4 bg-[--bg-tertiary] border-[--bg-hover] rounded"
+                                            disabled={isEnhancing}
+                                        />
+                                        <label htmlFor="comp-update-bg" className="ml-2 text-xs text-[--text-secondary]">Reemplazar Fondo</label>
+                                    </div>
+                                    <div className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            id="comp-add-to-canvas"
+                                            checked={shouldAddToCanvas}
+                                            onChange={(e) => setShouldAddToCanvas(e.target.checked)}
+                                            className="h-4 w-4 bg-[--bg-tertiary] border-[--bg-hover] rounded"
+                                            disabled={isEnhancing}
+                                        />
+                                        <label htmlFor="comp-add-to-canvas" className="ml-2 text-xs text-[--text-secondary]">Añadir como Capa</label>
+                                    </div>
+                                    <div className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            id="comp-remove-content"
+                                            checked={shouldRemoveContent}
+                                            onChange={(e) => setShouldRemoveContent(e.target.checked)}
+                                            className="h-4 w-4 bg-[--bg-tertiary] border-[--bg-hover] rounded"
+                                            disabled={isEnhancing}
+                                        />
+                                        <label htmlFor="comp-remove-content" className="ml-2 text-xs text-[--text-secondary]">Quitar Contenido Usado</label>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={() => onEnhance({
+                                        activeAiTab,
+                                        compositionPrompt,
+                                        styleRef,
+                                        shouldUpdateBackground,
+                                        shouldAddToCanvas,
+                                        shouldRemoveContent
+                                    })}
+                                    disabled={!compositionPrompt.trim() || isEnhancing}
+                                    className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-1 px-3 text-sm rounded-md disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
+                                >
+                                    {isEnhancing ? 'Generando...' : 'Generar Composición'}
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Free Tab Implementation */}
+                        {activeAiTab === 'free' && (
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Descripción Libre</label>
+                                    <textarea
+                                        value={freeFormPrompt}
+                                        onChange={(e) => setFreeFormPrompt(e.target.value)}
+                                        placeholder="Describe lo que quieres generar..."
+                                        className="w-full h-24 p-2 bg-[--bg-tertiary] text-[--text-primary] text-sm rounded-md resize-none"
+                                        disabled={isEnhancing}
+                                    />
+                                    <PromptManager type="description" value={freeFormPrompt} savePrompt={savePrompt} setPromptLoader={setPromptLoader} />
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold text-[--text-secondary] block mb-2">Elementos (Opcional)</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {(['main', 'a', 'b', 'c'] as const).map((slot) => (
+                                            <div key={slot} className="border border-[--bg-tertiary] rounded p-2 bg-[--bg-secondary]">
+                                                <span className="text-[10px] text-[--text-secondary] uppercase font-bold block mb-1">{slot === 'main' ? 'Principal' : `Ranura ${slot.toUpperCase()}`}</span>
+                                                {freeFormSlots[slot] ? (
+                                                    <div className="relative group aspect-square bg-[--bg-tertiary] rounded overflow-hidden">
+                                                        <img src={freeFormSlots[slot]!.url} alt={slot} className="w-full h-full object-cover" />
+                                                        <button
+                                                            onClick={() => setFreeFormSlots({ ...freeFormSlots, [slot]: null })}
+                                                            className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+                                                        >
+                                                            <XIcon className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <label className="flex flex-col items-center justify-center aspect-square bg-[--bg-tertiary] rounded cursor-pointer hover:bg-[--bg-hover] transition-colors">
+                                                        <UploadIcon className="w-5 h-5 text-[--text-secondary] mb-1" />
+                                                        <span className="text-[10px] text-[--text-secondary]">Subir</span>
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            className="hidden"
+                                                            onChange={(e) => {
+                                                                const file = e.target.files?.[0];
+                                                                if (file) {
+                                                                    const reader = new FileReader();
+                                                                    reader.onload = (ev) => {
+                                                                        if (ev.target?.result) {
+                                                                            setFreeFormSlots({
+                                                                                ...freeFormSlots,
+                                                                                [slot]: { id: `file-${Date.now()}`, type: 'file', url: ev.target.result as string, name: file.name }
+                                                                            });
+                                                                        }
+                                                                    };
+                                                                    reader.readAsDataURL(file);
+                                                                }
+                                                            }}
+                                                            disabled={isEnhancing}
+                                                        />
+                                                    </label>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-4 mt-2">
+                                    <div className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            id="free-add-to-canvas"
+                                            checked={shouldAddToCanvas}
+                                            onChange={(e) => setShouldAddToCanvas(e.target.checked)}
+                                            className="h-4 w-4 bg-[--bg-tertiary] border-[--bg-hover] rounded"
+                                            disabled={isEnhancing}
+                                        />
+                                        <label htmlFor="free-add-to-canvas" className="ml-2 text-xs text-[--text-secondary]">Añadir a Canvas</label>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={() => onEnhance({ activeAiTab, freeFormPrompt, freeFormSlots, shouldAddToCanvas, shouldAddToLibrary })}
+                                    disabled={!freeFormPrompt.trim() || isEnhancing}
+                                    className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-1 px-3 text-sm rounded-md disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
+                                >
+                                    {isEnhancing ? 'Generando...' : 'Generar Libre'}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

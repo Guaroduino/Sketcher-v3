@@ -131,6 +131,7 @@ export function usePointerEvents({
     strokeSmoothing,
     strokeModifier,
     setDebugPointers,
+    isPalmRejectionEnabled,
 }: {
     items: CanvasItem[];
     uiCanvasRef: React.RefObject<HTMLCanvasElement>;
@@ -186,6 +187,7 @@ export function usePointerEvents({
     strokeSmoothing: number;
     strokeModifier: StrokeModifier;
     setDebugPointers: React.Dispatch<React.SetStateAction<Map<number, { x: number, y: number }>>>;
+    isPalmRejectionEnabled: boolean;
 }) {
     const canvasRectRef = useRef<DOMRect | null>(null);
 
@@ -329,8 +331,29 @@ export function usePointerEvents({
         if (e.button !== 0 && e.pointerType === 'mouse' && e.button !== 1) return;
         if (e.pointerType === 'pen' && e.pressure === 0) return;
 
+        // Palm Rejection: If enabled, only allow pen input for interaction/drawing
+        if (isPalmRejectionEnabled && e.pointerType !== 'pen') {
+            // Still allow multi-touch gestures (zoom/pan) to accumulate in activePointers
+            // But we must NOT start a drawing or single-pointer action
+            // Optimization: If it's a single touch and we are rejecting it, we can perhaps return early for drawing checks?
+            // Actually, we need to track it for potential gestures.
+        } else {
+            // For non-rejected inputs (pen or touch when disabled)
+        }
+
         activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
         setDebugPointers(new Map(activePointers.current));
+
+        // Palm Rejection Logic for actions
+        const isRejectedPointer = isPalmRejectionEnabled && e.pointerType !== 'pen';
+
+        // If it's a rejected pointer, we ONLY care if it contributes to a multi-touch gesture.
+        // We should skip all drawing/manipulation logic if it's the *only* pointer or if we are just starting.
+
+        if (activePointers.current.size < 2 && isRejectedPointer) {
+            // Single touch with palm rejection on -> DO NOTHING (waiting for potential second finger)
+            return;
+        }
 
         if (activePointers.current.size >= 2) {
             wasInGestureRef.current = true;
@@ -669,7 +692,7 @@ export function usePointerEvents({
                 brush.onPointerDown(snappedPointWithPressure, brushContext);
             }
         }
-    }, [tool, viewTransform, activeItem, isDrawingTool, isSelectionTool, magicWandSettings, setSelection, cropRect, activeGuide, rulerGuides, mirrorGuides, perspectiveGuide, areGuidesLocked, setPerspectiveGuide, setRulerGuides, setMirrorGuides, setGuideDragState, perspectiveVPs, transformState, isPerspectiveStrokeLockEnabled, snapPointToGrid, strokeMode, strokeState, setStrokeState, onDrawCommit, onAddItem, setTextEditState, textEditState, onCommitText, getBrushForTool, strokeSmoothing, strokeModifier, setDebugPointers]);
+    }, [tool, viewTransform, activeItem, isDrawingTool, isSelectionTool, magicWandSettings, setSelection, cropRect, activeGuide, rulerGuides, mirrorGuides, perspectiveGuide, areGuidesLocked, setPerspectiveGuide, setRulerGuides, setMirrorGuides, setGuideDragState, perspectiveVPs, transformState, isPerspectiveStrokeLockEnabled, snapPointToGrid, strokeMode, strokeState, setStrokeState, onDrawCommit, onAddItem, setTextEditState, textEditState, onCommitText, getBrushForTool, strokeSmoothing, strokeModifier, setDebugPointers, isPalmRejectionEnabled]);
 
     const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
         if (!uiCanvasRef.current) return;
