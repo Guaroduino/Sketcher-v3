@@ -193,7 +193,7 @@ export function usePointerEvents({
 
     const dragAction = useRef<DragAction>({ type: 'none' });
     const activeBrushRef = useRef<BaseBrush | null>(null);
-    const strokeLockInfo = useRef<{ startPoint: Point; targetVP: Point | null } | null>(null);
+    const strokeLockInfo = useRef<{ startPoint: Point; targetVP: Point | null; locked: boolean } | null>(null);
     const orthogonalLock = useRef<{ axis: 'x' | 'y', startPoint: Point } | null>(null);
     const arcDrawingState = useRef<{ lastAngle: number; totalAngle: number } | null>(null);
     const activePointers = useRef(new Map<number, { x: number; y: number }>());
@@ -668,21 +668,8 @@ export function usePointerEvents({
             setDragAction({ type: 'draw' });
 
             orthogonalLock.current = { axis: 'x', startPoint: snappedPoint };
-            if (isPerspectiveStrokeLockEnabled && activeGuide === 'perspective' && perspectiveVPs.current) {
-                const { vpGreen, vpRed, vpBlue } = perspectiveVPs.current;
-                const vps = [vpGreen, vpRed, vpBlue].filter(Boolean) as Point[];
-                let closestVP: Point | null = null;
-                let min_dist_sq = Infinity;
-                vps.forEach(vp => {
-                    if (vp) {
-                        const d_sq = (snappedPoint.x - vp.x) ** 2 + (snappedPoint.y - vp.y) ** 2;
-                        if (d_sq < min_dist_sq) {
-                            min_dist_sq = d_sq;
-                            closestVP = vp;
-                        }
-                    }
-                });
-                strokeLockInfo.current = { startPoint: snappedPoint, targetVP: closestVP };
+            if (isPerspectiveStrokeLockEnabled && activeGuide === 'perspective') {
+                strokeLockInfo.current = { startPoint: snappedPoint, targetVP: null, locked: false };
             }
 
             const mainCtx = (activeItem as SketchObject).context;
@@ -794,9 +781,43 @@ export function usePointerEvents({
                             pointToDraw = { x: A.x + AB.x * t, y: A.y + AB.y * t };
                         }
                         didSnapToGuideForPoint = true;
-                    } else if (isPerspectiveStrokeLockEnabled && activeGuide === 'perspective' && strokeLockInfo.current?.targetVP) {
-                        pointToDraw = projectPointOnLine(point, strokeLockInfo.current.startPoint, strokeLockInfo.current.targetVP);
-                        didSnapToGuideForPoint = true;
+                    } else if (isPerspectiveStrokeLockEnabled && activeGuide === 'perspective' && strokeLockInfo.current) {
+                        const info = strokeLockInfo.current;
+
+                        // If not locked yet, try to determine the best VP based on stroke direction
+                        if (!info.locked && perspectiveVPs.current) {
+                            const dist = Math.hypot(point.x - info.startPoint.x, point.y - info.startPoint.y);
+                            const threshold = 10 / viewTransform.zoom; // Lock after some movement
+
+                            if (dist * viewTransform.zoom > 5) { // Minimum movement (5px) to guess direction
+                                const { vpGreen, vpRed, vpBlue } = perspectiveVPs.current;
+                                const vps = [vpGreen, vpRed, vpBlue].filter(Boolean) as Point[];
+
+                                let bestVP: Point | null = null;
+                                let minDistToLine = Infinity;
+
+                                vps.forEach(vp => {
+                                    // Distance from current point to the line (startPoint -> VP)
+                                    // We use distanceToLineSegment. IF VP is far, it works as line.
+                                    const d = distanceToLineSegment(point, info.startPoint, vp);
+                                    if (d < minDistToLine) {
+                                        minDistToLine = d;
+                                        bestVP = vp;
+                                    }
+                                });
+
+                                info.targetVP = bestVP; // Update best guess
+
+                                if (dist > threshold) {
+                                    info.locked = true; // Lock it if we moved enough
+                                }
+                            }
+                        }
+
+                        if (info.targetVP) {
+                            pointToDraw = projectPointOnLine(point, info.startPoint, info.targetVP);
+                            didSnapToGuideForPoint = true;
+                        }
                     }
 
                     if (!didSnapToGuideForPoint) {

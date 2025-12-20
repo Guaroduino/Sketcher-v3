@@ -1144,8 +1144,29 @@ export function App() {
                 if (e.target?.result) {
                     const img = new Image();
                     img.onload = () => {
-                        dispatch({ type: 'SET_CANVAS_FROM_IMAGE', payload: { image: img } });
-                        canvasView.onZoomExtents();
+                        // Check if canvas has valid dimensions to resize TO
+                        if (canvasSize.width > 0 && canvasSize.height > 0) {
+                            // Create a temporary canvas to resize the image
+                            const tempCanvas = document.createElement('canvas');
+                            tempCanvas.width = canvasSize.width;
+                            tempCanvas.height = canvasSize.height;
+                            const ctx = tempCanvas.getContext('2d');
+                            if (ctx) {
+                                // Draw image stretched to fit canvas (simplest "limit" approach)
+                                ctx.drawImage(img, 0, 0, canvasSize.width, canvasSize.height);
+                                
+                                // Create new image from resized content
+                                const resizedImg = new Image();
+                                resizedImg.onload = () => {
+                                    dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: resizedImg } });
+                                };
+                                resizedImg.src = tempCanvas.toDataURL();
+                            }
+                        } else {
+                            // Fallback: If canvas is 0x0 (not initialized), set canvas size from image
+                            dispatch({ type: 'SET_CANVAS_FROM_IMAGE', payload: { image: img } });
+                            canvasView.onZoomExtents();
+                        }
                     };
                     img.src = e.target.result as string;
                 }
@@ -1154,7 +1175,7 @@ export function App() {
         } else if (updates.image) {
             dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: updates.image } });
         } else if (updates.color) { dispatch({ type: 'UPDATE_BACKGROUND', payload: { color: updates.color } }); }
-    }, [canvasView, dispatch]);
+    }, [canvasSize, canvasView, dispatch]);
 
     const handleRemoveBackgroundImage = useCallback(() => dispatch({ type: 'REMOVE_BACKGROUND_IMAGE' }), [dispatch]);
     const handleConfirmDelete = useCallback(() => {
