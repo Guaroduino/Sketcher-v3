@@ -45,7 +45,7 @@ export const getLineIntersection = (line1: { start: Point; end: Point }, line2: 
 
     const t_num = (p1.x - p3.x) * (p3.y - p4.y) - (p1.y - p3.y) * (p3.x - p4.x);
     const t = t_num / den;
-    
+
     return {
         x: p1.x + t * (p2.x - p1.x),
         y: p1.y + t * (p2.y - p1.y),
@@ -61,6 +61,17 @@ export const distanceToLineSegment = (p: Point, v: Point, w: Point): number => {
     if (l2 === 0) return Math.hypot(p.x - v.x, p.y - v.y);
     let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
     t = Math.max(0, Math.min(1, t));
+    const projection = {
+        x: v.x + t * (w.x - v.x),
+        y: v.y + t * (w.y - v.y)
+    };
+    return Math.hypot(p.x - projection.x, p.y - projection.y);
+};
+
+export const distanceToLine = (p: Point, v: Point, w: Point): number => {
+    const l2 = (v.x - w.x) ** 2 + (v.y - w.y) ** 2;
+    if (l2 === 0) return Math.hypot(p.x - v.x, p.y - v.y);
+    const t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
     const projection = {
         x: v.x + t * (w.x - v.x),
         y: v.y + t * (w.y - v.y)
@@ -138,7 +149,7 @@ function solve(A: number[][], b: number[]): number[] | null {
 
         [A[i], A[max_row]] = [A[max_row], A[i]];
         [b[i], b[max_row]] = [b[max_row], b[i]];
-        
+
         if (Math.abs(A[i][i]) <= 1e-10) return null;
 
         for (let j = i + 1; j < n; j++) {
@@ -178,7 +189,7 @@ export function getHomographyMatrix(srcPoints: Point[], dstPoints: Point[]): num
     for (const { x, y } of dstPoints) {
         b.push(x, y);
     }
-    
+
     const h = solve(A, b);
     if (!h) return null;
 
@@ -198,7 +209,7 @@ export const getCssMatrix3d = (srcPoints: Point[], dstPoints: Point[]): string =
         [h[3], h[4], h[5]],
         [h[6], h[7], 1]
     ];
-    
+
     // Transpose for CSS matrix3d
     const M = [
         H[0][0], H[1][0], 0, H[2][0],
@@ -269,7 +280,7 @@ export const createThumbnail = (sourceCanvas: HTMLCanvasElement, maxWidth: numbe
             thumbHeight = maxHeight;
             thumbWidth = thumbHeight * aspect;
         }
-        
+
         tempCanvas.width = thumbWidth;
         tempCanvas.height = thumbHeight;
 
@@ -302,7 +313,7 @@ export function createMagicWandSelection(imageData: ImageData, startX: number, s
     const startG = data[startIndex + 1];
     const startB = data[startIndex + 2];
     const startA = data[startIndex + 3];
-    
+
     const selectionMask = new Uint8Array(width * height);
     let minX = width, minY = height, maxX = -1, maxY = -1;
 
@@ -313,19 +324,19 @@ export function createMagicWandSelection(imageData: ImageData, startX: number, s
         selectionMask[startY * width + startX] = 1;
         let head = 0;
 
-        while(head < queue.length) {
+        while (head < queue.length) {
             const [x, y] = queue[head++];
             minX = Math.min(minX, x); minY = Math.min(minY, y);
             maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
-            
-            const neighbors: [number, number][] = [ [x, y - 1], [x + 1, y], [x, y + 1], [x - 1, y] ];
+
+            const neighbors: [number, number][] = [[x, y - 1], [x + 1, y], [x, y + 1], [x - 1, y]];
 
             for (const [nx, ny] of neighbors) {
                 if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
                     const nIndex = ny * width + nx;
                     if (selectionMask[nIndex] === 0) {
                         const nDataIndex = nIndex * 4;
-                        if (colorMatch(startR, startG, startB, startA, data[nDataIndex], data[nDataIndex+1], data[nDataIndex+2], data[nDataIndex+3], tolerance)) {
+                        if (colorMatch(startR, startG, startB, startA, data[nDataIndex], data[nDataIndex + 1], data[nDataIndex + 2], data[nDataIndex + 3], tolerance)) {
                             selectionMask[nIndex] = 1;
                             queue.push([nx, ny]);
                         }
@@ -337,7 +348,7 @@ export function createMagicWandSelection(imageData: ImageData, startX: number, s
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
                 const index = (y * width + x) * 4;
-                if (colorMatch(startR, startG, startB, startA, data[index], data[index+1], data[index+2], data[index+3], tolerance)) {
+                if (colorMatch(startR, startG, startB, startA, data[index], data[index + 1], data[index + 2], data[index + 3], tolerance)) {
                     selectionMask[y * width + x] = 1;
                     minX = Math.min(minX, x); minY = Math.min(minY, y);
                     maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
@@ -345,7 +356,7 @@ export function createMagicWandSelection(imageData: ImageData, startX: number, s
             }
         }
     }
-    
+
     if (maxX === -1) return null; // Nothing selected
 
     const path = new Path2D();

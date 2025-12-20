@@ -4,7 +4,7 @@ import type {
     CropRect, ViewTransform, PerspectiveControlPoint, TransformState, AffineTransformState, FreeTransformState, GridGuide,
     StrokeMode, StrokeState, Selection, MagicWandSettings, StrokeModifier
 } from '../types';
-import { getCanvasPoint, isNearPoint, projectPointOnLine, pointInPolygon, cloneCanvas, distanceToLineSegment, getLineIntersection, createMagicWandSelection } from '../utils/canvasUtils';
+import { getCanvasPoint, isNearPoint, projectPointOnLine, pointInPolygon, cloneCanvas, distanceToLineSegment, distanceToLine, getLineIntersection, createMagicWandSelection } from '../utils/canvasUtils';
 import { clearCanvas } from '../utils/canvasUtils';
 import { type BaseBrush, type BrushContext } from '../lib/brushes/BaseBrush';
 
@@ -798,8 +798,8 @@ export function usePointerEvents({
 
                                 vps.forEach(vp => {
                                     // Distance from current point to the line (startPoint -> VP)
-                                    // We use distanceToLineSegment. IF VP is far, it works as line.
-                                    const d = distanceToLineSegment(point, info.startPoint, vp);
+                                    // We use distanceToLine (infinite) to allow snapping when moving AWAY from VP
+                                    const d = distanceToLine(point, info.startPoint, vp);
                                     if (d < minDistToLine) {
                                         minDistToLine = d;
                                         bestVP = vp;
