@@ -135,6 +135,8 @@ export function usePointerEvents({
     isPalmRejectionEnabled,
     isSolidBox,
     fillColor,
+    perspectiveWizardStep, // NEW
+    onWizardClick, // NEW
 }: {
     items: CanvasItem[];
     uiCanvasRef: React.RefObject<HTMLCanvasElement>;
@@ -194,6 +196,8 @@ export function usePointerEvents({
     isPalmRejectionEnabled: boolean;
     isSolidBox: boolean;
     fillColor: string;
+    perspectiveWizardStep?: 'none' | 'set-green' | 'set-red'; // NEW
+    onWizardClick?: (point: Point) => void; // NEW
 }) {
     const canvasRectRef = useRef<DOMRect | null>(null);
 
@@ -1442,6 +1446,14 @@ export function usePointerEvents({
         }
 
         if (wasInGestureRef.current) {
+            return;
+        }
+
+        // Wizard Click Interception
+        if (perspectiveWizardStep && perspectiveWizardStep !== 'none' && onWizardClick && uiCanvasRef.current) {
+            const point = getCanvasPoint(e, viewTransform, uiCanvasRef.current);
+            onWizardClick(point);
+            setDragAction({ type: 'none' });
             return;
         }
 

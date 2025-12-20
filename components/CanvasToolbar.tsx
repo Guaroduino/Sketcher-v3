@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Tool, Guide, Point, OrthogonalGuide, TransformState, GridGuide, GridType, ScaleUnit, StrokeMode } from '../types';
-import { HandIcon, ZoomInIcon, ZoomOutIcon, CrosshairIcon, UndoIcon, RedoIcon, TrashIcon, CheckIcon, XIcon, LockIcon, LockOpenIcon, GridIcon, SnapIcon, IsometricIcon, PasteIcon, CubeIcon, RefreshCwIcon } from './icons';
+import { HandIcon, ZoomInIcon, ZoomOutIcon, CrosshairIcon, UndoIcon, RedoIcon, TrashIcon, CheckIcon, XIcon, LockIcon, LockOpenIcon, GridIcon, SnapIcon, IsometricIcon, PasteIcon, CubeIcon, RefreshCwIcon, MagicWandIcon } from './icons';
 
 interface CanvasToolbarProps {
   tool: Tool;
@@ -54,6 +54,8 @@ interface CanvasToolbarProps {
   strokeMode: StrokeMode;
   isSolidBox: boolean;
   setIsSolidBox: (v: boolean) => void;
+  perspectiveWizardStep: 'none' | 'set-green' | 'set-red';
+  setPerspectiveWizardStep: (step: 'none' | 'set-green' | 'set-red') => void;
 }
 
 export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
@@ -108,6 +110,8 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
   strokeMode,
   isSolidBox,
   setIsSolidBox,
+  perspectiveWizardStep,
+  setPerspectiveWizardStep,
 }) => {
   const [customAngle, setCustomAngle] = useState('');
   const [gridSpacing, setGridSpacing] = useState('50');
@@ -409,12 +413,29 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                 </button>
                 <div className="w-px h-6 bg-[--bg-hover] mx-1" />
                 <button
+                  onClick={() => setPerspectiveWizardStep(perspectiveWizardStep === 'none' ? 'set-green' : 'none')}
+                  className={`p-2 rounded-md transition-colors ${perspectiveWizardStep !== 'none' ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'}`}
+                  title="Configurar puntos de fuga (Asistente)"
+                >
+                  <MagicWandIcon className="w-5 h-5" />
+                </button>
+                <div className="w-px h-6 bg-[--bg-hover] mx-1" />
+                <button
                   onClick={onResetPerspective}
                   className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover] transition-colors"
                   title="Reiniciar Guías de Perspectiva"
                 >
                   <RefreshCwIcon className="w-5 h-5" />
                 </button>
+
+                {perspectiveWizardStep !== 'none' && (
+                  <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-[--accent-primary] text-white px-3 py-1 rounded-full text-sm font-medium shadow-lg flex items-center gap-2 whitespace-nowrap animate-bounce">
+                    <span>{perspectiveWizardStep === 'set-green' ? 'Click: Left VP (Green)' : 'Click: Right VP (Red)'}</span>
+                    <button onClick={() => setPerspectiveWizardStep('none')} className="hover:text-red-200 transition-colors">
+                      <XIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </>
             )}
 
