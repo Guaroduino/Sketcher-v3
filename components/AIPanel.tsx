@@ -3,6 +3,8 @@ import { XIcon, SparklesIcon, TrashIcon, UploadIcon } from './icons';
 import type { CropRect } from '../types';
 import { useAIPanel, PromptType } from '../hooks/useAIPanel';
 
+import { AIPreviewPanel } from './AIPreviewPanel';
+
 interface AIPanelProps {
     isOpen: boolean;
     onClose: () => void;
@@ -12,6 +14,8 @@ interface AIPanelProps {
     isEnhancing: boolean;
     enhancementPreview: { fullDataUrl: string; croppedDataUrl: string | null; bbox: CropRect | null } | null;
     onGenerateEnhancementPreview: (includeBackground: boolean) => void;
+    debugInfo: { prompt: string; images: { name: string; url: string }[] } | null;
+    onUpdateDebugInfo: (payload: any) => void;
 }
 
 const PromptManager: React.FC<{
@@ -34,6 +38,8 @@ export const AIPanel: React.FC<AIPanelProps> = ({
     isEnhancing,
     enhancementPreview,
     onGenerateEnhancementPreview,
+    debugInfo,
+    onUpdateDebugInfo,
 }) => {
     const {
         activeAiTab, setActiveAiTab,
@@ -55,6 +61,8 @@ export const AIPanel: React.FC<AIPanelProps> = ({
         freeFormPrompt, setFreeFormPrompt,
         freeFormSlots, setFreeFormSlots,
         savedPrompts, savePrompt, deletePrompt,
+        upscaleFormat, setUpscaleFormat,
+        upscaleCreativity, setUpscaleCreativity
         // ... other state
     } = aiPanelState;
 
@@ -81,6 +89,31 @@ export const AIPanel: React.FC<AIPanelProps> = ({
             onGenerateEnhancementPreview(includeBg);
         }
     }, [isOpen, activeAiTab]);
+
+    // Real-time Debug Info Update
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const timer = setTimeout(() => {
+            onUpdateDebugInfo({
+                activeAiTab,
+                enhancementPrompt, enhancementStylePrompt, enhancementNegativePrompt, enhancementCreativity, enhancementInputMode, enhancementChromaKey, enhancementPreviewBgColor,
+                compositionPrompt, styleRef,
+                freeFormPrompt, freeFormSlots,
+                shouldUpdateBackground, shouldAddToCanvas, shouldAddToLibrary, shouldRemoveContent, sourceScope,
+                upscaleCreativity
+            });
+        }, 500); // 500ms debounce
+
+        return () => clearTimeout(timer);
+    }, [
+        isOpen, activeAiTab,
+        enhancementPrompt, enhancementStylePrompt, enhancementNegativePrompt, enhancementCreativity, enhancementInputMode, enhancementChromaKey, enhancementPreviewBgColor,
+        compositionPrompt, styleRef,
+        freeFormPrompt, freeFormSlots,
+        shouldUpdateBackground, shouldAddToCanvas, shouldAddToLibrary, shouldRemoveContent, sourceScope,
+        upscaleCreativity
+    ]);
 
     // Load prompt handler
     const loadPrompt = (type: PromptType, value: string) => {
@@ -115,6 +148,9 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                             </button>
                             <button onClick={() => setActiveAiTab('free')} className={`flex-1 p-2 text-sm font-semibold transition-colors ${activeAiTab === 'free' ? 'text-[--accent-primary] border-b-2 border-[--accent-primary]' : 'text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}>
                                 LIBRE
+                            </button>
+                            <button onClick={() => setActiveAiTab('upscale')} className={`flex-1 p-2 text-sm font-semibold transition-colors ${activeAiTab === 'upscale' ? 'text-[--accent-primary] border-b-2 border-[--accent-primary]' : 'text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}>
+                                ESCALAR
                             </button>
                         </div>
 
@@ -403,7 +439,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                         shouldAddToCanvas,
                                         shouldRemoveContent
                                     })}
-                                    disabled={!compositionPrompt.trim() || isEnhancing}
+                                    disabled={isEnhancing}
                                     className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-1 px-3 text-sm rounded-md disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
                                 >
                                     {isEnhancing ? 'Generando...' : 'Generar Composición'}
@@ -496,6 +532,65 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                 </button>
                             </div>
                         )}
+
+                        {/* Upscale Tab Implementation */}
+                        {activeAiTab === 'upscale' && (
+                            <div className="space-y-4">
+                                <div className="p-4 bg-[--bg-secondary] rounded-md border border-[--bg-tertiary] text-sm text-[--text-secondary]">
+                                    <p className="mb-2"><strong>Modo Escalado 4K</strong></p>
+                                    <p>Este modo generará una versión de súper alta resolución (aprox 4K) de tu composición actual.</p>
+                                    <p className="mt-2 text-xs opacity-70">Nota: La IA realizará una "remasterización creativa", mejorando detalles y texturas manteniendo la estructura original.</p>
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold text-[--text-secondary] block mb-2">Formato de Descarga</label>
+                                    <div className="flex gap-4">
+                                        <button
+                                            onClick={() => setUpscaleFormat('png')}
+                                            className={`flex-1 py-2 px-4 rounded border ${upscaleFormat === 'png' ? 'bg-[--accent-primary] text-white border-[--accent-primary]' : 'bg-[--bg-tertiary] border-[--bg-tertiary] hover:bg-[--bg-hover]'}`}
+                                        >
+                                            PNG
+                                        </button>
+                                        <button
+                                            onClick={() => setUpscaleFormat('jpg')}
+                                            className={`flex-1 py-2 px-4 rounded border ${upscaleFormat === 'jpg' ? 'bg-[--accent-primary] text-white border-[--accent-primary]' : 'bg-[--bg-tertiary] border-[--bg-tertiary] hover:bg-[--bg-hover]'}`}
+                                        >
+                                            JPG
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4">
+                                    <label className="text-xs font-bold text-[--text-secondary] block mb-2">Creatividad de Escalado: {upscaleCreativity}</label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="150"
+                                        value={upscaleCreativity}
+                                        onChange={(e) => setUpscaleCreativity(parseInt(e.target.value))}
+                                        className="w-full"
+                                        disabled={isEnhancing}
+                                    />
+                                    <div className="flex justify-between text-xs text-[--text-secondary] mt-1">
+                                        <span>Fiel (0)</span>
+                                        <span>Equilibrado (75)</span>
+                                        <span>Imaginativo (150)</span>
+                                    </div>
+                                    <p className="text-xs text-[--text-secondary] opacity-70 mt-2 mb-4">
+                                        <strong>0-30:</strong> Solo enfoca. <strong>30-100:</strong> Añade detalle. <strong>100+:</strong> Reinterpreta texturas.
+                                    </p>
+                                </div>
+
+                                <button
+                                    onClick={() => onEnhance({ activeAiTab, upscaleFormat, upscaleCreativity })}
+                                    disabled={isEnhancing}
+                                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 text-sm rounded-md disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
+                                >
+                                    {isEnhancing ? 'Escalando...' : `Escalar a 4K y Descargar (${upscaleFormat.toUpperCase()})`}
+                                </button>
+                            </div>
+                        )}
+                        <AIPreviewPanel debugInfo={debugInfo} />
                     </div>
                 </div>
             </div>

@@ -27,7 +27,10 @@ import { QuickAccessBar } from './components/QuickAccessBar';
 import { ToolSelectorModal } from './components/modals/ToolSelectorModal';
 import { WorkspaceTemplatesPopover } from './components/WorkspaceTemplatesPopover';
 import { AIPanel } from './components/AIPanel';
+
+import { BackgroundImportModal } from './components/modals/BackgroundImportModal';
 import { ConfirmDeleteModal } from './components/modals/ConfirmDeleteModal';
+
 import { CanvasSizeModal } from './components/modals/CanvasSizeModal';
 import { ConfirmClearModal } from './components/modals/ConfirmClearModal';
 import { ConfirmDeleteLibraryItemModal } from './components/modals/ConfirmDeleteLibraryItemModal';
@@ -35,6 +38,7 @@ import { ConfirmResetModal } from './components/modals/ConfirmResetModal';
 import { CropIcon, CheckIcon, XIcon, RulerIcon, PerspectiveIcon, ImageSquareIcon, OrthogonalIcon, MirrorIcon, GridIcon, IsometricIcon, LockIcon, LockOpenIcon, TransformIcon, FreeTransformIcon, SunIcon, MoonIcon, CopyIcon, CutIcon, PasteIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, GoogleIcon, LogOutIcon, ArrowUpIcon, ArrowDownIcon, SnapIcon, BookmarkIcon, SaveIcon, FolderOpenIcon, GalleryIcon, StrokeModeIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, ExpandIcon, MinimizeIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, HistoryIcon, MoreVerticalIcon, AddAboveIcon, AddBelowIcon, HandRaisedIcon, DownloadIcon, SparklesIcon } from './components/icons';
 import type { SketchObject, ItemType, Tool, CropRect, TransformState, WorkspaceTemplate, QuickAccessTool, ProjectFile, Project, StrokeMode, StrokeState, CanvasItem, StrokeModifier, ScaleUnit, Selection, ClipboardData, AppState, Point } from './types';
 import { getContentBoundingBox, createNewCanvas, createThumbnail, cloneCanvas } from './utils/canvasUtils';
+import { prepareAIRequest } from './utils/aiUtils';
 
 type Theme = 'light' | 'dark';
 
@@ -610,6 +614,20 @@ function useAI(
         return canvas;
     };
 
+    const handleUpdateDebugInfo = useCallback((
+        payload: any,
+        canvasSize: { width: number, height: number },
+        getDrawableObjects: () => CanvasItem[],
+        backgroundObject: SketchObject | undefined,
+        activeItemId: string | null,
+        allObjects: CanvasItem[]
+    ) => {
+        const result = prepareAIRequest(payload, canvasSize, getDrawableObjects, backgroundObject, activeItemId, allObjects, getCompositeCanvas, getCombinedBbox);
+        if (result) {
+            setDebugInfo({ prompt: result.finalPrompt, images: result.debugImages });
+        }
+    }, [getCompositeCanvas, getCombinedBbox]);
+
     const handleEnhance = useCallback(async (
         payload: any,
         canvasSize: { width: number, height: number },
@@ -620,130 +638,27 @@ function useAI(
     ) => {
         setDebugInfo(null);
         setIsEnhancing(true);
-        let finalPrompt = '';
-        const parts: any[] = [];
-        const debugImages: { name: string; url: string }[] = [];
-        let referenceWidth = canvasSize.width;
 
-        const visibleObjects = getDrawableObjects().filter((obj): obj is SketchObject => obj.type === 'object' && !obj.isBackground && obj.isVisible && !!obj.canvas);
-        let filteredObjects = visibleObjects;
-
-        if (payload.sourceScope === 'layer' && activeItemId) {
-            const activeItem = allObjects.find(i => i.id === activeItemId);
-            const parentId = activeItem?.type === 'group' ? activeItem.id : activeItem?.parentId;
-            filteredObjects = visibleObjects.filter(obj => obj.parentId === (parentId || null));
+        const requestData = prepareAIRequest(payload, canvasSize, getDrawableObjects, backgroundObject, activeItemId, allObjects, getCompositeCanvas, getCombinedBbox);
+        if (!requestData) {
+            setIsEnhancing(false);
+            alert("No se pudo preparar la solicitud. Verifica los campos requeridos.");
+            return;
         }
+
+        const { parts, debugImages, finalPrompt, referenceWidth, filteredObjects, visibleObjects } = requestData;
+
+        // Strict validation for execution
+        if (payload.activeAiTab === 'object' && !payload.enhancementPrompt) {
+            setIsEnhancing(false);
+            alert("Description prompt is required.");
+            return;
+        }
+
+        setDebugInfo({ prompt: finalPrompt, images: debugImages });
 
         try {
             const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
-
-            switch (payload.activeAiTab) {
-                case 'object': {
-                    const { enhancementPrompt, enhancementStylePrompt, enhancementNegativePrompt, enhancementCreativity, enhancementInputMode, enhancementChromaKey, enhancementPreviewBgColor } = payload;
-                    if (!enhancementPrompt) throw new Error("Description prompt is required.");
-
-                    // Manual Composite Logic for filteredObjects
-                    const tempCanvas = document.createElement('canvas');
-                    tempCanvas.width = canvasSize.width;
-                    tempCanvas.height = canvasSize.height;
-                    const tempCtx = tempCanvas.getContext('2d');
-                    if (!tempCtx) throw new Error("Canvas context error");
-
-                    [...filteredObjects].reverse().forEach(obj => {
-                        if (obj.canvas) {
-                            tempCtx.globalAlpha = obj.opacity;
-                            tempCtx.drawImage(obj.canvas, 0, 0);
-                        }
-                    });
-                    tempCtx.globalAlpha = 1.0;
-
-                    const compositeCanvas = tempCanvas;
-                    let imageCanvas = compositeCanvas;
-
-                    // Bbox Logic
-                    const combinedBbox = getCombinedBbox(filteredObjects);
-
-                    if (combinedBbox && combinedBbox.width > 0 && combinedBbox.height > 0) {
-                        referenceWidth = combinedBbox.width;
-                        const cropCanvas = document.createElement('canvas');
-                        cropCanvas.width = combinedBbox.width;
-                        cropCanvas.height = combinedBbox.height;
-                        const cropCtx = cropCanvas.getContext('2d');
-                        if (cropCtx) {
-                            cropCtx.drawImage(compositeCanvas, combinedBbox.x, combinedBbox.y, combinedBbox.width, combinedBbox.height, 0, 0, combinedBbox.width, combinedBbox.height);
-                            imageCanvas = cropCanvas;
-                        }
-                    }
-
-                    let finalImageCanvas = document.createElement('canvas');
-                    finalImageCanvas.width = imageCanvas.width;
-                    finalImageCanvas.height = imageCanvas.height;
-                    const finalCtx = finalImageCanvas.getContext('2d');
-                    if (finalCtx) {
-                        finalCtx.fillStyle = enhancementPreviewBgColor || '#FFFFFF';
-                        finalCtx.fillRect(0, 0, finalImageCanvas.width, finalImageCanvas.height);
-                        finalCtx.drawImage(imageCanvas, 0, 0);
-                    } else {
-                        finalImageCanvas = imageCanvas;
-                    }
-
-                    const dataUrl = finalImageCanvas.toDataURL('image/jpeg');
-                    debugImages.push({ name: 'Imagen de Entrada', url: dataUrl });
-                    parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(dataUrl) } });
-
-                    let creativityInstruction = '';
-                    if (enhancementCreativity <= 40) creativityInstruction = 'Sé muy fiel a la imagen de entrada y a la descripción proporcionada. Realiza solo los cambios solicitados.';
-                    else if (enhancementCreativity <= 80) creativityInstruction = 'Mantén una fidelidad moderada a la imagen y descripción, pero puedes hacer pequeñas mejoras estéticas.';
-                    else if (enhancementCreativity <= 120) creativityInstruction = 'Usa la imagen y la descripción como una fuerte inspiración. Siéntete libre de reinterpretar elementos para un mejor resultado artístico.';
-                    else creativityInstruction = 'Usa la imagen y la descripción solo como una vaga inspiración. Prioriza un resultado impactante y altamente creativo sobre la fidelidad al original.';
-
-                    const promptParts = [
-                        `Tu tarea es mejorar o transformar una imagen de entrada.`,
-                        `Descripción de la transformación deseada: "${enhancementPrompt}".`,
-                        `El estilo visual a aplicar es: "${enhancementStylePrompt}".`,
-                        creativityInstruction,
-                    ];
-                    if (enhancementNegativePrompt.trim()) promptParts.push(`Asegúrate de evitar estrictamente lo siguiente: "${enhancementNegativePrompt}".`);
-                    if (enhancementChromaKey !== 'none') {
-                        const colorHex = enhancementChromaKey === 'green' ? '#00FF00' : '#0000FF';
-                        promptParts.push(`Importante: La imagen resultante DEBE tener un fondo de croma sólido y uniforme de color ${enhancementChromaKey} (${colorHex}). El sujeto principal no debe contener este color.`);
-                    }
-                    finalPrompt = promptParts.join(' ');
-                    break;
-                }
-                case 'composition': {
-                    const compositeCanvas = getCompositeCanvas(true, canvasSize, getDrawableObjects, backgroundObject);
-                    if (!compositeCanvas) throw new Error("Could not create composite canvas.");
-                    const dataUrl = compositeCanvas.toDataURL('image/jpeg');
-                    debugImages.push({ name: 'Escena Compuesta', url: dataUrl });
-                    parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(dataUrl) } });
-
-                    if (payload.styleRef?.url) {
-                        debugImages.push({ name: 'Referencia de Estilo', url: payload.styleRef.url });
-                        parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(payload.styleRef.url) } });
-                    }
-                    finalPrompt = payload.compositionPrompt;
-                    break;
-                }
-                case 'free': {
-                    const slots: ('main' | 'a' | 'b' | 'c')[] = ['main', 'a', 'b', 'c'];
-                    const slotNames = ['Objeto Principal', 'Elemento A', 'Elemento B', 'Elemento C'];
-                    slots.forEach((slot, index) => {
-                        const slotData = payload.freeFormSlots[slot];
-                        if (slotData?.url) {
-                            debugImages.push({ name: slotNames[index], url: slotData.url });
-                            // Add a text label identifying this image
-                            parts.push({ text: `[Imagen: ${slotNames[index]}]` });
-                            parts.push({ inlineData: { mimeType: 'image/png', data: dataURLtoBase64(slotData.url) } });
-                        }
-                    });
-                    finalPrompt = payload.freeFormPrompt;
-                    break;
-                }
-            }
-
-            setDebugInfo({ prompt: finalPrompt, images: debugImages });
-
             const textPart = { text: finalPrompt };
             const model = 'gemini-3-pro-image-preview';
             const config = { responseModalities: [Modality.IMAGE, Modality.TEXT] };
@@ -782,6 +697,36 @@ function useAI(
                         if (payload.shouldUpdateBackground !== false) { // Default to true if undefined
                             dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: finalImg } });
                         }
+                    }
+
+                    if (payload.activeAiTab === 'upscale') {
+                        // Force 4K Resolution (3840px width)
+                        const TARGET_WIDTH = 3840;
+                        const scale = TARGET_WIDTH / img.width;
+                        const targetHeight = Math.round(img.height * scale);
+
+                        const downloadCanvas = document.createElement('canvas');
+                        downloadCanvas.width = TARGET_WIDTH;
+                        downloadCanvas.height = targetHeight;
+                        const ctx = downloadCanvas.getContext('2d');
+                        if (ctx) {
+                            // High quality scaling
+                            ctx.imageSmoothingEnabled = true;
+                            ctx.imageSmoothingQuality = 'high';
+                            ctx.drawImage(img, 0, 0, downloadCanvas.width, downloadCanvas.height);
+                            const format = payload.upscaleFormat === 'jpg' ? 'image/jpeg' : 'image/png';
+                            const ext = payload.upscaleFormat === 'jpg' ? 'jpg' : 'png';
+                            // Use 0.92 quality for JPG to balance size/quality at 4K
+                            const downloadUrl = downloadCanvas.toDataURL(format, 0.92);
+
+                            const link = document.createElement('a');
+                            link.href = downloadUrl;
+                            link.download = `Upscale_4K_${Date.now()}.${ext}`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                        }
+                        return; // Stop further processing (don't add to library or canvas)
                     }
 
                     // Common Handling for All Tabs (Library, Canvas Layer, Delete Content)
@@ -857,6 +802,8 @@ function useAI(
         backgroundDataUrl,
         setBackgroundDataUrl,
         debugInfo,
+        setDebugInfo, // Exposed for external setting if needed
+        updateDebugInfo: handleUpdateDebugInfo,
         generateEnhancementPreview,
         handleEnhance,
     };
@@ -1117,8 +1064,40 @@ export function App() {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') { setStrokeState(null); setSelection(null); }
         };
+
+        const handleGlobalPaste = (e: ClipboardEvent) => {
+            // Check if we are pasting into a text input, if so, ignore
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+            if (e.clipboardData && e.clipboardData.items) {
+                const items = e.clipboardData.items;
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i].type.indexOf('image') !== -1) {
+                        const blob = items[i].getAsFile();
+                        if (blob) {
+                            const img = new Image();
+                            const url = URL.createObjectURL(blob);
+                            img.onload = () => {
+                                // Logic: Fit Image to Canvas width/height (Fill) + Crop Canvas to Fit (Match Image)
+                                // Effectively: Set Canvas Size to Image Size
+                                dispatch({ type: 'RESIZE_CANVAS', payload: { width: img.width, height: img.height } });
+                                dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: img } });
+                                URL.revokeObjectURL(url);
+                            };
+                            img.src = url;
+                            e.preventDefault(); // Prevent default paste behavior
+                        }
+                    }
+                }
+            }
+        };
+
         window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
+        window.addEventListener('paste', handleGlobalPaste);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('paste', handleGlobalPaste);
+        };
     }, []);
 
     useEffect(() => { setStrokeState(null); }, [tool, strokeMode]);
@@ -1138,45 +1117,103 @@ export function App() {
     const handleDrawCommit = useCallback((id: string, beforeCanvas: HTMLCanvasElement) => dispatch({ type: 'COMMIT_DRAWING', payload: { activeItemId: id, beforeCanvas } }), [dispatch]);
     const updateItem = useCallback((id: string, updates: Partial<CanvasItem>) => dispatch({ type: 'UPDATE_ITEM', payload: { id, updates } }), [dispatch]);
 
+    // Background Import Logic
+    const [pendingBgFile, setPendingBgFile] = useState<File | null>(null);
+    const [isBgImportModalOpen, setIsBgImportModalOpen] = useState(false);
+
     const handleUpdateBackground = useCallback((updates: { color?: string, file?: File, image?: HTMLImageElement }) => {
         if (updates.file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                if (e.target?.result) {
-                    const img = new Image();
-                    img.onload = () => {
-                        // Check if canvas has valid dimensions to resize TO
-                        if (canvasSize.width > 0 && canvasSize.height > 0) {
-                            // Create a temporary canvas to resize the image
-                            const tempCanvas = document.createElement('canvas');
-                            tempCanvas.width = canvasSize.width;
-                            tempCanvas.height = canvasSize.height;
-                            const ctx = tempCanvas.getContext('2d');
-                            if (ctx) {
-                                // Draw image stretched to fit canvas (simplest "limit" approach)
-                                ctx.drawImage(img, 0, 0, canvasSize.width, canvasSize.height);
-
-                                // Create new image from resized content
-                                const resizedImg = new Image();
-                                resizedImg.onload = () => {
-                                    dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: resizedImg } });
-                                };
-                                resizedImg.src = tempCanvas.toDataURL();
-                            }
-                        } else {
-                            // Fallback: If canvas is 0x0 (not initialized), set canvas size from image
-                            dispatch({ type: 'SET_CANVAS_FROM_IMAGE', payload: { image: img } });
-                            canvasView.onZoomExtents();
-                        }
-                    };
-                    img.src = e.target.result as string;
-                }
-            };
-            reader.readAsDataURL(updates.file);
+            setPendingBgFile(updates.file);
+            // If canvas is empty/new (size 0 or default), maybe auto-resize? 
+            // For now, ALWAYS ask as requested.
+            setIsBgImportModalOpen(true);
+        } else if (updates.color) {
+            dispatch({ type: 'UPDATE_BACKGROUND', payload: { color: updates.color } });
         } else if (updates.image) {
+            // Direct image update (e.g. from history or other internal logic if any)
             dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: updates.image } });
-        } else if (updates.color) { dispatch({ type: 'UPDATE_BACKGROUND', payload: { color: updates.color } }); }
-    }, [canvasSize, canvasView, dispatch]);
+        }
+    }, [dispatch, canvasSize]); // canvasSize dependency to check if empty?
+
+    const confirmBackgroundImport = (mode: 'resize-canvas' | 'fit-image', cropToFit: boolean = false) => {
+
+        if (!pendingBgFile) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            if (e.target?.result) {
+                const img = new Image();
+                img.onload = () => {
+                    if (mode === 'resize-canvas') {
+                        // 1. Update Canvas Size
+                        // 1. Update Canvas Size
+                        dispatch({ type: 'RESIZE_CANVAS', payload: { width: img.width, height: img.height } });
+
+                        // 2. Set Background Image (full size)
+                        dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: img } });
+
+                    } else if (mode === 'fit-image') {
+                        // 1. Create temp canvas to resize image
+                        // Maintain Aspect Ratio: Calculate fit dimensions
+                        const canvasRatio = canvasSize.width / canvasSize.height;
+                        const imgRatio = img.width / img.height;
+
+                        let targetWidth = canvasSize.width;
+                        let targetHeight = canvasSize.height;
+
+                        if (imgRatio > canvasRatio) {
+                            // Image is wider than canvas relative to height: Fit by Width
+                            targetHeight = Math.round(targetWidth / imgRatio);
+                        } else {
+                            // Image is taller: Fit by Height
+                            targetWidth = Math.round(targetHeight * imgRatio);
+                        }
+
+                        // Center the image? For background usually we want it filling or centered.
+                        // "Fit to Canvas" implies it should be fully visible. 
+
+                        const tempCanvas = document.createElement('canvas');
+                        // If cropping, use target dims. If not, use canvas dims.
+                        tempCanvas.width = cropToFit ? targetWidth : canvasSize.width;
+                        tempCanvas.height = cropToFit ? targetHeight : canvasSize.height;
+                        const ctx = tempCanvas.getContext('2d');
+
+                        if (ctx) {
+                            // Fill with white/transparent or keep as is? 
+                            // Background object usually covers the whole canvas. 
+                            // If we fit, we might have empty space.
+
+                            // If cropping, we draw at 0,0. 
+                            // If fitting to existing canvas, we center it.
+                            const x = cropToFit ? 0 : (canvasSize.width - targetWidth) / 2;
+                            const y = cropToFit ? 0 : (canvasSize.height - targetHeight) / 2;
+
+                            ctx.drawImage(img, x, y, targetWidth, targetHeight);
+
+                            const resizedImg = new Image();
+                            resizedImg.onload = () => {
+                                // If cropping, we ALSO need to update the canvas size
+                                if (cropToFit) {
+                                    // If cropping, we ALSO need to update the canvas size
+                                    if (cropToFit) {
+                                        dispatch({ type: 'RESIZE_CANVAS', payload: { width: targetWidth, height: targetHeight } });
+                                    }
+
+                                }
+                                dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: resizedImg } });
+                            };
+                            resizedImg.src = tempCanvas.toDataURL();
+                        }
+                    }
+                    setIsBgImportModalOpen(false);
+                    setPendingBgFile(null);
+                };
+                img.src = e.target.result as string;
+            }
+        };
+        reader.readAsDataURL(pendingBgFile);
+    };
+
 
     const handleRemoveBackgroundImage = useCallback(() => dispatch({ type: 'REMOVE_BACKGROUND_IMAGE' }), [dispatch]);
     const handleConfirmDelete = useCallback(() => {
@@ -1464,14 +1501,23 @@ export function App() {
                     {ui.isLeftSidebarVisible ? <ChevronLeftIcon className="w-5 h-5" /> : <ChevronRightIcon className="w-5 h-5" />}
                 </button>
 
+                <BackgroundImportModal
+                    isOpen={isBgImportModalOpen}
+                    onClose={() => { setIsBgImportModalOpen(false); setPendingBgFile(null); }}
+                    onResizeCanvas={() => confirmBackgroundImport('resize-canvas')}
+                    onFitImage={(cropToFit) => confirmBackgroundImport('fit-image', cropToFit)}
+                />
+
                 <AIPanel
                     isOpen={aiPanelState.isOpen}
                     onClose={() => aiPanelState.setIsOpen(false)}
                     aiPanelState={aiPanelState}
                     onEnhance={(payload) => ai.handleEnhance(payload, canvasSize, getDrawableObjects, backgroundObject, activeItemId, objects)}
+                    onUpdateDebugInfo={(payload) => ai.updateDebugInfo(payload, canvasSize, getDrawableObjects, backgroundObject, activeItemId, objects)}
                     isEnhancing={ai.isEnhancing}
                     enhancementPreview={ai.enhancementPreview}
                     onGenerateEnhancementPreview={(includeBackground) => ai.generateEnhancementPreview(canvasSize, getDrawableObjects, backgroundObject, includeBackground)}
+                    debugInfo={ai.debugInfo}
                 />
 
                 <button

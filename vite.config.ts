@@ -17,7 +17,8 @@ export default defineConfig(({ mode }) => {
       react(),
       // PWA plugin will generate a service worker and manifest at build time.
       VitePWA({
-        registerType: 'autoUpdate',
+        // registerType: 'autoUpdate', // Disabled to prevent annoying auto-reloads
+        registerType: 'prompt',
         manifest: {
           name: 'Sketcher',
           short_name: 'Sketcher',

@@ -10,7 +10,7 @@ export type PromptType = keyof SavedPrompts;
 
 export function useAIPanel() {
     const [isOpen, setIsOpen] = useState(false);
-    const [activeAiTab, setActiveAiTab] = useState<'object' | 'composition' | 'free'>('object');
+    const [activeAiTab, setActiveAiTab] = useState<'object' | 'composition' | 'free' | 'upscale'>('object');
 
     // Object Tab State
     const [enhancementPrompt, setEnhancementPrompt] = useState('');
@@ -79,6 +79,10 @@ export function useAIPanel() {
         }
     }, [isChromaKeyEnabled, setEnhancementChromaKey]);
 
+    // Upscale Tab State
+    const [upscaleFormat, setUpscaleFormat] = useState<'png' | 'jpg'>('png');
+    const [upscaleCreativity, setUpscaleCreativity] = useState<number>(0);
+
     return {
         isOpen, setIsOpen,
         activeAiTab, setActiveAiTab,
@@ -100,6 +104,8 @@ export function useAIPanel() {
         freeFormPrompt, setFreeFormPrompt,
         addEnhancedImageToLibrary, setAddEnhancedImageToLibrary,
         freeFormSlots, setFreeFormSlots,
-        savedPrompts, savePrompt, deletePrompt
+        savedPrompts, savePrompt, deletePrompt,
+        upscaleFormat, setUpscaleFormat,
+        upscaleCreativity, setUpscaleCreativity
     };
 }
