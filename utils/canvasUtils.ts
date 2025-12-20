@@ -511,21 +511,44 @@ export const getVisibleBoxEdges = (corners: Point[]): Point[][] => {
     // Heuristic: We usually see 3 faces (convex corner).
     // Let's find the sign that gives us <= 3 faces (but > 0 faces).
 
+    // Opposite pairs: (0,1), (2,4), (3,5)
+    // A valid convex visibility set cannot contain both members of an opposite pair.
+    const isValidSet = (indicesList: number[][]) => {
+        const faceIndices = indicesList.map(list => candidateFaces.indexOf(list));
+        const has0 = faceIndices.includes(0);
+        const has1 = faceIndices.includes(1);
+        const has2 = faceIndices.includes(2);
+        const has3 = faceIndices.includes(3);
+        const has4 = faceIndices.includes(4);
+        const has5 = faceIndices.includes(5);
+
+        if (has0 && has1) return false;
+        if (has2 && has4) return false;
+        if (has3 && has5) return false;
+        return true;
+    };
+
     let visibleIndices: number[][] = [];
 
     // Try Negative Area (Standard CW projected visibility usually)
     const negFaces = candidateFaces.filter(indices => getSignedArea(indices) < 0);
     const posFaces = candidateFaces.filter(indices => getSignedArea(indices) > 0);
 
-    // If the box is "inside out" (negative height), the winding flips.
-    // We pick the set that looks like a "valid" exterior view (1, 2, or 3 faces).
-    if (negFaces.length > 0 && negFaces.length <= 3) {
+    const negValid = negFaces.length > 0 && negFaces.length <= 3 && isValidSet(negFaces);
+    const posValid = posFaces.length > 0 && posFaces.length <= 3 && isValidSet(posFaces);
+
+    if (negValid && !posValid) {
         visibleIndices = negFaces;
-    } else if (posFaces.length > 0 && posFaces.length <= 3) {
+    } else if (posValid && !negValid) {
         visibleIndices = posFaces;
+    } else if (negValid && posValid) {
+        // Both valid? This is rare. Pick the one with larger total projected area?
+        // Or default to negFaces as standard winding.
+        visibleIndices = negFaces;
     } else {
-        // Fallback: This is weird (maybe inside the box?). Just show "Front" faces?
-        // Default to negative if ambiguous.
+        // Neither valid? Fallback or show all (wireframe). 
+        // Showing all might be messy, let's try to show at least something.
+        // If the box is extremely distorted, maybe just show negFaces.
         visibleIndices = negFaces;
     }
 

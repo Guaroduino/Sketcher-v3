@@ -20,6 +20,7 @@ export interface SketchObject extends BaseItem {
   context?: CanvasRenderingContext2D;
   isBackground?: boolean;
   color?: string;
+  fillColor?: string;
   backgroundImage?: HTMLImageElement;
   dataUrl?: string; // For serialization
 }
@@ -28,6 +29,7 @@ export interface BrushSettings {
   size: number;
   opacity: number;
   color: string;
+  fillColor: string; // New fill color property
   lineCap: 'butt' | 'round' | 'square';
   lineJoin: 'round' | 'bevel' | 'miter';
   hasStrokeCaps: boolean;
@@ -58,6 +60,7 @@ export interface SimpleMarkerSettings {
   // Added 'circle' as a valid tip shape for simple markers
   tipShape: 'square' | 'line' | 'circle';
   blendMode: BlendMode;
+  fillColor: string;
   pressureControl: {
     opacity: boolean;
   };
@@ -74,6 +77,7 @@ export interface AdvancedMarkerSettings {
   wetness: number; // 0-100, color blending
   spacing: number; // 1-100 (% of size)
   blendMode: BlendMode;
+  fillColor: string;
   pressureControl: {
     size: boolean;
     flow: boolean;
@@ -86,6 +90,7 @@ export interface NaturalMarkerSettings {
   size: number;
   opacity: number;
   color: string;
+  fillColor: string;
   pressureControl: {
     size: boolean;
     opacity: boolean;
@@ -96,6 +101,7 @@ export interface AirbrushSettings {
   size: number;
   flow: number; // 0-1
   color: string;
+  fillColor: string;
   pressureControl: {
     flow: boolean;
   };
@@ -106,6 +112,7 @@ export interface FXBrushSettings {
   size: number;
   opacity: number;
   color: string;
+  fillColor: string;
 }
 
 export interface WatercolorSettings {
@@ -114,6 +121,7 @@ export interface WatercolorSettings {
   wetness: number; // 0-100, opacity of each dab
   opacity: number; // 0-1 overall brush opacity (slider)
   color: string;
+  fillColor: string;
   pressureControl: {
     size: boolean;
     flow: boolean;
@@ -194,7 +202,7 @@ export type CanvasItem = SketchObject;
 
 export type Point = { x: number; y: number; pressure?: number };
 
-export type StrokeMode = 'freehand' | 'line' | 'polyline' | 'curve' | 'arc' | 'parallelepiped';
+export type StrokeMode = 'freehand' | 'line' | 'polyline' | 'curve' | 'arc' | 'parallelepiped' | 'rectangle' | 'circle' | 'rotated-rectangle';
 
 export interface StrokeState {
   mode: StrokeMode;

@@ -69,10 +69,10 @@ export function useGuides(canvasSize: { width: number, height: number }) {
     }, [perspectiveGuide, mirrorGuides, rulerGuides, canvasSize]);
 
     const setGridType = useCallback((type: GridType) => {
-      setGridGuide(g => ({ ...g, type }));
-      if (type === 'none') {
-        setIsSnapToGridEnabled(false);
-      }
+        setGridGuide(g => ({ ...g, type }));
+        if (type === 'none') {
+            setIsSnapToGridEnabled(false);
+        }
     }, []);
 
     const toggleSnapToGrid = useCallback(() => setIsSnapToGridEnabled(p => !p), []);
@@ -87,7 +87,7 @@ export function useGuides(canvasSize: { width: number, height: number }) {
             setGridGuide(g => ({ ...g, spacing }));
         }
     }, []);
-    
+
     const handleSetGridIsoAngle = useCallback((angle: number) => {
         setGridGuide(g => ({ ...g, isoAngle: angle }));
     }, []);
@@ -113,7 +113,7 @@ export function useGuides(canvasSize: { width: number, height: number }) {
         setMirrorGuides(guideState.mirrorGuides);
         setPerspectiveGuide(guideState.perspectiveGuide);
         setOrthogonalGuide(guideState.orthogonalGuide);
-        
+
         if (guideState.gridGuide) { // New format
             setGridGuide({ ...guideState.gridGuide, majorLineColor: guideState.gridGuide.majorLineColor || 'rgba(128, 128, 128, 0.6)', minorLineColor: guideState.gridGuide.minorLineColor || 'rgba(128, 128, 128, 0.3)' });
         } else { // Old format for backward compatibility
@@ -124,6 +124,31 @@ export function useGuides(canvasSize: { width: number, height: number }) {
         setIsPerspectiveStrokeLockEnabled(guideState.isPerspectiveStrokeLockEnabled);
         setIsSnapToGridEnabled(guideState.isSnapToGridEnabled);
     }, []);
+
+    const resetPerspective = useCallback(() => {
+        const { width, height } = canvasSize;
+        const horizon = height * 0.4;
+        const vp1_x = width * 0.1;
+        const vp2_x = width * 0.9;
+        setPerspectiveGuide({
+            lines: {
+                green: [
+                    { id: 'g1', start: { x: 0, y: 0 }, end: { x: vp1_x, y: horizon } },
+                    { id: 'g2', start: { x: 0, y: height }, end: { x: vp1_x, y: horizon } },
+                ],
+                red: [
+                    { id: 'r1', start: { x: width, y: 0 }, end: { x: vp2_x, y: horizon } },
+                    { id: 'r2', start: { x: width, y: height }, end: { x: vp2_x, y: horizon } },
+                ],
+                blue: [
+                    { id: 'b1', start: { x: width * 0.3, y: 0 }, end: { x: width * 0.3, y: height } },
+                    { id: 'b2', start: { x: width * 0.7, y: 0 }, end: { x: width * 0.7, y: height } },
+                ],
+            },
+            guidePoint: { x: width / 2, y: height * 0.8 },
+            extraGuideLines: { green: [], red: [], blue: [] }
+        });
+    }, [canvasSize]);
 
     return {
         activeGuide,
@@ -147,5 +172,6 @@ export function useGuides(canvasSize: { width: number, height: number }) {
         onSetGridMajorLineColor: handleSetGridMajorLineColor,
         onSetGridMinorLineColor: handleSetGridMinorLineColor,
         loadGuideState,
+        resetPerspective,
     };
 }

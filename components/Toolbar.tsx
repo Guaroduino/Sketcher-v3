@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 // FIX: Corrected import path for MagicWandIcon.
 // FIX: Replaced MarkerIcon with SolidMarkerIcon and NaturalMarkerIcon
 // FIX: Added WatercolorIcon to support the new watercolor tool.
-import { SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, TransformIcon, ChevronDownIcon, TrashIcon, ExportIcon, CropIcon, RulerIcon, PerspectiveIcon, OrthogonalIcon, MirrorIcon, FreeTransformIcon, SparklesIcon, XIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon, UploadIcon, MoreVerticalIcon, TextIcon, NaturalMarkerIcon, AirbrushIcon, FXBrushIcon, AdvancedMarkerIcon, WatercolorIcon, CubeIcon } from './icons';
+import { SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, TransformIcon, ChevronDownIcon, TrashIcon, ExportIcon, CropIcon, RulerIcon, PerspectiveIcon, OrthogonalIcon, MirrorIcon, FreeTransformIcon, SparklesIcon, XIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon, UploadIcon, MoreVerticalIcon, TextIcon, NaturalMarkerIcon, AirbrushIcon, FXBrushIcon, AdvancedMarkerIcon, WatercolorIcon, CubeIcon, SquareIcon, CircleIcon } from './icons';
 // FIX: Replaced SolidMarkerSettings with SimpleMarkerSettings
 // FIX: Added missing tool setting and BrushPreset types.
 // FIX: Added WatercolorSettings to support the new watercolor tool.
@@ -418,17 +418,41 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 </div>
                             </div>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
+                                <label className="text-xs text-[--text-secondary] block mb-1">Color de Trazo</label>
                                 <input type="color" value={brushSettings.color} onChange={(e) => setBrushSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
                             </div>
-                        </Accordion>
+                            <div>
+                                <label className="text-xs text-[--text-secondary] block mb-1">Relleno</label>
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex rounded-md bg-[--bg-tertiary] p-1 gap-1">
+                                        <button
+                                            onClick={() => setBrushSettings(s => ({ ...s, fillColor: 'transparent' }))}
+                                            className={`flex-1 text-xs py-1 px-2 rounded-sm ${brushSettings.fillColor === 'transparent' ? 'bg-[--bg-primary] shadow text-[--text-primary]' : 'text-[--text-secondary] hover:text-[--text-primary]'}`}
+                                        >
+                                            Solo Trazo
+                                        </button>
+                                        <button
+                                            onClick={() => setBrushSettings(s => ({ ...s, fillColor: s.color }))} // Set to current stroke color initially if enabling
+                                            className={`flex-1 text-xs py-1 px-2 rounded-sm ${brushSettings.fillColor !== 'transparent' ? 'bg-[--bg-primary] shadow text-[--text-primary]' : 'text-[--text-secondary] hover:text-[--text-primary]'}`}
+                                        >
+                                            Relleno
+                                        </button>
+                                    </div>
+                                    {brushSettings.fillColor !== 'transparent' && (
+                                        <div className="flex gap-2 items-center">
+                                            <input type="color" value={brushSettings.fillColor} onChange={(e) => setBrushSettings(s => ({ ...s, fillColor: e.target.value }))} className="flex-grow h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </Accordion >
                         <Accordion title="Dinámica de Presión">
                             <div className="flex items-center justify-between py-1">
                                 <label htmlFor="pressure-size-brush" className="text-xs text-[--text-secondary]">Controlar Tamaño</label>
                                 <input id="pressure-size-brush" type="checkbox" checked={brushSettings.pressureControl.size} onChange={(e) => setBrushSettings(s => ({ ...s, pressureControl: { ...s.pressureControl, size: e.target.checked } }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
                             </div>
                         </Accordion>
-                    </div>
+                    </div >
                 );
             case 'simple-marker':
                 return (
@@ -449,11 +473,35 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
                                 <input type="color" value={simpleMarkerSettings.color} onChange={(e) => setSimpleMarkerSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
                             </div>
+                            <div>
+                                <label className="text-xs text-[--text-secondary] block mb-1">Relleno</label>
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex rounded-md bg-[--bg-tertiary] p-1 gap-1">
+                                        <button
+                                            onClick={() => setSimpleMarkerSettings(s => ({ ...s, fillColor: 'transparent' }))}
+                                            className={`flex-1 text-xs py-1 px-2 rounded-sm ${simpleMarkerSettings.fillColor === 'transparent' ? 'bg-[--bg-primary] shadow text-[--text-primary]' : 'text-[--text-secondary] hover:text-[--text-primary]'}`}
+                                        >
+                                            Solo Trazo
+                                        </button>
+                                        <button
+                                            onClick={() => setSimpleMarkerSettings(s => ({ ...s, fillColor: s.color }))}
+                                            className={`flex-1 text-xs py-1 px-2 rounded-sm ${simpleMarkerSettings.fillColor !== 'transparent' ? 'bg-[--bg-primary] shadow text-[--text-primary]' : 'text-[--text-secondary] hover:text-[--text-primary]'}`}
+                                        >
+                                            Relleno
+                                        </button>
+                                    </div>
+                                    {simpleMarkerSettings.fillColor !== 'transparent' && (
+                                        <div className="flex gap-2 items-center">
+                                            <input type="color" value={simpleMarkerSettings.fillColor} onChange={(e) => setSimpleMarkerSettings(s => ({ ...s, fillColor: e.target.value }))} className="flex-grow h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                             <BlendModeSelector
                                 value={simpleMarkerSettings.blendMode}
                                 onChange={(value) => setSimpleMarkerSettings(s => ({ ...s, blendMode: value }))}
                             />
-                        </Accordion>
+                        </Accordion >
                         <Accordion title="Punta">
                             <div>
                                 <label className="text-xs text-[--text-secondary] block mb-1">Forma de la punta</label>
@@ -469,7 +517,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 <input id="pressure-opacity-marker" type="checkbox" checked={simpleMarkerSettings.pressureControl.opacity} onChange={(e) => setSimpleMarkerSettings(s => ({ ...s, pressureControl: { ...s.pressureControl, opacity: e.target.checked } }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
                             </div>
                         </Accordion>
-                    </div>
+                    </div >
                 );
             case 'advanced-marker':
                 return (
@@ -490,11 +538,35 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
                                 <input type="color" value={advancedMarkerSettings.color} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
                             </div>
+                            <div>
+                                <label className="text-xs text-[--text-secondary] block mb-1">Relleno</label>
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex rounded-md bg-[--bg-tertiary] p-1 gap-1">
+                                        <button
+                                            onClick={() => setAdvancedMarkerSettings(s => ({ ...s, fillColor: 'transparent' }))}
+                                            className={`flex-1 text-xs py-1 px-2 rounded-sm ${advancedMarkerSettings.fillColor === 'transparent' ? 'bg-[--bg-primary] shadow text-[--text-primary]' : 'text-[--text-secondary] hover:text-[--text-primary]'}`}
+                                        >
+                                            Solo Trazo
+                                        </button>
+                                        <button
+                                            onClick={() => setAdvancedMarkerSettings(s => ({ ...s, fillColor: s.color }))}
+                                            className={`flex-1 text-xs py-1 px-2 rounded-sm ${advancedMarkerSettings.fillColor !== 'transparent' ? 'bg-[--bg-primary] shadow text-[--text-primary]' : 'text-[--text-secondary] hover:text-[--text-primary]'}`}
+                                        >
+                                            Relleno
+                                        </button>
+                                    </div>
+                                    {advancedMarkerSettings.fillColor !== 'transparent' && (
+                                        <div className="flex gap-2 items-center">
+                                            <input type="color" value={advancedMarkerSettings.fillColor} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, fillColor: e.target.value }))} className="flex-grow h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                             <BlendModeSelector
                                 value={advancedMarkerSettings.blendMode}
                                 onChange={(value) => setAdvancedMarkerSettings(s => ({ ...s, blendMode: value }))}
                             />
-                        </Accordion>
+                        </Accordion >
                         <Accordion title="Punta">
                             <div>
                                 <label className="text-xs text-[--text-secondary] block mb-1">Dureza: {advancedMarkerSettings.hardness}%</label>
@@ -515,7 +587,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 <input id="pressure-flow-adv" type="checkbox" checked={advancedMarkerSettings.pressureControl.flow} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, pressureControl: { ...s.pressureControl, flow: e.target.checked } }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
                             </div>
                         </Accordion>
-                    </div>
+                    </div >
                 );
             // FIX: Added settings panel for watercolor tool.
             case 'watercolor':
@@ -650,6 +722,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         curve: BezierIcon,
         arc: ArcIcon,
         parallelepiped: CubeIcon,
+        rectangle: SquareIcon,
+        circle: CircleIcon,
+        'rotated-rectangle': TransformIcon,
     }[strokeMode];
 
     const strokeModesList: { mode: StrokeMode; label: string; icon: React.FC<{ className?: string }> }[] = [
@@ -659,6 +734,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         { mode: 'curve', label: 'Curva (3 Puntos)', icon: BezierIcon },
         { mode: 'arc', label: 'Arco (Centro)', icon: ArcIcon },
         { mode: 'parallelepiped', label: 'Cubo 3D (Perspectiva)', icon: CubeIcon },
+        { mode: 'rectangle', label: 'Rectángulo', icon: SquareIcon },
+        { mode: 'circle', label: 'Círculo', icon: CircleIcon },
+        { mode: 'rotated-rectangle', label: 'Rectángulo (3 Puntos)', icon: TransformIcon },
     ];
 
     const ActiveStrokeStyleIcon = {
@@ -809,18 +887,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                         <span>{label}</span>
                                     </button>
                                 ))}
-                                {strokeMode === 'parallelepiped' && (
-                                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[--bg-tertiary]">
-                                        <input
-                                            type="checkbox"
-                                            id="is-solid-box-mode"
-                                            checked={isSolidBox}
-                                            onChange={(e) => setIsSolidBox(e.target.checked)}
-                                            className="w-4 h-4 rounded border-[--bg-tertiary]"
-                                        />
-                                        <label htmlFor="is-solid-box-mode" className="text-xs text-[--text-secondary]">Ocultar lados ocultos</label>
-                                    </div>
-                                )}
                             </div>
                         )}
                     </div>

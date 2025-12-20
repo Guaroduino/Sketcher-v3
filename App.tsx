@@ -1576,9 +1576,12 @@ export function App() {
                         onSetGridIsoAngle={guides.onSetGridIsoAngle} onSetGridMajorLineColor={guides.onSetGridMajorLineColor}
                         onSetGridMinorLineColor={guides.onSetGridMinorLineColor} areGuidesLocked={guides.areGuidesLocked}
                         onSetAreGuidesLocked={guides.setAreGuidesLocked} isPerspectiveStrokeLockEnabled={guides.isPerspectiveStrokeLockEnabled}
-                        onSetIsPerspectiveStrokeLockEnabled={guides.setIsPerspectiveStrokeLockEnabled} scaleFactor={currentState.scaleFactor}
+                        onSetIsPerspectiveStrokeLockEnabled={guides.setIsPerspectiveStrokeLockEnabled}
+                        onResetPerspective={guides.resetPerspective}
+                        scaleFactor={currentState.scaleFactor}
                         scaleUnit={currentState.scaleUnit} onPaste={handlePaste} hasClipboardContent={!!clipboard}
                         strokeSmoothing={strokeSmoothing} setStrokeSmoothing={setStrokeSmoothing}
+                        strokeMode={strokeMode} isSolidBox={isSolidBox} setIsSolidBox={setIsSolidBox}
                     />
                     <QuickAccessBar
                         settings={quickAccess.quickAccessSettings} onUpdateColor={quickAccess.updateColor} onAddColor={quickAccess.addColor}

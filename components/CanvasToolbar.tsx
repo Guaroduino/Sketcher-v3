@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import type { Tool, Guide, Point, OrthogonalGuide, TransformState, GridGuide, GridType, ScaleUnit } from '../types';
-import { HandIcon, ZoomInIcon, ZoomOutIcon, CrosshairIcon, UndoIcon, RedoIcon, TrashIcon, CheckIcon, XIcon, LockIcon, LockOpenIcon, GridIcon, SnapIcon, IsometricIcon, PasteIcon } from './icons';
+import type { Tool, Guide, Point, OrthogonalGuide, TransformState, GridGuide, GridType, ScaleUnit, StrokeMode } from '../types';
+import { HandIcon, ZoomInIcon, ZoomOutIcon, CrosshairIcon, UndoIcon, RedoIcon, TrashIcon, CheckIcon, XIcon, LockIcon, LockOpenIcon, GridIcon, SnapIcon, IsometricIcon, PasteIcon, CubeIcon, RefreshCwIcon } from './icons';
 
 interface CanvasToolbarProps {
   tool: Tool;
@@ -43,13 +43,17 @@ interface CanvasToolbarProps {
   areGuidesLocked: boolean;
   onSetAreGuidesLocked: React.Dispatch<React.SetStateAction<boolean>>;
   isPerspectiveStrokeLockEnabled: boolean;
-  onSetIsPerspectiveStrokeLockEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  onSetIsPerspectiveStrokeLockEnabled: (value: React.SetStateAction<boolean>) => void;
+  onResetPerspective: () => void;
   scaleFactor: number;
   scaleUnit: ScaleUnit;
   onPaste: () => void;
   hasClipboardContent: boolean;
   strokeSmoothing: number;
   setStrokeSmoothing: (value: number) => void;
+  strokeMode: StrokeMode;
+  isSolidBox: boolean;
+  setIsSolidBox: (v: boolean) => void;
 }
 
 export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
@@ -94,12 +98,16 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
   onSetAreGuidesLocked,
   isPerspectiveStrokeLockEnabled,
   onSetIsPerspectiveStrokeLockEnabled,
+  onResetPerspective,
   scaleFactor,
   scaleUnit,
   onPaste,
   hasClipboardContent,
   strokeSmoothing,
   setStrokeSmoothing,
+  strokeMode,
+  isSolidBox,
+  setIsSolidBox,
 }) => {
   const [customAngle, setCustomAngle] = useState('');
   const [gridSpacing, setGridSpacing] = useState('50');
@@ -398,6 +406,27 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                   title={isPerspectiveStrokeLockEnabled ? "Desactivar bloqueo de trazo a perspectiva" : "Activar bloqueo de trazo a perspectiva"}
                 >
                   <SnapIcon className="w-5 h-5" />
+                </button>
+                <div className="w-px h-6 bg-[--bg-hover] mx-1" />
+                <button
+                  onClick={onResetPerspective}
+                  className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover] transition-colors"
+                  title="Reiniciar Guías de Perspectiva"
+                >
+                  <RefreshCwIcon className="w-5 h-5" />
+                </button>
+              </>
+            )}
+
+            {strokeMode === 'parallelepiped' && (
+              <>
+                <div className="w-px h-6 bg-[--bg-hover] mx-1" />
+                <button
+                  onClick={() => setIsSolidBox(!isSolidBox)}
+                  className={`p-2 rounded-md transition-colors ${isSolidBox ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'}`}
+                  title={isSolidBox ? "Mostrar todos los lados" : "Ocultar lados traseros"}
+                >
+                  <CubeIcon className="w-5 h-5" />
                 </button>
               </>
             )}

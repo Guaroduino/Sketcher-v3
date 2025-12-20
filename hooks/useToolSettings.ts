@@ -6,6 +6,7 @@ const initialBrushSettings: BrushSettings = {
     size: 3,
     opacity: 1,
     color: '#000000',
+    fillColor: 'transparent', // Default fill transparent
     // FIX: Corrected lineCap to be a valid value 'round' instead of an empty/truncated string.
     lineCap: 'round',
     lineJoin: 'round',
@@ -29,6 +30,7 @@ const initialSimpleMarkerSettings: SimpleMarkerSettings = {
     // Default tip is now a line
     tipShape: 'line',
     blendMode: 'source-over',
+    fillColor: 'transparent',
     pressureControl: {
         opacity: true,
     },
@@ -38,6 +40,7 @@ const initialNaturalMarkerSettings: NaturalMarkerSettings = {
     size: 20,
     opacity: 0.7,
     color: '#34d399',
+    fillColor: 'transparent',
     pressureControl: {
         size: true,
         opacity: true,
@@ -48,6 +51,7 @@ const initialAirbrushSettings: AirbrushSettings = {
     size: 60,
     flow: 0.5,
     color: '#60a5fa',
+    fillColor: 'transparent',
     pressureControl: {
         flow: true,
     },
@@ -58,6 +62,7 @@ const initialFxBrushSettings: FXBrushSettings = {
     size: 50,
     opacity: 1,
     color: '#c084fc',
+    fillColor: 'transparent',
 };
 
 const initialAdvancedMarkerSettings: AdvancedMarkerSettings = {
@@ -71,6 +76,7 @@ const initialAdvancedMarkerSettings: AdvancedMarkerSettings = {
     wetness: 10,
     spacing: 25,
     blendMode: 'source-over',
+    fillColor: 'transparent',
     pressureControl: {
         size: true,
         flow: true,
@@ -83,6 +89,7 @@ const initialWatercolorSettings: WatercolorSettings = {
     wetness: 50,
     opacity: 0.9,
     color: '#3b82f6',
+    fillColor: 'transparent',
     pressureControl: {
         size: true,
         flow: false,

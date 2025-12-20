@@ -238,6 +238,14 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         setDebugPointers,
         isPalmRejectionEnabled,
         isSolidBox,
+        brushSettings: props.brushSettings,
+        fillColor: tool === 'brush' ? props.brushSettings.fillColor :
+            tool === 'simple-marker' ? props.simpleMarkerSettings.fillColor :
+                tool === 'advanced-marker' ? props.advancedMarkerSettings.fillColor :
+                    tool === 'natural-marker' ? props.naturalMarkerSettings.fillColor :
+                        tool === 'airbrush' ? props.airbrushSettings.fillColor :
+                            tool === 'watercolor' ? props.watercolorSettings.fillColor :
+                                tool === 'fx-brush' ? props.fxBrushSettings.fillColor : 'transparent',
     });
 
     const pointerHandlers = {

@@ -2,7 +2,7 @@ import React, { useRef, useCallback, useEffect } from 'react';
 import type {
     CanvasItem, SketchObject, Tool, Guide, Point, RulerGuide, PerspectiveGuide, MirrorGuide, OrthogonalGuide,
     CropRect, ViewTransform, PerspectiveControlPoint, TransformState, AffineTransformState, FreeTransformState, GridGuide,
-    StrokeMode, StrokeState, Selection, MagicWandSettings, StrokeModifier
+    StrokeMode, StrokeState, Selection, MagicWandSettings, StrokeModifier, BrushSettings
 } from '../types';
 import { getCanvasPoint, isNearPoint, projectPointOnLine, pointInPolygon, cloneCanvas, distanceToLineSegment, distanceToLine, getLineIntersection, createMagicWandSelection, getPerspectiveBoxPoints, getVisibleBoxEdges } from '../utils/canvasUtils';
 import { clearCanvas } from '../utils/canvasUtils';
@@ -84,6 +84,7 @@ export function usePointerEvents({
     setViewTransform,
     activeItem,
     tool,
+    brushSettings,
     isDrawingTool,
     isSelectionTool,
     onDrawCommit,
@@ -133,6 +134,7 @@ export function usePointerEvents({
     setDebugPointers,
     isPalmRejectionEnabled,
     isSolidBox,
+    fillColor,
 }: {
     items: CanvasItem[];
     uiCanvasRef: React.RefObject<HTMLCanvasElement>;
@@ -141,6 +143,7 @@ export function usePointerEvents({
     setViewTransform: React.Dispatch<React.SetStateAction<ViewTransform>>;
     activeItem: CanvasItem | null | undefined;
     tool: Tool;
+    brushSettings: BrushSettings;
     isDrawingTool: boolean;
     isSelectionTool: boolean;
     onDrawCommit: (activeItemId: string, beforeCanvas: HTMLCanvasElement) => void;
@@ -190,6 +193,7 @@ export function usePointerEvents({
     setDebugPointers: React.Dispatch<React.SetStateAction<Map<number, { x: number, y: number }>>>;
     isPalmRejectionEnabled: boolean;
     isSolidBox: boolean;
+    fillColor: string;
 }) {
     const canvasRectRef = useRef<DOMRect | null>(null);
 
@@ -591,15 +595,15 @@ export function usePointerEvents({
             }
         }
 
-        if (isDrawingTool && strokeMode === 'line') {
+        if (isDrawingTool && ['line'].includes(strokeMode)) {
             setDragAction({ type: 'draw' });
             if (!strokeState) {
-                setStrokeState({ mode: 'line', points: [snappedPointWithPressure] });
+                setStrokeState({ mode: strokeMode, points: [snappedPointWithPressure] });
             }
             return;
         }
 
-        if (isDrawingTool && ['polyline', 'curve', 'arc', 'parallelepiped'].includes(strokeMode)) {
+        if (isDrawingTool && ['polyline', 'curve', 'arc', 'parallelepiped', 'rectangle', 'circle', 'rotated-rectangle'].includes(strokeMode)) {
             if (strokeMode === 'polyline') {
                 if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
                 longPressTimerRef.current = window.setTimeout(() => {
@@ -625,12 +629,29 @@ export function usePointerEvents({
                 }
             } else {
                 const newPoints = [...strokeState.points, snappedPointWithPressure];
+
+                let isClosed = false;
+                if (strokeMode === 'polyline' && newPoints.length > 2) {
+                    const startPoint = newPoints[0];
+                    const endPoint = newPoints[newPoints.length - 1];
+                    const dist = Math.hypot(startPoint.x - endPoint.x, startPoint.y - endPoint.y);
+                    if (dist < 10 / viewTransform.zoom) {
+                        isClosed = true;
+                        // Snap last point to start point to close the loop perfectly
+                        newPoints[newPoints.length - 1] = { ...startPoint, pressure: endPoint.pressure };
+                    }
+                }
+
                 setStrokeState({ ...strokeState, points: newPoints });
 
                 let strokeComplete = false;
                 if (strokeMode === 'curve' && newPoints.length === 3) strokeComplete = true;
                 if (strokeMode === 'arc' && newPoints.length === 3) strokeComplete = true;
                 if (strokeMode === 'parallelepiped' && newPoints.length === 3) strokeComplete = true;
+                if (strokeMode === 'rectangle' && newPoints.length === 2) strokeComplete = true;
+                if (strokeMode === 'circle' && newPoints.length === 2) strokeComplete = true;
+                if (strokeMode === 'rotated-rectangle' && newPoints.length === 3) strokeComplete = true;
+                if (isClosed) strokeComplete = true;
 
                 if (strokeComplete && activeItem?.type === 'object') {
                     const beforeCanvas = cloneCanvas(activeItem.canvas!);
@@ -639,12 +660,113 @@ export function usePointerEvents({
                     if (brush) {
                         const brushContext: BrushContext = { mainCtx, previewCtx: previewCanvasRef.current!.getContext('2d')!, viewTransform, onDrawCommit, activeItemId: activeItem.id, activeGuide, mirrorGuides, strokeModifier };
 
+                        // Handle Fill for Shapes
+                        if (fillColor && fillColor !== 'transparent') {
+                            mainCtx.save();
+                            mainCtx.fillStyle = fillColor;
+
+                            if (strokeMode === 'polyline' && isClosed) {
+                                mainCtx.beginPath();
+                                mainCtx.moveTo(newPoints[0].x, newPoints[0].y);
+                                for (let i = 1; i < newPoints.length; i++) mainCtx.lineTo(newPoints[i].x, newPoints[i].y);
+                                mainCtx.closePath();
+                                mainCtx.fill();
+                            } else if (strokeMode === 'rectangle' && newPoints.length === 2) {
+                                const width = newPoints[1].x - newPoints[0].x;
+                                const height = newPoints[1].y - newPoints[0].y;
+                                mainCtx.fillRect(newPoints[0].x, newPoints[0].y, width, height);
+                            } else if (strokeMode === 'circle' && newPoints.length === 2) {
+                                const radius = Math.hypot(newPoints[1].x - newPoints[0].x, newPoints[1].y - newPoints[0].y);
+                                mainCtx.beginPath();
+                                mainCtx.arc(newPoints[0].x, newPoints[0].y, radius, 0, 2 * Math.PI);
+                                mainCtx.fill();
+                            } else if (strokeMode === 'rotated-rectangle' && newPoints.length === 3) {
+                                const p1 = newPoints[0];
+                                const p2 = newPoints[1];
+                                const p3 = newPoints[2];
+                                // Calculate 4th point
+                                // Vector p1->p2
+                                const dx = p2.x - p1.x;
+                                const dy = p2.y - p1.y;
+                                // Vector p2->p3 (projected perpendicular to p1->p2 ?)
+                                // User expects 3 points: Base Start, Base End, Extrusion Height.
+                                // Logic:
+                                // Base = p1->p2.
+                                // Height = Distance from p3 to line(p1,p2).
+                                // OR: p3 simply defines the opposite side.
+                                // Standard 3-point rect:
+                                // 1. Click p1
+                                // 2. Click p2 (defines angle and width)
+                                // 3. Drag/Click p3 (defines height, perpendicular to p1-p2)
+
+                                // Proper math:
+                                // Vector U = p2 - p1 (Unit vector u)
+                                // Vector V = p3 - p2
+                                // Height = V dot Normal(U) ?
+                                // Easier: Project p3 onto the line perpendicular to p1-p2.
+
+                                const len = Math.hypot(dx, dy);
+                                if (len > 0) {
+                                    const ux = dx / len;
+                                    const uy = dy / len;
+                                    const nx = -uy;
+                                    const ny = ux;
+
+                                    // Vector p2->p3
+                                    const v23x = p3.x - p2.x;
+                                    const v23y = p3.y - p2.y;
+
+                                    // Project v23 onto normal
+                                    const dist = v23x * nx + v23y * ny;
+
+                                    // p3_projected (p4) = p1 + (dist * normal)
+                                    // p3_actual (adjusted) = p2 + (dist * normal)
+                                    const p3_final = { x: p2.x + nx * dist, y: p2.y + ny * dist };
+                                    const p4_final = { x: p1.x + nx * dist, y: p1.y + ny * dist };
+
+                                    mainCtx.beginPath();
+                                    mainCtx.moveTo(p1.x, p1.y);
+                                    mainCtx.lineTo(p2.x, p2.y);
+                                    mainCtx.lineTo(p3_final.x, p3_final.y);
+                                    mainCtx.lineTo(p4_final.x, p4_final.y);
+                                    mainCtx.closePath();
+                                    mainCtx.fill();
+                                }
+                            }
+
+                            mainCtx.restore();
+                        }
+
                         if (strokeMode === 'parallelepiped') {
                             const vps = perspectiveVPs.current;
                             if (vps.vpGreen && vps.vpRed) {
 
                                 const corners = getPerspectiveBoxPoints(newPoints[0], newPoints[1], newPoints[2], vps);
                                 if (corners.length === 8) {
+
+                                    // Fill Box Faces if fillColor is set
+                                    if (fillColor && fillColor !== 'transparent') {
+                                        mainCtx.save();
+                                        mainCtx.fillStyle = fillColor;
+                                        const faces = [
+                                            [0, 1, 2, 3], // Base
+                                            [4, 5, 6, 7], // Top
+                                            [0, 4, 7, 3], // Side 1
+                                            [1, 5, 4, 0], // Side 2
+                                            [2, 6, 5, 1], // Side 3
+                                            [3, 7, 6, 2]  // Side 4
+                                        ];
+                                        // Simple painter's alg (draw all) - not perfect but okay for opaque solids often
+                                        faces.forEach(faceIndices => {
+                                            mainCtx.beginPath();
+                                            mainCtx.moveTo(corners[faceIndices[0]].x, corners[faceIndices[0]].y);
+                                            for (let k = 1; k < 4; k++) mainCtx.lineTo(corners[faceIndices[k]].x, corners[faceIndices[k]].y);
+                                            mainCtx.closePath();
+                                            mainCtx.fill();
+                                        });
+                                        mainCtx.restore();
+                                    }
+
                                     let edges: Point[][] = [];
 
                                     if (isSolidBox) {
@@ -676,6 +798,46 @@ export function usePointerEvents({
                             if (strokeMode === 'arc') {
                                 pointsToDraw = generateArcPoints(newPoints, arcDrawingState.current?.totalAngle);
                             }
+                            if (strokeMode === 'rectangle' && newPoints.length === 2) {
+                                const p1 = newPoints[0];
+                                const p2 = newPoints[1];
+                                pointsToDraw = [p1, { x: p2.x, y: p1.y, pressure: p1.pressure }, p2, { x: p1.x, y: p2.y, pressure: p2.pressure }, p1];
+                            }
+                            if (strokeMode === 'circle' && newPoints.length === 2) {
+                                const center = newPoints[0];
+                                const radius = Math.hypot(newPoints[1].x - center.x, newPoints[1].y - center.y);
+                                pointsToDraw = [];
+                                const steps = Math.max(30, Math.ceil(radius));
+                                for (let i = 0; i <= steps; i++) {
+                                    const theta = (i / steps) * 2 * Math.PI;
+                                    pointsToDraw.push({
+                                        x: center.x + radius * Math.cos(theta),
+                                        y: center.y + radius * Math.sin(theta),
+                                        pressure: newPoints[1].pressure
+                                    });
+                                }
+                            }
+                            if (strokeMode === 'rotated-rectangle' && newPoints.length === 3) {
+                                const p1 = newPoints[0];
+                                const p2 = newPoints[1];
+                                const p3 = newPoints[2];
+                                const dx = p2.x - p1.x;
+                                const dy = p2.y - p1.y;
+                                const len = Math.hypot(dx, dy);
+                                if (len > 0) {
+                                    const ux = dx / len;
+                                    const uy = dy / len;
+                                    const nx = -uy;
+                                    const ny = ux;
+                                    const v23x = p3.x - p2.x;
+                                    const v23y = p3.y - p2.y;
+                                    const dist = v23x * nx + v23y * ny;
+                                    const p3_final = { x: p2.x + nx * dist, y: p2.y + ny * dist, pressure: p3.pressure };
+                                    const p4_final = { x: p1.x + nx * dist, y: p1.y + ny * dist, pressure: p3.pressure };
+                                    pointsToDraw = [p1, p2, p3_final, p4_final, p1];
+                                }
+                            }
+
                             (brush as any).drawWithMirroring(mainCtx, pointsToDraw, brushContext);
                         }
 
@@ -716,7 +878,7 @@ export function usePointerEvents({
                 brush.onPointerDown(snappedPointWithPressure, brushContext);
             }
         }
-    }, [tool, viewTransform, activeItem, isDrawingTool, isSelectionTool, magicWandSettings, setSelection, cropRect, activeGuide, rulerGuides, mirrorGuides, perspectiveGuide, areGuidesLocked, setPerspectiveGuide, setRulerGuides, setMirrorGuides, setGuideDragState, perspectiveVPs, transformState, isPerspectiveStrokeLockEnabled, snapPointToGrid, strokeMode, strokeState, setStrokeState, onDrawCommit, onAddItem, setTextEditState, textEditState, onCommitText, getBrushForTool, strokeSmoothing, strokeModifier, setDebugPointers, isPalmRejectionEnabled, isSolidBox]);
+    }, [tool, viewTransform, activeItem, isDrawingTool, isSelectionTool, magicWandSettings, setSelection, cropRect, activeGuide, rulerGuides, mirrorGuides, perspectiveGuide, areGuidesLocked, setPerspectiveGuide, setRulerGuides, setMirrorGuides, setGuideDragState, perspectiveVPs, transformState, isPerspectiveStrokeLockEnabled, snapPointToGrid, strokeMode, strokeState, setStrokeState, onDrawCommit, onAddItem, setTextEditState, textEditState, onCommitText, getBrushForTool, strokeSmoothing, strokeModifier, setDebugPointers, isPalmRejectionEnabled, isSolidBox, fillColor]);
 
     const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
         if (!uiCanvasRef.current) return;
@@ -1024,6 +1186,103 @@ export function usePointerEvents({
                         }
                         previewCtx.stroke();
                     }
+                } else if (strokeMode === 'rotated-rectangle') {
+                    if (pointsToDraw.length >= 2) {
+                        const p1 = pointsToDraw[0];
+                        const p2 = pointsToDraw[1];
+
+                        previewCtx.lineWidth = (activeBrushRef.current?.getSize ? (activeBrushRef.current as any).getSize() : 2) / viewTransform.zoom;
+                        const brushColor = brushSettings?.color || 'black';
+                        previewCtx.strokeStyle = brushColor;
+
+                        // Draw Base Line
+                        previewCtx.beginPath();
+                        previewCtx.moveTo(p1.x, p1.y);
+                        previewCtx.lineTo(p2.x, p2.y);
+                        previewCtx.stroke();
+
+                        if (pointsToDraw.length === 3) {
+                            const p3 = pointsToDraw[2];
+                            // Calculate rect
+                            const dx = p2.x - p1.x;
+                            const dy = p2.y - p1.y;
+                            const len = Math.hypot(dx, dy);
+                            if (len > 0) {
+                                const ux = dx / len;
+                                const uy = dy / len;
+                                const nx = -uy;
+                                const ny = ux;
+                                const v23x = p3.x - p2.x;
+                                const v23y = p3.y - p2.y;
+                                const dist = v23x * nx + v23y * ny;
+                                const p3_final = { x: p2.x + nx * dist, y: p2.y + ny * dist };
+                                const p4_final = { x: p1.x + nx * dist, y: p1.y + ny * dist };
+
+                                if (fillColor && fillColor !== 'transparent') {
+                                    previewCtx.fillStyle = fillColor;
+                                    previewCtx.beginPath();
+                                    previewCtx.moveTo(p1.x, p1.y);
+                                    previewCtx.lineTo(p2.x, p2.y);
+                                    previewCtx.lineTo(p3_final.x, p3_final.y);
+                                    previewCtx.lineTo(p4_final.x, p4_final.y);
+                                    previewCtx.closePath();
+                                    previewCtx.fill();
+                                }
+
+                                // Preview Wireframe
+                                previewCtx.beginPath();
+                                previewCtx.moveTo(p1.x, p1.y);
+                                previewCtx.lineTo(p2.x, p2.y);
+                                previewCtx.lineTo(p3_final.x, p3_final.y);
+                                previewCtx.lineTo(p4_final.x, p4_final.y);
+                                previewCtx.closePath();
+                                previewCtx.stroke();
+                            }
+                        }
+                    }
+                } else if (strokeState.mode === 'rectangle') {
+                    const width = currentPointWithPressure.x - strokeState.points[0].x;
+                    const height = currentPointWithPressure.y - strokeState.points[0].y;
+
+                    if (fillColor && fillColor !== 'transparent') {
+                        previewCtx.fillStyle = fillColor;
+                        previewCtx.fillRect(strokeState.points[0].x, strokeState.points[0].y, width, height);
+                    }
+
+                    // Need to check if brush has size?
+                    const brushSize = activeBrushRef.current?.getSize ? (activeBrushRef.current as any).getSize() : 2;
+                    previewCtx.lineWidth = brushSize / viewTransform.zoom;
+
+                    (brush as any).drawWithMirroring(previewCtx, [
+                        strokeState.points[0],
+                        { x: currentPointWithPressure.x, y: strokeState.points[0].y, pressure: strokeState.points[0].pressure },
+                        currentPointWithPressure,
+                        { x: strokeState.points[0].x, y: currentPointWithPressure.y, pressure: currentPointWithPressure.pressure },
+                        strokeState.points[0]
+                    ], brushContext);
+
+                } else if (strokeState.mode === 'circle') {
+                    const [center] = strokeState.points;
+                    const radius = Math.hypot(currentPointWithPressure.x - center.x, currentPointWithPressure.y - center.y);
+
+                    if (fillColor && fillColor !== 'transparent') {
+                        previewCtx.fillStyle = fillColor;
+                        previewCtx.beginPath();
+                        previewCtx.arc(center.x, center.y, radius, 0, 2 * Math.PI);
+                        previewCtx.fill();
+                    }
+                    // Fix: Generate circle points
+                    const circlePoints: Point[] = [];
+                    const steps = Math.max(40, Math.ceil(radius));
+                    for (let i = 0; i <= steps; i++) {
+                        const theta = (i / steps) * 2 * Math.PI;
+                        circlePoints.push({
+                            x: center.x + radius * Math.cos(theta),
+                            y: center.y + radius * Math.sin(theta),
+                            pressure: currentPointWithPressure.pressure
+                        });
+                    }
+                    (brush as any).drawWithMirroring(previewCtx, circlePoints, brushContext);
                 } else {
                     // Fallback for line/polyline
                     (brush as any).drawWithMirroring(previewCtx, pointsToDraw, brushContext);
@@ -1206,7 +1465,7 @@ export function usePointerEvents({
             setLivePreviewLayerId(null);
         }
 
-        if (dragAction.current.type === 'draw' && strokeState && strokeState.mode === 'line' && strokeState.points.length > 0 && activeItem?.type === 'object') {
+        if (dragAction.current.type === 'draw' && strokeState && ['line', 'rectangle', 'circle'].includes(strokeState.mode) && strokeState.points.length > 0 && activeItem?.type === 'object') {
             const beforeCanvas = cloneCanvas(activeItem.canvas!);
             const mainCtx = activeItem.context!;
             const brush = getBrushForTool(tool);
@@ -1214,10 +1473,58 @@ export function usePointerEvents({
             const finalPoint = snapPointToGrid(getCanvasPoint(e.nativeEvent, viewTransform, uiCanvasRef.current!) as Point);
             const pressure = (e.pointerType === 'pen') ? e.pressure : 1.0;
             const finalPointWithPressure = { ...finalPoint, pressure };
-            const finalPoints = [strokeState.points[0], finalPointWithPressure];
+            const finalPoints = [...strokeState.points, finalPointWithPressure];
 
             if (brush && finalPoints.length > 1) {
                 const brushContext: BrushContext = { mainCtx, previewCtx: previewCanvasRef.current!.getContext('2d')!, viewTransform, onDrawCommit, activeItemId: activeItem.id, activeGuide, mirrorGuides, strokeModifier };
+
+                // Handle Fill for Rectangle and Circle
+                if ((strokeState.mode === 'rectangle' || strokeState.mode === 'circle') && fillColor && fillColor !== 'transparent') {
+                    mainCtx.save();
+
+                    // Handle Mirroring for Fill?
+                    // drawWithMirroring handles it for stroke. We should manually mirror the fill if needed.
+                    // A bit complex. For now, let's just support basic fill without mirror or check how BaseBrush handles mirror.
+                    // BaseBrush loops over mirrorGuides. We should replicate that or expose a helper.
+                    // Or, just implement a basic fill for now.
+
+                    const drawFill = (ctx: CanvasRenderingContext2D) => {
+                        ctx.fillStyle = fillColor;
+                        ctx.beginPath();
+                        if (strokeState.mode === 'rectangle') {
+                            const width = finalPoints[1].x - finalPoints[0].x;
+                            const height = finalPoints[1].y - finalPoints[0].y;
+                            ctx.rect(finalPoints[0].x, finalPoints[0].y, width, height);
+                        } else if (strokeState.mode === 'circle') {
+                            const center = finalPoints[0];
+                            const radius = Math.hypot(finalPoints[1].x - center.x, finalPoints[1].y - center.y);
+                            ctx.arc(center.x, center.y, radius, 0, 2 * Math.PI);
+                        }
+                        ctx.fill();
+                    };
+
+                    drawFill(mainCtx);
+
+                    if (activeGuide === 'mirror' && mirrorGuides.length > 0) {
+                        mirrorGuides.forEach(guide => {
+                            mainCtx.save();
+                            const [p1, p2] = [guide.start, guide.end];
+                            const dx = p2.x - p1.x;
+                            const dy = p2.y - p1.y;
+                            const angle = Math.atan2(dy, dx);
+                            mainCtx.translate(p1.x, p1.y);
+                            mainCtx.rotate(angle);
+                            mainCtx.scale(1, -1);
+                            mainCtx.rotate(-angle);
+                            mainCtx.translate(-p1.x, -p1.y);
+                            drawFill(mainCtx);
+                            mainCtx.restore();
+                        });
+                    }
+
+                    mainCtx.restore();
+                }
+
                 (brush as any).drawWithMirroring(mainCtx, finalPoints, brushContext);
                 onDrawCommit(activeItem.id, beforeCanvas);
             }
