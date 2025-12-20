@@ -809,6 +809,18 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                         <span>{label}</span>
                                     </button>
                                 ))}
+                                {strokeMode === 'parallelepiped' && (
+                                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[--bg-tertiary]">
+                                        <input
+                                            type="checkbox"
+                                            id="is-solid-box-mode"
+                                            checked={isSolidBox}
+                                            onChange={(e) => setIsSolidBox(e.target.checked)}
+                                            className="w-4 h-4 rounded border-[--bg-tertiary]"
+                                        />
+                                        <label htmlFor="is-solid-box-mode" className="text-xs text-[--text-secondary]">Ocultar lados ocultos</label>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -859,18 +871,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                         className="w-full mt-1"
                                         disabled={strokeModifier.style === 'solid'}
                                     />
-                                    {strokeMode === 'parallelepiped' && (
-                                        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[--bg-tertiary]">
-                                            <input
-                                                type="checkbox"
-                                                id="is-solid-box"
-                                                checked={isSolidBox}
-                                                onChange={(e) => setIsSolidBox(e.target.checked)}
-                                                className="w-4 h-4 rounded border-[--bg-tertiary]"
-                                            />
-                                            <label htmlFor="is-solid-box" className="text-xs text-[--text-secondary]">Ocultar lados ocultos</label>
-                                        </div>
-                                    )}
+
                                 </div>
                             </div>
                         )}
