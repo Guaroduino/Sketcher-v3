@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Point, ViewTransform, CropRect } from '../types';
+import type { Point, ViewTransform, CropRect, PerspectiveGuide } from '../types';
 
 export const getCanvasPoint = (e: PointerEvent | React.PointerEvent<HTMLDivElement>, viewTransform: ViewTransform, canvas: HTMLCanvasElement): Point => {
     const rect = canvas.getBoundingClientRect();
@@ -77,6 +77,106 @@ export const distanceToLine = (p: Point, v: Point, w: Point): number => {
         y: v.y + t * (w.y - v.y)
     };
     return Math.hypot(p.x - projection.x, p.y - projection.y);
+};
+
+
+export const getPerspectiveBoxPoints = (
+    p1: Point, // Base Corner 1
+    p2: Point, // Base Corner 2 (Opposite on base plane)
+    p3: Point | null, // Height Point (optional, for partial construction)
+    vps: { vpGreen: Point | null, vpRed: Point | null, vpBlue: Point | null }
+): Point[] => {
+    // We assume 2-Point or 3-Point perspective.
+    // Base is on the Green-Red plane. Height is along Blue.
+    // If Blue VP is null (2-point), height lines are vertical (parallel Y).
+
+    const { vpGreen, vpRed, vpBlue } = vps;
+    if (!vpGreen || !vpRed) return []; // Need at least 2 VPs for the base
+
+    // 1. Construct Base Rect (4 points) on "Ground"
+    // Lines: L1(vpGreen, p1), L2(vpRed, p1) -> These define the "origin" corner lines
+    // Lines: L3(vpGreen, p2), L4(vpRed, p2) -> These define the "opposite" corner lines
+    // Corners:
+    // C1 = p1
+    // C2 = Intersection(Line(vpRed, p1), Line(vpGreen, p2))
+    // C3 = p2
+    // C4 = Intersection(Line(vpGreen, p1), Line(vpRed, p2))
+
+    const c1 = p1;
+    const c3 = p2;
+    const c2 = getLineIntersection(
+        { start: vpRed, end: p1 },
+        { start: vpGreen, end: p2 }
+    );
+    const c4 = getLineIntersection(
+        { start: vpGreen, end: p1 },
+        { start: vpRed, end: p2 }
+    );
+
+    if (!c2 || !c4) return [c1, c3]; // Degenerate base, return what we have
+
+    const basePoints = [c1, c2, c3, c4];
+    if (!p3) return basePoints;
+
+    // 2. Construct Top Rect
+    // We need to determine the "Height" offset.
+    // User clicked p3.
+    // We assume p3 defines the height relative to the LAST point clicked (p2 usually, or p1?).
+    // Let's assume height is derived from p2 to p3 along the Vertical axis (Blue VP).
+
+    // Vertical Line Constraint:
+    // If vpBlue exists: Line(vpBlue, p2)
+    // If no vpBlue: Vertical Line passing through p2
+
+    // But p3 might not be on that line exactly.
+    // So we project p3 onto the vertical line passing through p2.
+    // Let's call the projected point p3_proj. That determines the "height".
+
+    let heightVectorStart = c3; // Using p2 (c3) as the anchor for height
+    let topC3: Point | null = null;
+
+    if (vpBlue) {
+        // Project p3 onto Line(vpBlue, c3)
+        topC3 = projectPointOnLine(p3, vpBlue, c3);
+    } else {
+        // Vertical line
+        topC3 = { x: c3.x, y: p3.y }; // Simple vertical projection
+    }
+
+    if (!topC3) return basePoints;
+
+    // Now reconstructing the Top Rect starting from topC3
+    // We essentially repeat the intersection logic but "elevated"
+    // Wait, simpler way:
+    // We have the vertical "rails" from each base corner to VP_Blue (or vertical infinity).
+    // topC3 is the corner corresponding to c3.
+    // topC1, topC2, topC4 must be found by intersecting these rails with the "Top Plane" grids.
+    //
+    // Line(vpGreen, topC3) intersects Rail(c2) -> topC2
+    // Line(vpRed, topC3) intersects Rail(c4) -> topC4
+    // Line(vpRed, topC2) (or vpGreen, topC4) intersects Rail(c1) -> topC1
+
+    const getRail = (baseP: Point) => {
+        if (vpBlue) return { start: vpBlue, end: baseP };
+        return { start: baseP, end: { x: baseP.x, y: baseP.y - 10000 } }; // Vertical ray up
+    };
+
+    const rail1 = getRail(c1);
+    const rail2 = getRail(c2);
+    // rail3 is passes through topC3 by definition
+    const rail4 = getRail(c4);
+
+    const topC2 = getLineIntersection(rail2, { start: vpGreen, end: topC3 });
+    const topC4 = getLineIntersection(rail4, { start: vpRed, end: topC3 });
+
+    if (!topC2 || !topC4) return [...basePoints, topC3];
+
+    const topC1 = getLineIntersection(rail1, { start: vpRed, end: topC2 });
+    // Verification: could also be intersection(rail1, {start: vpGreen, end: topC4})
+
+    if (!topC1) return [...basePoints, topC3]; // Should rarely happen if valid perspective
+
+    return [c1, c2, c3, c4, topC1, topC2, topC3, topC4];
 };
 
 export const getContentBoundingBox = (canvas: HTMLCanvasElement, tolerance: number = 1): CropRect | null => {
@@ -377,3 +477,75 @@ export function createMagicWandSelection(imageData: ImageData, startX: number, s
         bbox: { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 }
     };
 }
+
+export const getVisibleBoxEdges = (corners: Point[]): Point[][] => {
+    if (corners.length !== 8) return [];
+
+    const getSignedArea = (indices: number[]) => {
+        let sum = 0;
+        for (let i = 0; i < indices.length; i++) {
+            const p1 = corners[indices[i]];
+            const p2 = corners[indices[(i + 1) % indices.length]];
+            sum += (p2.x - p1.x) * (p2.y + p1.y);
+        }
+        return sum;
+    };
+
+    // Faces defined to have Outward Normals (assuming "standard" construction)
+    // 0: Bottom (0, 3, 2, 1)
+    // 1: Top    (4, 5, 6, 7)
+    // 2: Front  (0, 1, 5, 4)
+    // 3: Right  (1, 2, 6, 5)
+    // 4: Back   (2, 3, 7, 6)
+    // 5: Left   (3, 0, 4, 7)
+    const candidateFaces = [
+        [0, 3, 2, 1],
+        [4, 5, 6, 7],
+        [0, 1, 5, 4],
+        [1, 2, 6, 5],
+        [2, 3, 7, 6],
+        [3, 0, 4, 7]
+    ];
+
+    // In Y-down (screen), visible faces (CCW in 3D?) usually map to Negative or Positive Signed Area depending on winding.
+    // Heuristic: We usually see 3 faces (convex corner).
+    // Let's find the sign that gives us <= 3 faces (but > 0 faces).
+
+    let visibleIndices: number[][] = [];
+
+    // Try Negative Area (Standard CW projected visibility usually)
+    const negFaces = candidateFaces.filter(indices => getSignedArea(indices) < 0);
+    const posFaces = candidateFaces.filter(indices => getSignedArea(indices) > 0);
+
+    // If the box is "inside out" (negative height), the winding flips.
+    // We pick the set that looks like a "valid" exterior view (1, 2, or 3 faces).
+    if (negFaces.length > 0 && negFaces.length <= 3) {
+        visibleIndices = negFaces;
+    } else if (posFaces.length > 0 && posFaces.length <= 3) {
+        visibleIndices = posFaces;
+    } else {
+        // Fallback: This is weird (maybe inside the box?). Just show "Front" faces?
+        // Default to negative if ambiguous.
+        visibleIndices = negFaces;
+    }
+
+    const edges: Point[][] = [];
+    const edgeSet = new Set<string>();
+
+    visibleIndices.forEach(indices => {
+        for (let i = 0; i < indices.length; i++) {
+            const i1 = indices[i];
+            const i2 = indices[(i + 1) % indices.length];
+            // Sort indices for unique edge key
+            const key = i1 < i2 ? `${i1}-${i2}` : `${i2}-${i1}`;
+            // For hidden line removal, we only draw edges that belong to AT LEAST ONE visible face.
+            // We draw them once.
+            if (!edgeSet.has(key)) {
+                edgeSet.add(key);
+                edges.push([corners[i1], corners[i2]]);
+            }
+        }
+    });
+
+    return edges;
+};

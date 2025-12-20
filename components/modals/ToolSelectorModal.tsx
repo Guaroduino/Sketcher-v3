@@ -3,18 +3,18 @@ import React from 'react';
 import type { Tool, BrushPreset, QuickAccessTool } from '../../types';
 // FIX: Replaced MarkerIcon with SolidMarkerIcon and NaturalMarkerIcon.
 // FIX: Imported missing icons.
-import { XIcon, SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, NaturalMarkerIcon, AirbrushIcon, FXBrushIcon, TransformIcon, FreeTransformIcon, SparklesIcon, CropIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon, TextIcon, AdvancedMarkerIcon, WatercolorIcon } from '../icons';
+import { XIcon, SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, NaturalMarkerIcon, AirbrushIcon, FXBrushIcon, TransformIcon, FreeTransformIcon, SparklesIcon, CropIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon, TextIcon, AdvancedMarkerIcon, WatercolorIcon, CubeIcon } from '../icons';
 
 interface ToolSelectorModalProps {
     isOpen: boolean;
     onClose: () => void;
     // FIX: Updated type to allow for presets
-    onSelectTool: (tool: QuickAccessTool | { type: 'fx-preset', id: string, name: string }) => void;
+    onSelectTool: (tool: QuickAccessTool) => void;
     fxPresets: BrushPreset[];
 }
 
 // FIX: Added new tools to the standard tools list.
-const standardTools: { name: Tool, icon: React.FC<{className?: string}> }[] = [
+const standardTools: { name: Tool, icon: React.FC<{ className?: string }> }[] = [
     { name: 'select', icon: SelectIcon },
     { name: 'marquee-rect', icon: MarqueeRectIcon },
     { name: 'lasso', icon: LassoIcon },
@@ -37,7 +37,7 @@ const standardTools: { name: Tool, icon: React.FC<{className?: string}> }[] = [
 export const ToolSelectorModal: React.FC<ToolSelectorModalProps> = ({ isOpen, onClose, onSelectTool, fxPresets }) => {
     if (!isOpen) return null;
 
-    const handleSelect = (tool: QuickAccessTool | { type: 'fx-preset', id: string, name: string }) => {
+    const handleSelect = (tool: QuickAccessTool) => {
         onSelectTool(tool);
         onClose();
     };
@@ -51,7 +51,7 @@ export const ToolSelectorModal: React.FC<ToolSelectorModalProps> = ({ isOpen, on
                         <XIcon className="w-6 h-6" />
                     </button>
                 </div>
-                
+
                 <div className="flex-grow overflow-y-auto space-y-4 pr-2">
                     <div>
                         <h3 className="text-sm font-bold uppercase text-[--text-secondary] mb-2">Herramientas Estándar</h3>
@@ -67,14 +67,22 @@ export const ToolSelectorModal: React.FC<ToolSelectorModalProps> = ({ isOpen, on
                                     <span className="text-xs mt-2 capitalize">{
                                         // Provide friendlier display names for specific tools
                                         name === 'advanced-marker' ? 'Lápiz de color'
-                                        : name === 'natural-marker' ? 'Marcador sólido'
-                                        : name.replace('-', ' ')
+                                            : name === 'natural-marker' ? 'Marcador sólido'
+                                                : name.replace('-', ' ')
                                     }</span>
                                 </button>
                             ))}
+                            <button
+                                onClick={() => handleSelect({ type: 'mode-preset', mode: 'parallelepiped', tool: 'brush', label: 'Cubo 3D' })}
+                                className="flex flex-col items-center justify-center p-3 rounded-lg bg-[--bg-tertiary] hover:bg-[--bg-hover] transition-colors"
+                                title="Cubo 3D (Perspectiva)"
+                            >
+                                <CubeIcon className="w-8 h-8" />
+                                <span className="text-xs mt-2 capitalize">Cubo 3D</span>
+                            </button>
                         </div>
                     </div>
-                    
+
                     <div>
                         <h3 className="text-sm font-bold uppercase text-[--text-secondary] mb-2">Presets de Pincel FX</h3>
                         {fxPresets.length > 0 ? (

@@ -4,7 +4,7 @@ import type {
     CropRect, ViewTransform, PerspectiveControlPoint, TransformState, AffineTransformState, FreeTransformState, GridGuide,
     StrokeMode, StrokeState, Selection, MagicWandSettings, StrokeModifier
 } from '../types';
-import { getCanvasPoint, isNearPoint, projectPointOnLine, pointInPolygon, cloneCanvas, distanceToLineSegment, distanceToLine, getLineIntersection, createMagicWandSelection } from '../utils/canvasUtils';
+import { getCanvasPoint, isNearPoint, projectPointOnLine, pointInPolygon, cloneCanvas, distanceToLineSegment, distanceToLine, getLineIntersection, createMagicWandSelection, getPerspectiveBoxPoints, getVisibleBoxEdges } from '../utils/canvasUtils';
 import { clearCanvas } from '../utils/canvasUtils';
 import { type BaseBrush, type BrushContext } from '../lib/brushes/BaseBrush';
 
@@ -132,6 +132,7 @@ export function usePointerEvents({
     strokeModifier,
     setDebugPointers,
     isPalmRejectionEnabled,
+    isSolidBox,
 }: {
     items: CanvasItem[];
     uiCanvasRef: React.RefObject<HTMLCanvasElement>;
@@ -188,6 +189,7 @@ export function usePointerEvents({
     strokeModifier: StrokeModifier;
     setDebugPointers: React.Dispatch<React.SetStateAction<Map<number, { x: number, y: number }>>>;
     isPalmRejectionEnabled: boolean;
+    isSolidBox: boolean;
 }) {
     const canvasRectRef = useRef<DOMRect | null>(null);
 
@@ -597,7 +599,7 @@ export function usePointerEvents({
             return;
         }
 
-        if (isDrawingTool && ['polyline', 'curve', 'arc'].includes(strokeMode)) {
+        if (isDrawingTool && ['polyline', 'curve', 'arc', 'parallelepiped'].includes(strokeMode)) {
             if (strokeMode === 'polyline') {
                 if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
                 longPressTimerRef.current = window.setTimeout(() => {
@@ -628,6 +630,7 @@ export function usePointerEvents({
                 let strokeComplete = false;
                 if (strokeMode === 'curve' && newPoints.length === 3) strokeComplete = true;
                 if (strokeMode === 'arc' && newPoints.length === 3) strokeComplete = true;
+                if (strokeMode === 'parallelepiped' && newPoints.length === 3) strokeComplete = true;
 
                 if (strokeComplete && activeItem?.type === 'object') {
                     const beforeCanvas = cloneCanvas(activeItem.canvas!);
@@ -635,13 +638,47 @@ export function usePointerEvents({
                     const brush = getBrushForTool(tool);
                     if (brush) {
                         const brushContext: BrushContext = { mainCtx, previewCtx: previewCanvasRef.current!.getContext('2d')!, viewTransform, onDrawCommit, activeItemId: activeItem.id, activeGuide, mirrorGuides, strokeModifier };
-                        let pointsToDraw = newPoints;
-                        if (strokeMode === 'curve') pointsToDraw = generateCurvePoints(newPoints);
-                        if (strokeMode === 'arc') {
-                            pointsToDraw = generateArcPoints(newPoints, arcDrawingState.current?.totalAngle);
+
+                        if (strokeMode === 'parallelepiped') {
+                            const vps = perspectiveVPs.current;
+                            if (vps.vpGreen && vps.vpRed) {
+
+                                const corners = getPerspectiveBoxPoints(newPoints[0], newPoints[1], newPoints[2], vps);
+                                if (corners.length === 8) {
+                                    let edges: Point[][] = [];
+
+                                    if (isSolidBox) {
+                                        // Use hidden line removal logic
+                                        // Import getVisibleBoxEdges if not already there (it is)
+                                        // We need to ensure getVisibleBoxEdges is available or imported.
+                                        // Assuming getVisibleBoxEdges is imported from utils/canvasUtils
+                                        const visibleEdges = getVisibleBoxEdges(corners);
+                                        // format visibleEdges as simple pairs? getVisibleBoxEdges returns pairs
+                                        edges = visibleEdges;
+                                    } else {
+                                        // Default Wireframe
+                                        const edgeIndices = [
+                                            [0, 1], [1, 2], [2, 3], [3, 0], // Base
+                                            [4, 5], [5, 6], [6, 7], [7, 4], // Top
+                                            [0, 4], [1, 5], [2, 6], [3, 7]  // Vertical
+                                        ];
+                                        edges = edgeIndices.map(([i, j]) => [corners[i], corners[j]]);
+                                    }
+
+                                    edges.forEach((edgePoints) => {
+                                        (brush as any).drawWithMirroring(mainCtx, edgePoints, brushContext);
+                                    });
+                                }
+                            }
+                        } else {
+                            let pointsToDraw = newPoints;
+                            if (strokeMode === 'curve') pointsToDraw = generateCurvePoints(newPoints);
+                            if (strokeMode === 'arc') {
+                                pointsToDraw = generateArcPoints(newPoints, arcDrawingState.current?.totalAngle);
+                            }
+                            (brush as any).drawWithMirroring(mainCtx, pointsToDraw, brushContext);
                         }
 
-                        (brush as any).drawWithMirroring(mainCtx, pointsToDraw, brushContext);
                         onDrawCommit(activeItem.id, beforeCanvas);
                     }
                     setStrokeState(null);
@@ -679,7 +716,7 @@ export function usePointerEvents({
                 brush.onPointerDown(snappedPointWithPressure, brushContext);
             }
         }
-    }, [tool, viewTransform, activeItem, isDrawingTool, isSelectionTool, magicWandSettings, setSelection, cropRect, activeGuide, rulerGuides, mirrorGuides, perspectiveGuide, areGuidesLocked, setPerspectiveGuide, setRulerGuides, setMirrorGuides, setGuideDragState, perspectiveVPs, transformState, isPerspectiveStrokeLockEnabled, snapPointToGrid, strokeMode, strokeState, setStrokeState, onDrawCommit, onAddItem, setTextEditState, textEditState, onCommitText, getBrushForTool, strokeSmoothing, strokeModifier, setDebugPointers, isPalmRejectionEnabled]);
+    }, [tool, viewTransform, activeItem, isDrawingTool, isSelectionTool, magicWandSettings, setSelection, cropRect, activeGuide, rulerGuides, mirrorGuides, perspectiveGuide, areGuidesLocked, setPerspectiveGuide, setRulerGuides, setMirrorGuides, setGuideDragState, perspectiveVPs, transformState, isPerspectiveStrokeLockEnabled, snapPointToGrid, strokeMode, strokeState, setStrokeState, onDrawCommit, onAddItem, setTextEditState, textEditState, onCommitText, getBrushForTool, strokeSmoothing, strokeModifier, setDebugPointers, isPalmRejectionEnabled, isSolidBox]);
 
     const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
         if (!uiCanvasRef.current) return;
@@ -956,7 +993,41 @@ export function usePointerEvents({
                     }
                 }
 
-                (brush as any).drawWithMirroring(previewCtx, pointsToDraw, brushContext);
+                if (strokeState.mode === 'parallelepiped') {
+                    // Preview logic for Box
+                    const vps = perspectiveVPs.current;
+                    if (vps.vpGreen && vps.vpRed) {
+                        const p1 = strokeState.points[0];
+                        const p2 = strokeState.points.length > 1 ? strokeState.points[1] : currentPointWithPressure;
+                        const p3 = strokeState.points.length > 1 ? currentPointWithPressure : null; // Only use p3 if we have p2 locked
+
+                        const corners = getPerspectiveBoxPoints(p1, p2, p3, vps);
+
+                        // Draw wireframe
+                        previewCtx.lineWidth = 1 / viewTransform.zoom;
+                        previewCtx.strokeStyle = 'black'; // Default to black for preview
+                        previewCtx.beginPath();
+
+                        const drawLine = (i: number, j: number) => {
+                            if (corners[i] && corners[j]) {
+                                previewCtx.moveTo(corners[i].x, corners[i].y);
+                                previewCtx.lineTo(corners[j].x, corners[j].y);
+                            }
+                        };
+
+                        if (corners.length >= 4) {
+                            drawLine(0, 1); drawLine(1, 2); drawLine(2, 3); drawLine(3, 0);
+                        }
+                        if (corners.length === 8) {
+                            drawLine(4, 5); drawLine(5, 6); drawLine(6, 7); drawLine(7, 4);
+                            drawLine(0, 4); drawLine(1, 5); drawLine(2, 6); drawLine(3, 7);
+                        }
+                        previewCtx.stroke();
+                    }
+                } else {
+                    // Fallback for line/polyline
+                    (brush as any).drawWithMirroring(previewCtx, pointsToDraw, brushContext);
+                }
             }
             previewCtx.restore();
             return;

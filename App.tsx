@@ -886,6 +886,7 @@ export function App() {
     const [strokeMode, setStrokeMode] = useState<StrokeMode>('freehand');
     const [strokeState, setStrokeState] = useState<StrokeState | null>(null);
     const [strokeModifier, setStrokeModifier] = useState<StrokeModifier>({ style: 'solid', scale: 1 });
+    const [isSolidBox, setIsSolidBox] = useState(false);
     const [isPalmRejectionEnabled, setIsPalmRejectionEnabled] = useState(false); // Default: Disabled (Touch can draw)
     const [debugPointers, setDebugPointers] = useState<Map<number, { x: number, y: number }>>(new Map());
 
@@ -1451,6 +1452,7 @@ export function App() {
                         onToggleOrthogonal={guides.toggleOrthogonal} onExportClick={() => ui.setExportModalOpen(true)}
                         objects={objects} libraryItems={library.libraryItems} backgroundDataUrl={ai.backgroundDataUrl} debugInfo={ai.debugInfo}
                         strokeMode={strokeMode} setStrokeMode={setStrokeMode} strokeModifier={strokeModifier} setStrokeModifier={setStrokeModifier}
+                        isSolidBox={isSolidBox} setIsSolidBox={setIsSolidBox}
                     />
                 )}
                 <button
@@ -1496,6 +1498,7 @@ export function App() {
                         setDebugPointers={setDebugPointers}
                         isPalmRejectionEnabled={isPalmRejectionEnabled}
                         scaleFactor={scaleFactor}
+                        isSolidBox={isSolidBox}
                         scaleUnit={scaleUnit}
                     />
                     <div className="absolute top-36 left-4 md:top-2 md:left-2 flex items-center gap-2 z-10">
@@ -1535,9 +1538,9 @@ export function App() {
                         settings={quickAccess.quickAccessSettings} onUpdateColor={quickAccess.updateColor} onAddColor={quickAccess.addColor}
                         onRemoveColor={quickAccess.removeColor} onUpdateSize={quickAccess.updateSize} onUpdateTool={quickAccess.updateTool}
                         onAddToolSlot={quickAccess.addToolSlot}
-                        onSelectColor={handleSelectColor} onSelectSize={handleSelectSize} onSelectTool={(qaTool) => { if (qaTool.type === 'tool') setTool(qaTool.tool); else if (qaTool.type === 'fx-preset') { setTool('fx-brush'); toolSettings.onLoadPreset(qaTool.id); } }}
+                        onSelectColor={handleSelectColor} onSelectSize={handleSelectSize} onSelectTool={(qaTool) => { if (qaTool.type === 'tool') setTool(qaTool.tool); else if (qaTool.type === 'fx-preset') { setTool('fx-brush'); toolSettings.onLoadPreset(qaTool.id); } else if (qaTool.type === 'mode-preset') { setTool(qaTool.tool); setStrokeMode(qaTool.mode); } }}
                         onOpenToolSelector={(index) => { setIsToolSelectorOpen(true); setEditingToolSlotIndex(index); }}
-                        activeTool={tool} activeColor={activeColor} activeSize={activeSize}
+                        activeTool={tool} activeColor={activeColor} activeSize={activeSize} strokeMode={strokeMode}
                         onToggleHeader={() => ui.setIsHeaderVisible(!ui.isHeaderVisible)}
                         isHeaderVisible={ui.isHeaderVisible}
                     />

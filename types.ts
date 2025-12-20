@@ -37,19 +37,19 @@ export interface BrushSettings {
 }
 
 export interface EraserSettings {
-    size: number;
-    opacity: number; // 0-1, acts like flow
-    hardness: number; // 0-100
-    tipShape: 'round' | 'square';
+  size: number;
+  opacity: number; // 0-1, acts like flow
+  hardness: number; // 0-100
+  tipShape: 'round' | 'square';
 }
 
-export type BlendMode = 
-      | 'source-over' | 'source-in' | 'source-out' | 'source-atop'
-      | 'destination-over' | 'destination-in' | 'destination-out' | 'destination-atop'
-      | 'lighter' | 'copy' | 'xor' | 'multiply' | 'screen' | 'overlay'
-      | 'darken' | 'lighten' | 'color-dodge' | 'color-burn' | 'hard-light'
-      | 'soft-light' | 'difference' | 'exclusion' | 'hue' | 'saturation'
-      | 'color' | 'luminosity';
+export type BlendMode =
+  | 'source-over' | 'source-in' | 'source-out' | 'source-atop'
+  | 'destination-over' | 'destination-in' | 'destination-out' | 'destination-atop'
+  | 'lighter' | 'copy' | 'xor' | 'multiply' | 'screen' | 'overlay'
+  | 'darken' | 'lighten' | 'color-dodge' | 'color-burn' | 'hard-light'
+  | 'soft-light' | 'difference' | 'exclusion' | 'hue' | 'saturation'
+  | 'color' | 'luminosity';
 
 export interface SimpleMarkerSettings {
   size: number;
@@ -116,8 +116,8 @@ export interface WatercolorSettings {
   color: string;
   pressureControl: {
     size: boolean;
-      flow: boolean;
-      opacity: boolean;
+    flow: boolean;
+    opacity: boolean;
   };
 }
 
@@ -132,19 +132,19 @@ export interface TextSettings {
 }
 
 export interface MagicWandSettings {
-    tolerance: number; // 0-100
-    contiguous: boolean;
+  tolerance: number; // 0-100
+  contiguous: boolean;
 }
 
 export interface Selection {
-    path: Path2D;
-    boundingBox: CropRect;
-    sourceItemId: string;
+  path: Path2D;
+  boundingBox: CropRect;
+  sourceItemId: string;
 }
 
 export interface ClipboardData {
-    imageData: ImageData;
-    sourceRect: CropRect;
+  imageData: ImageData;
+  sourceRect: CropRect;
 }
 
 
@@ -156,8 +156,8 @@ export type Tool = 'select' | 'transform' | 'brush' | 'eraser' | 'pan' | 'simple
 
 // FIX: Added BrushPreset type for FX brushes.
 export interface BrushPreset {
-    id: string;
-    name: string;
+  id: string;
+  name: string;
 }
 
 export type RgbColor = { r: number; g: number; b: number };
@@ -194,11 +194,11 @@ export type CanvasItem = SketchObject;
 
 export type Point = { x: number; y: number; pressure?: number };
 
-export type StrokeMode = 'freehand' | 'line' | 'polyline' | 'curve' | 'arc';
+export type StrokeMode = 'freehand' | 'line' | 'polyline' | 'curve' | 'arc' | 'parallelepiped';
 
 export interface StrokeState {
-    mode: StrokeMode;
-    points: Point[];
+  mode: StrokeMode;
+  points: Point[];
 }
 
 export type StrokeStyle = 'solid' | 'dashed' | 'dotted' | 'dash-dot';
@@ -264,50 +264,50 @@ export interface OrthogonalGuide {
 export type ScaleUnit = 'mm' | 'cm' | 'm';
 
 export interface AppState {
-    objects: CanvasItem[];
-    canvasSize: { width: number, height: number };
-    scaleFactor: number; // px/mm
-    scaleUnit: ScaleUnit;
+  objects: CanvasItem[];
+  canvasSize: { width: number, height: number };
+  scaleFactor: number; // px/mm
+  scaleUnit: ScaleUnit;
 }
 
 export interface CropRect {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 // FIX: Export ViewTransform to be used in multiple files.
 export type ViewTransform = { zoom: number, pan: { x: number, y: number } };
 
 export type AffineTransformState = {
-    type: 'affine';
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    rotation: number; // in radians
+  type: 'affine';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number; // in radians
 }
 
 export type FreeTransformState = {
-    type: 'free';
-    x: number; // Initial bbox x
-    y: number; // Initial bbox y
-    width: number; // Initial bbox width
-    height: number; // Initial bbox height
-    corners: {
-        tl: Point;
-        tr: Point;
-        bl: Point;
-        br: Point;
-    };
+  type: 'free';
+  x: number; // Initial bbox x
+  y: number; // Initial bbox y
+  width: number; // Initial bbox width
+  height: number; // Initial bbox height
+  corners: {
+    tl: Point;
+    tr: Point;
+    bl: Point;
+    br: Point;
+  };
 }
 
 export type TransformState = AffineTransformState | FreeTransformState;
 
 // -- Quick Access Bar --
 // FIX: Converted QuickAccessTool to a union to support presets.
-export type QuickAccessTool = { type: 'tool'; tool: Tool } | { type: 'fx-preset'; id: string; name: string };
+export type QuickAccessTool = { type: 'tool'; tool: Tool } | { type: 'fx-preset'; id: string; name: string } | { type: 'mode-preset'; mode: StrokeMode; tool: Tool; label?: string };
 
 export interface QuickAccessSettings {
   colors: string[];
@@ -338,7 +338,7 @@ export interface WorkspaceTemplate {
   toolSettings: {
     brushSettings: BrushSettings;
     eraserSettings: EraserSettings;
-// FIX: Cannot find name 'SolidMarkerSettings'. Changed to 'SimpleMarkerSettings' for backward compatibility.
+    // FIX: Cannot find name 'SolidMarkerSettings'. Changed to 'SimpleMarkerSettings' for backward compatibility.
     solidMarkerSettings?: SimpleMarkerSettings; // For backwards compatibility
     simpleMarkerSettings: SimpleMarkerSettings;
     // FIX: Added new tool settings to WorkspaceTemplate
@@ -354,14 +354,14 @@ export interface WorkspaceTemplate {
 }
 
 export interface ProjectFile {
-    fileFormatVersion: string;
-    canvasSize: { width: number; height: number };
-    objects: CanvasItem[];
-    scaleFactor: number; // px/mm
-    scaleUnit: ScaleUnit;
-    guides: WorkspaceTemplate['guides'];
-    toolSettings: WorkspaceTemplate['toolSettings'];
-    quickAccessSettings: QuickAccessSettings;
+  fileFormatVersion: string;
+  canvasSize: { width: number; height: number };
+  objects: CanvasItem[];
+  scaleFactor: number; // px/mm
+  scaleUnit: ScaleUnit;
+  guides: WorkspaceTemplate['guides'];
+  toolSettings: WorkspaceTemplate['toolSettings'];
+  quickAccessSettings: QuickAccessSettings;
 }
 
 export interface Project {

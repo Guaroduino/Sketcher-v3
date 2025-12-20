@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 // FIX: Corrected import path for MagicWandIcon.
 // FIX: Replaced MarkerIcon with SolidMarkerIcon and NaturalMarkerIcon
 // FIX: Added WatercolorIcon to support the new watercolor tool.
-import { SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, TransformIcon, ChevronDownIcon, TrashIcon, ExportIcon, CropIcon, RulerIcon, PerspectiveIcon, OrthogonalIcon, MirrorIcon, FreeTransformIcon, SparklesIcon, XIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon, UploadIcon, MoreVerticalIcon, TextIcon, NaturalMarkerIcon, AirbrushIcon, FXBrushIcon, AdvancedMarkerIcon, WatercolorIcon } from './icons';
+import { SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, TransformIcon, ChevronDownIcon, TrashIcon, ExportIcon, CropIcon, RulerIcon, PerspectiveIcon, OrthogonalIcon, MirrorIcon, FreeTransformIcon, SparklesIcon, XIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon, UploadIcon, MoreVerticalIcon, TextIcon, NaturalMarkerIcon, AirbrushIcon, FXBrushIcon, AdvancedMarkerIcon, WatercolorIcon, CubeIcon } from './icons';
 // FIX: Replaced SolidMarkerSettings with SimpleMarkerSettings
 // FIX: Added missing tool setting and BrushPreset types.
 // FIX: Added WatercolorSettings to support the new watercolor tool.
@@ -45,6 +45,8 @@ interface ToolbarProps {
     setStrokeMode: (mode: StrokeMode) => void;
     strokeModifier: StrokeModifier;
     setStrokeModifier: React.Dispatch<React.SetStateAction<StrokeModifier>>;
+    isSolidBox: boolean;
+    setIsSolidBox: (value: boolean) => void;
     // FIX: Added missing preset-related props
     brushPresets: BrushPreset[];
     onSavePreset: (name: string) => void;
@@ -167,6 +169,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     setStrokeMode,
     strokeModifier,
     setStrokeModifier,
+    isSolidBox,
+    setIsSolidBox,
     brushPresets,
     ...props
 }) => {
@@ -645,6 +649,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         polyline: PolylineIcon,
         curve: BezierIcon,
         arc: ArcIcon,
+        parallelepiped: CubeIcon,
     }[strokeMode];
 
     const strokeModesList: { mode: StrokeMode; label: string; icon: React.FC<{ className?: string }> }[] = [
@@ -653,6 +658,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         { mode: 'polyline', label: 'Polilínea', icon: PolylineIcon },
         { mode: 'curve', label: 'Curva (3 Puntos)', icon: BezierIcon },
         { mode: 'arc', label: 'Arco (Centro)', icon: ArcIcon },
+        { mode: 'parallelepiped', label: 'Cubo 3D (Perspectiva)', icon: CubeIcon },
     ];
 
     const ActiveStrokeStyleIcon = {
@@ -725,7 +731,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
 
     return (
-        <div ref={toolbarWrapperRef} className="relative flex-shrink-0 h-full">
+        <aside ref={toolbarWrapperRef} className="relative flex-shrink-0 h-full">
             <div className="bg-[--bg-primary] text-[--text-primary] h-full flex flex-col p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-[--bg-tertiary] scrollbar-track-transparent">
                 {/* Main Tools */}
                 <div className="flex flex-col items-center space-y-2">
@@ -853,6 +859,18 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                         className="w-full mt-1"
                                         disabled={strokeModifier.style === 'solid'}
                                     />
+                                    {strokeMode === 'parallelepiped' && (
+                                        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[--bg-tertiary]">
+                                            <input
+                                                type="checkbox"
+                                                id="is-solid-box"
+                                                checked={isSolidBox}
+                                                onChange={(e) => setIsSolidBox(e.target.checked)}
+                                                className="w-4 h-4 rounded border-[--bg-tertiary]"
+                                            />
+                                            <label htmlFor="is-solid-box" className="text-xs text-[--text-secondary]">Ocultar lados ocultos</label>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -937,8 +955,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 </div>
 
 
-
-
                 {/* Other Tools */}
                 <div className="mt-auto flex flex-col items-center space-y-2">
                     <button onClick={() => handleToolClick('crop')} className={toolButtonClasses('crop')} title="Recortar">
@@ -951,19 +967,21 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             </div>
 
             {/* Popovers for non-AI tools */}
-            {openSettings && settingsPanelPosition && (
-                <div
-                    ref={settingsPanelRef}
-                    className="fixed z-50 bg-[--bg-secondary] border border-[--bg-tertiary] rounded-lg shadow-xl w-64 overflow-hidden"
-                    style={{
-                        top: settingsPanelPosition.top,
-                        left: settingsPanelPosition.left,
-                        maxHeight: '80vh',
-                    }}
-                >
-                    {renderSettings(openSettings)}
-                </div>
-            )}
-        </div>
+            {
+                openSettings && settingsPanelPosition && (
+                    <div
+                        ref={settingsPanelRef}
+                        className="fixed z-50 bg-[--bg-secondary] border border-[--bg-tertiary] rounded-lg shadow-xl w-64 overflow-hidden"
+                        style={{
+                            top: settingsPanelPosition.top,
+                            left: settingsPanelPosition.left,
+                            maxHeight: '80vh',
+                        }}
+                    >
+                        {renderSettings(openSettings)}
+                    </div>
+                )
+            }
+        </aside >
     );
 };

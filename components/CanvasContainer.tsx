@@ -107,7 +107,9 @@ interface CanvasContainerProps {
     strokeModifier: StrokeModifier;
     isPalmRejectionEnabled: boolean;
     scaleFactor: number;
+
     scaleUnit: ScaleUnit;
+    isSolidBox: boolean;
 }
 
 type GuideDragState =
@@ -149,6 +151,8 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         isPalmRejectionEnabled,
         scaleFactor,
         scaleUnit,
+
+        isSolidBox,
     } = props;
 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -233,6 +237,7 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         strokeModifier,
         setDebugPointers,
         isPalmRejectionEnabled,
+        isSolidBox,
     });
 
     const pointerHandlers = {

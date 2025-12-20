@@ -1,8 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react';
-import type { QuickAccessSettings, QuickAccessTool, Tool } from '../types';
+import type { QuickAccessSettings, QuickAccessTool, Tool, StrokeMode } from '../types';
 // FIX: Replaced MarkerIcon with SolidMarkerIcon and NaturalMarkerIcon
 // FIX: Added missing icons for new tool types.
-import { SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, NaturalMarkerIcon, AirbrushIcon, FXBrushIcon, TransformIcon, FreeTransformIcon, SparklesIcon, CropIcon, PlusIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon, TextIcon, AdvancedMarkerIcon, WatercolorIcon, ChevronUpIcon, ChevronDownIcon } from './icons';
+import { SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, NaturalMarkerIcon, AirbrushIcon, FXBrushIcon, TransformIcon, FreeTransformIcon, SparklesIcon, CropIcon, PlusIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon, TextIcon, AdvancedMarkerIcon, WatercolorIcon, ChevronUpIcon, ChevronDownIcon, CubeIcon } from './icons';
 
 interface QuickAccessBarProps {
   settings: QuickAccessSettings;
@@ -21,6 +21,7 @@ interface QuickAccessBarProps {
   activeTool?: Tool;
   activeColor?: string;
   activeSize?: number;
+  strokeMode?: StrokeMode;
 }
 
 // FIX: Replaced 'solid-marker' with 'simple-marker'
@@ -164,6 +165,7 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
   activeTool,
   activeColor,
   activeSize,
+  strokeMode,
 }) => {
   const [editingColor, setEditingColor] = useState<{ index: number; initialColor: string; anchorEl: HTMLElement } | null>(null);
   const [colorContextMenu, setColorContextMenu] = useState<{ x: number; y: number; index: number } | null>(null);
@@ -221,14 +223,18 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
     if (tool.type === 'fx-preset') {
       return <FXBrushIcon className="w-5 h-5" />;
     }
+    if (tool.type === 'mode-preset') {
+      if (tool.mode === 'parallelepiped') return <CubeIcon className="w-5 h-5" />;
+      return <BrushIcon className="w-5 h-5" />;
+    }
     return null;
   };
 
   const getToolTitle = (tool: QuickAccessTool | null): string => {
     if (!tool) return "Seleccionar herramienta";
     if (tool.type === 'tool') return tool.tool;
-    // FIX: Check for type before accessing properties of a union member.
     if (tool.type === 'fx-preset') return `Preset: ${tool.name}`;
+    if (tool.type === 'mode-preset') return tool.label || tool.mode;
     return "";
   };
 
@@ -362,7 +368,8 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
             // FIX: Correctly check active state for union type.
             const isActive = tool !== null && activeTool !== undefined && (
               (tool.type === 'tool' && tool.tool === activeTool) ||
-              (tool.type === 'fx-preset' && activeTool === 'fx-brush')
+              (tool.type === 'fx-preset' && activeTool === 'fx-brush') ||
+              (tool.type === 'mode-preset' && activeTool === tool.tool && strokeMode === tool.mode)
             );
 
             // Construct handlers for this specific tool button using the hook
