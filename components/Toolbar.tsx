@@ -183,14 +183,18 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     const [isChromaKeyEnabled, setIsChromaKeyEnabled] = useState(false);
     const [isStrokeModeMenuOpen, setIsStrokeModeMenuOpen] = useState(false);
     const strokeModeMenuRef = useRef<HTMLDivElement>(null);
+    const strokeModeDropdownRef = useRef<HTMLDivElement>(null);
     const [isStrokeModifierMenuOpen, setIsStrokeModifierMenuOpen] = useState(false);
     const strokeModifierMenuRef = useRef<HTMLDivElement>(null);
+    const strokeModifierDropdownRef = useRef<HTMLDivElement>(null);
 
     // Tool Group States
     const [isSelectionToolsMenuOpen, setIsSelectionToolsMenuOpen] = useState(false);
     const selectionToolsMenuRef = useRef<HTMLDivElement>(null);
+    const selectionToolsDropdownRef = useRef<HTMLDivElement>(null);
     const [isDrawingToolsMenuOpen, setIsDrawingToolsMenuOpen] = useState(false);
     const drawingToolsMenuRef = useRef<HTMLDivElement>(null);
+    const drawingToolsDropdownRef = useRef<HTMLDivElement>(null);
     const [lastActiveSelectionTool, setLastActiveSelectionTool] = useState<Tool>('marquee-rect');
     const [lastActiveDrawingTool, setLastActiveDrawingTool] = useState<Tool>('brush');
 
@@ -199,24 +203,30 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     // Effect to close popovers when clicking outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (strokeModeMenuRef.current && !strokeModeMenuRef.current.contains(event.target as Node)) {
+            const target = event.target as Node;
+
+            if (strokeModeMenuRef.current && !strokeModeMenuRef.current.contains(target) &&
+                strokeModeDropdownRef.current && !strokeModeDropdownRef.current.contains(target)) {
                 setIsStrokeModeMenuOpen(false);
             }
-            if (strokeModifierMenuRef.current && !strokeModifierMenuRef.current.contains(event.target as Node)) {
+            if (strokeModifierMenuRef.current && !strokeModifierMenuRef.current.contains(target) &&
+                strokeModifierDropdownRef.current && !strokeModifierDropdownRef.current.contains(target)) {
                 setIsStrokeModifierMenuOpen(false);
             }
-            if (selectionToolsMenuRef.current && !selectionToolsMenuRef.current.contains(event.target as Node)) {
+            if (selectionToolsMenuRef.current && !selectionToolsMenuRef.current.contains(target) &&
+                selectionToolsDropdownRef.current && !selectionToolsDropdownRef.current.contains(target)) {
                 setIsSelectionToolsMenuOpen(false);
             }
-            if (drawingToolsMenuRef.current && !drawingToolsMenuRef.current.contains(event.target as Node)) {
+            if (drawingToolsMenuRef.current && !drawingToolsMenuRef.current.contains(target) &&
+                drawingToolsDropdownRef.current && !drawingToolsDropdownRef.current.contains(target)) {
                 setIsDrawingToolsMenuOpen(false);
             }
             if (
                 openSettings !== 'enhance' && // This effect is only for popovers now
                 settingsPanelRef.current &&
-                !settingsPanelRef.current.contains(event.target as Node) &&
+                !settingsPanelRef.current.contains(target) &&
                 settingsPanelAnchor &&
-                !settingsPanelAnchor.contains(event.target as Node)
+                !settingsPanelAnchor.contains(target)
             ) {
                 setOpenSettings(null);
                 setSettingsPanelAnchor(null);
@@ -943,6 +953,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             {
                 isSelectionToolsMenuOpen && (
                     <div
+                        ref={selectionToolsDropdownRef}
                         className="fixed z-50 p-2 space-y-1 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-xl w-60"
                         style={getMenuPositionStyle(selectionToolsMenuRef.current)}
                     >
@@ -964,6 +975,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             {
                 isStrokeModeMenuOpen && (
                     <div
+                        ref={strokeModeDropdownRef}
                         className="fixed z-50 p-2 space-y-1 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-xl w-60"
                         style={getMenuPositionStyle(strokeModeMenuRef.current)}
                     >
@@ -988,6 +1000,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             {
                 isStrokeModifierMenuOpen && (
                     <div
+                        ref={strokeModifierDropdownRef}
                         className="fixed z-50 p-2 space-y-2 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-xl w-60"
                         style={getMenuPositionStyle(strokeModifierMenuRef.current)}
                     >
@@ -1026,6 +1039,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             {
                 isDrawingToolsMenuOpen && (
                     <div
+                        ref={drawingToolsDropdownRef}
                         className="fixed z-50 p-2 space-y-1 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-xl w-60"
                         style={getMenuPositionStyle(drawingToolsMenuRef.current)}
                     >

@@ -1478,21 +1478,9 @@ export function App() {
                 </header>
             )}
 
-<<<<<<< HEAD
-            {/* Header, sidebars... */}
-            <div className="flex h-full max-h-[100dvh] pt-0 md:pt-1">
-                {/* Left Sidebar */}
-                <aside className={`
-                     md:relative absolute z-30 h-full bg-[--bg-tertiary]
-                     transition-all duration-300 ease-in-out flex flex-col ${ui.isLeftSidebarVisible ? 'overflow-visible' : 'overflow-hidden'}
-                     ${ui.isLeftSidebarVisible ? 'w-20 translate-x-0 border-r border-[--bg-tertiary] z-40' : 'w-0 -translate-x-full md:w-0 md:translate-x-0 border-none z-30'}
-                `}>
-=======
-
             {/* Main Content Area */}
             <div className="flex flex-grow min-h-0 relative">
                 {ui.isLeftSidebarVisible && (
->>>>>>> parent of ac736d6 (funcionando 2)
                     <Toolbar
                         tool={tool} setTool={setTool} {...toolSettings} brushPresets={toolSettings.brushPresets} onSavePreset={toolSettings.onSavePreset}
                         onUpdatePreset={toolSettings.onUpdatePreset} onLoadPreset={toolSettings.onLoadPreset} onDeletePreset={toolSettings.onDeletePreset}
@@ -1605,31 +1593,8 @@ export function App() {
                         isHeaderVisible={ui.isHeaderVisible}
                     />
                 </main>
-<<<<<<< HEAD
-                <aside ref={ui.rightSidebarRef} className={`
-                    flex-shrink-0 bg-[--bg-secondary] flex flex-col z-30
-                     transition-all duration-300 ease-in-out ${ui.isRightSidebarVisible ? 'overflow-visible' : 'overflow-hidden'}
-                     ${ui.isRightSidebarVisible ? 'w-80 translate-x-0 border-l border-[--bg-tertiary]' : 'w-0 translate-x-full border-none'}
-                     ${aiPanelState.isOpen ? 'z-50' : ''}
-                `}>
-                    <div style={{ height: ui.rightSidebarTopHeight }} className="flex-shrink-0">
-                        <Outliner
-                            items={objects} activeItemId={activeItemId} onAddItem={addItem} onCopyItem={copyItem} onDeleteItem={deleteItem} onSelectItem={handleSelectItem}
-                            onUpdateItem={updateItem} onMoveItem={handleMoveItem} onMergeItems={handleMergeItems} onUpdateBackground={handleUpdateBackground}
-                            onRemoveBackgroundImage={handleRemoveBackgroundImage} onExportItem={() => { if (activeItem) ui.setSingleExportModalOpen(true); }}
-                            onOpenCanvasSizeModal={() => ui.setCanvasSizeModalOpen(true)} activeItemState={activeItemState}
-                            onMoveItemUpDown={handleMoveItemUpDown} onMergeItemDown={handleMergeItemDown} onMergeItemUp={handleMergeItemUp}
-                            onAddObjectAbove={handleAddObjectAbove} onAddObjectBelow={handleAddObjectBelow}
-                        />
-                    </div>
-                    <div onPointerDown={ui.handlePointerDownResize} className="flex-shrink-0 h-1.5 bg-[--bg-secondary] hover:bg-[--accent-primary] transition-colors cursor-ns-resize" />
-                    <div className="flex-grow min-h-0">
-                        <Library user={user} items={library.libraryItems} onImportImage={library.onImportToLibrary} onCreateFolder={library.onCreateFolder} onEditItem={library.onEditTransparency} onDeleteItem={library.onDeleteLibraryItem} onAddItemToScene={(id) => onDropOnCanvas({ type: 'library-item', id }, activeItemId, setSelectedItemIds)} onMoveItems={library.onMoveItems} />
-                    </div>
-                </aside>
-=======
                 {ui.isRightSidebarVisible && (
-                    <aside ref={ui.rightSidebarRef} className={`flex-shrink-0 w-80 border-l border-[--bg-tertiary] flex flex-col ${isAiModalOpen ? 'z-50' : ''}`}>
+                    <aside ref={ui.rightSidebarRef} className={`flex-shrink-0 w-80 border-l border-[--bg-tertiary] flex flex-col ${aiPanelState.isOpen ? 'z-50' : ''}`}>
                         <div style={{ height: ui.rightSidebarTopHeight }} className="flex-shrink-0">
                             <Outliner
                                 items={objects} activeItemId={activeItemId} onAddItem={addItem} onCopyItem={copyItem} onDeleteItem={deleteItem} onSelectItem={handleSelectItem}
@@ -1646,12 +1611,12 @@ export function App() {
                         </div>
                     </aside>
                 )}
->>>>>>> parent of ac736d6 (funcionando 2)
                 <button onClick={() => ui.setIsRightSidebarVisible(!ui.isRightSidebarVisible)} className="absolute top-1/2 -translate-y-1/2 bg-[--bg-secondary] p-2 rounded-full shadow-xl z-40 border border-[--bg-tertiary] hover:bg-[--bg-tertiary] transition-all" style={{ right: ui.isRightSidebarVisible ? '20.25rem' : '0.25rem' }} title={ui.isRightSidebarVisible ? 'Ocultar paneles' : 'Mostrar paneles'}>
+
                     {ui.isRightSidebarVisible ? <ChevronRightIcon className="w-5 h-5" /> : <ChevronLeftIcon className="w-5 h-5" />}
                 </button>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }
 
