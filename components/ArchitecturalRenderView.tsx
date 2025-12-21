@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { PhotoIcon, SparklesIcon, UploadIcon, UndoIcon, RedoIcon, SaveIcon, XIcon as CloseIcon } from './icons';
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
+import { buildArchitecturalPrompt, ArchitecturalRenderOptions } from '../utils/architecturalPromptBuilder';
 
 interface ArchitecturalRenderViewProps {
     onImportFromSketch: () => string | null; // Returns dataURL or null
@@ -32,12 +33,13 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
     const [inputImage, setInputImage] = useState<string | null>(null);
 
     // -- Form State --
-    const [timeOfDay, setTimeOfDay] = useState('día');
-    const [weather, setWeather] = useState('soleado');
-    const [archStyle, setArchStyle] = useState('moderno');
-    const [roomType, setRoomType] = useState('sala de estar'); // For interior
+    const [timeOfDay, setTimeOfDay] = useState('noon');
+    const [weather, setWeather] = useState('sunny');
+    const [archStyle, setArchStyle] = useState('modern');
+    const [roomType, setRoomType] = useState('living_room'); // For interior
     const [lighting, setLighting] = useState('natural'); // For interior
 
+    // Creativity now 0-200
     const [creativeFreedom, setCreativeFreedom] = useState(50);
     const [additionalPrompt, setAdditionalPrompt] = useState('');
 
@@ -81,10 +83,11 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
             setShowOriginal(false);
             setAdditionalPrompt('');
             setCreativeFreedom(50);
-            setTimeOfDay('día');
-            setWeather('soleado');
-            setArchStyle('moderno');
-            // Reset other defaults if needed
+            setTimeOfDay('noon');
+            setWeather('sunny');
+            setArchStyle('modern');
+            setRoomType('living_room');
+            setLighting('natural');
         }
     };
 
@@ -104,29 +107,20 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
             const model = 'gemini-3-pro-image-preview';
             console.log("Render View using model:", model);
 
-            // Construct Prompt
-            let prompt = `Genera un render arquitectónico fotorealista de alta calidad basado en la imagen de entrada. `;
+            // Construct Prompt using the new Builder Service
+            const renderOptions: ArchitecturalRenderOptions = {
+                sceneType,
+                creativeFreedom,
+                additionalPrompt,
+                archStyle,
+                // Exterior options
+                ...(sceneType === 'exterior' && { timeOfDay, weather }),
+                // Interior options
+                ...(sceneType === 'interior' && { roomType, lighting }),
+            };
 
-            if (sceneType === 'exterior') {
-                prompt += `Escena exterior. Estilo arquitectónico: ${archStyle}. Hora del día: ${timeOfDay}. Clima: ${weather}. `;
-            } else {
-                prompt += `Escena interior. Tipo de habitación: ${roomType}. Estilo: ${archStyle}. Iluminación: ${lighting}. `;
-            }
-
-            if (additionalPrompt.trim()) {
-                prompt += `Detalles adicionales: ${additionalPrompt}. `;
-            }
-
-            // Creativity Instructions
-            if (creativeFreedom < 30) {
-                prompt += `MANTÉN ALTA FIDELIDAD a la estructura y trazos originales. Solo mejora texturas e iluminación. `;
-            } else if (creativeFreedom > 70) {
-                prompt += `Usa la imagen original como inspiración, siéntete libre de añadir detalles creativos y mejorar la arquitectura. `;
-            } else {
-                prompt += `Balancea la fidelidad a la estructura original con mejoras fotorealistas. `;
-            }
-
-            prompt += `El resultado debe parecer una fotografía profesional de arquitectura.`;
+            const prompt = buildArchitecturalPrompt(renderOptions);
+            console.log("[Prompt Maestro] Generated Prompt:\n", prompt);
 
             // Prepare Image Part
             const base64Data = inputImage.split(',')[1];
@@ -201,6 +195,55 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
             setIsUpscaling(false);
         }
     };
+
+
+    // -- Options Configuration --
+    const timeOptions = [
+        { label: 'Mañana', value: 'morning' },
+        { label: 'Mediodía', value: 'noon' },
+        { label: 'Tarde', value: 'afternoon' },
+        { label: 'Hora Dorada', value: 'golden_hour' },
+        { label: 'Noche', value: 'night' }
+    ];
+
+    const weatherOptions = [
+        { label: 'Soleado', value: 'sunny' },
+        { label: 'Nublado', value: 'overcast' },
+        { label: 'Lluvia', value: 'rainy' },
+        { label: 'Niebla', value: 'foggy' }
+    ];
+
+    const extStyleOptions = [
+        { label: 'Moderno', value: 'modern' },
+        { label: 'Brutalista', value: 'brutalist' },
+        { label: 'Mediterráneo', value: 'mediterranean' },
+        { label: 'Contemporáneo', value: 'contemporary' },
+        { label: 'Minimalista', value: 'minimalist' }
+    ];
+
+    const roomOptions = [
+        { label: 'Sala', value: 'living_room' },
+        { label: 'Cocina', value: 'kitchen' },
+        { label: 'Dormitorio', value: 'bedroom' },
+        { label: 'Baño', value: 'bathroom' },
+        { label: 'Oficina', value: 'office' },
+        { label: 'Lobby', value: 'lobby' }
+    ];
+
+    const lightingOptions = [
+        { label: 'Natural', value: 'natural' },
+        { label: 'Cálida', value: 'warm_artificial' },
+        { label: 'Moody', value: 'moody' },
+        { label: 'Estudio', value: 'studio' }
+    ];
+
+    const intStyleOptions = [
+        { label: 'Escandinavo', value: 'scandinavian' },
+        { label: 'Industrial', value: 'industrial' },
+        { label: 'Art Deco', value: 'art_deco' },
+        { label: 'Moderno', value: 'modern' },
+        { label: 'Minimalista', value: 'minimalist' }
+    ];
 
 
     return (
@@ -358,15 +401,15 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
                     <div className="space-y-4">
                         {sceneType === 'exterior' ? (
                             <>
-                                <PillGroup label="Hora del día" options={['Amanecer', 'Mañana', 'Mediodía', 'Atardecer', 'Noche', 'Hora dorada']} value={timeOfDay} onChange={setTimeOfDay} />
-                                <PillGroup label="Clima" options={['Soleado', 'Nublado', 'Lluvioso', 'Niebla', 'Nieve']} value={weather} onChange={setWeather} />
-                                <PillGroup label="Estilo Arquitectónico" options={['Moderno', 'Contemporáneo', 'Minimalista', 'Industrial', 'Brutalista', 'Clásico', 'Futurista']} value={archStyle} onChange={setArchStyle} />
+                                <PillGroup label="Hora del día" options={timeOptions} value={timeOfDay} onChange={setTimeOfDay} />
+                                <PillGroup label="Clima" options={weatherOptions} value={weather} onChange={setWeather} />
+                                <PillGroup label="Estilo Arquitectónico" options={extStyleOptions} value={archStyle} onChange={setArchStyle} />
                             </>
                         ) : (
                             <>
-                                <PillGroup label="Tipo de Habitación" options={['Sala de estar', 'Dormitorio', 'Cocina', 'Baño', 'Oficina', 'Comedor', 'Lobby']} value={roomType} onChange={setRoomType} />
-                                <PillGroup label="Estilo de Interior" options={['Moderno', 'Escandinavo', 'Industrial', 'Boho', 'Minimalista', 'Lujoso']} value={archStyle} onChange={setArchStyle} />
-                                <PillGroup label="Iluminación" options={['Natural', 'Cálida', 'Fría', 'Cinemática', 'Estudio', 'Neón']} value={lighting} onChange={setLighting} />
+                                <PillGroup label="Tipo de Habitación" options={roomOptions} value={roomType} onChange={setRoomType} />
+                                <PillGroup label="Estilo de Interior" options={intStyleOptions} value={archStyle} onChange={setArchStyle} />
+                                <PillGroup label="Iluminación" options={lightingOptions} value={lighting} onChange={setLighting} />
                             </>
                         )}
                     </div>
@@ -377,18 +420,26 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
                     <div className="space-y-3">
                         <div className="flex justify-between">
                             <label className="text-[10px] font-bold text-[--text-secondary] uppercase tracking-wider">Libertad Creativa</label>
-                            <span className="text-xs text-[--text-secondary] font-mono">{creativeFreedom}%</span>
+                            <span className="text-xs text-[--text-secondary] font-mono">{creativeFreedom}</span>
                         </div>
                         <input
                             type="range"
                             min="0"
-                            max="100"
+                            max="200"
                             value={creativeFreedom}
                             onChange={(e) => setCreativeFreedom(parseInt(e.target.value))}
                             className="w-full h-1.5 bg-[--bg-tertiary] rounded-lg appearance-none cursor-pointer accent-[--accent-primary]"
                         />
-                        <p className="text-[10px] text-[--text-tertiary] leading-tight">
-                            {creativeFreedom < 30 ? "Alta fidelidad al trazo original" : creativeFreedom > 70 ? "Más creatividad e interpretación" : "Balanceado"}
+                        <div className="flex justify-between text-[8px] text-[--text-tertiary] uppercase font-bold tracking-widest mt-1">
+                            <span>Fiel (0)</span>
+                            <span>Interpretativo (100)</span>
+                            <span>Transformativo (200)</span>
+                        </div>
+                        <p className="text-[10px] text-[--text-tertiary] leading-tight mt-2 border-l-2 border-[--accent-primary] pl-2">
+                            {creativeFreedom <= 50 && "Cambio de shaders y mejoras de luz. Geometría intacta."}
+                            {creativeFreedom > 50 && creativeFreedom <= 100 && "Añade decoración y detalles. Arquitectura base mantenida."}
+                            {creativeFreedom > 100 && creativeFreedom <= 150 && "Mejoras estéticas en la forma. Prioriza belleza."}
+                            {creativeFreedom > 150 && "Rediseño conceptual completo basado en la composición."}
                         </p>
                     </div>
 
@@ -463,20 +514,20 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
     );
 };
 
-const PillGroup: React.FC<{ label: string, options: string[], value: string, onChange: (val: string) => void }> = ({ label, options, value, onChange }) => (
+const PillGroup: React.FC<{ label: string, options: { label: string, value: string }[], value: string, onChange: (val: string) => void }> = ({ label, options, value, onChange }) => (
     <div className="space-y-1.5">
         <label className="text-[10px] font-bold text-[--text-secondary] uppercase tracking-wider">{label}</label>
         <div className="flex flex-wrap gap-1.5">
             {options.map(opt => (
                 <button
-                    key={opt}
-                    onClick={() => onChange(opt.toLowerCase())}
-                    className={`px-2 py-1 rounded-md text-[10px] font-medium border transition-all ${value.toLowerCase() === opt.toLowerCase()
+                    key={opt.value}
+                    onClick={() => onChange(opt.value)}
+                    className={`px-2 py-1 rounded-md text-[10px] font-medium border transition-all ${value === opt.value
                         ? 'bg-[--text-primary] text-[--bg-primary] border-[--text-primary]'
                         : 'bg-transparent text-[--text-secondary] border-[--bg-tertiary] hover:border-[--text-secondary]'
                         }`}
                 >
-                    {opt}
+                    {opt.label}
                 </button>
             ))}
         </div>
