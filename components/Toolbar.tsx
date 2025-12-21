@@ -796,14 +796,15 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     };
 
     const getMenuPositionStyle = (anchorEl: HTMLElement | null): React.CSSProperties => {
-        if (!anchorEl) return {};
+        if (!anchorEl) return { display: 'none' };
         const rect = anchorEl.getBoundingClientRect();
         return {
             position: 'fixed',
             left: `${rect.right + 8}px`,
             top: `${rect.top}px`,
             maxHeight: `calc(100vh - ${rect.top}px - 16px)`,
-            overflowY: 'auto'
+            overflowY: 'auto',
+            zIndex: 50
         };
     };
 
@@ -834,24 +835,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         >
                             <ActiveSelectionIcon className="w-6 h-6" />
                         </button>
-                        {isSelectionToolsMenuOpen && (
-                            <div
-                                className="z-20 p-2 space-y-1 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-60"
-                                style={getMenuPositionStyle(selectionToolsMenuRef.current)}
-                            >
-                                {selectionToolsGroup.map(({ tool: t, name, icon: Icon }) => (
-                                    <div key={t} className={`flex items-center justify-between rounded-md text-sm ${tool === t ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}>
-                                        <button onClick={() => { handleToolClick(t); setIsSelectionToolsMenuOpen(false); }} className="flex items-center gap-3 p-2 flex-grow text-left">
-                                            <Icon className="w-5 h-5" />
-                                            <span>{name}</span>
-                                        </button>
-                                        <button onClick={(e) => { handleSettingsClick(e, t); }} className="p-2 mr-1 rounded-full hover:bg-black/10 flex-shrink-0" title="Configuración de la herramienta">
-                                            <MoreVerticalIcon className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
                     </div>
 
                     <div className="relative" ref={strokeModeMenuRef}>
@@ -867,28 +850,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         >
                             <ActiveStrokeIcon className="w-6 h-6" />
                         </button>
-
-                        {isStrokeModeMenuOpen && (
-                            <div
-                                className="z-20 p-2 space-y-1 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-60"
-                                style={getMenuPositionStyle(strokeModeMenuRef.current)}
-                            >
-                                <h4 className="px-2 pb-1 text-sm font-bold uppercase text-[--text-secondary]">Modos de Trazo</h4>
-                                {strokeModesList.map(({ mode, label, icon: Icon }) => (
-                                    <button
-                                        key={mode}
-                                        onClick={() => {
-                                            setStrokeMode(mode);
-                                            setIsStrokeModeMenuOpen(false);
-                                        }}
-                                        className={`w-full flex items-center gap-3 p-2 rounded-md text-sm ${strokeMode === mode ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}
-                                    >
-                                        <Icon className="w-5 h-5" />
-                                        <span>{label}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        )}
                     </div>
 
                     <div className="relative" ref={strokeModifierMenuRef}>
@@ -904,43 +865,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         >
                             <ActiveStrokeStyleIcon className="w-6 h-6" />
                         </button>
-
-                        {isStrokeModifierMenuOpen && (
-                            <div
-                                className="z-20 p-2 space-y-2 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-60"
-                                style={getMenuPositionStyle(strokeModifierMenuRef.current)}
-                            >
-                                <h4 className="px-2 pb-1 text-sm font-bold uppercase text-[--text-secondary]">Estilo de Trazo</h4>
-                                <div className="space-y-1">
-                                    {strokeModifierList.map(({ style, label, icon: Icon }) => (
-                                        <button
-                                            key={style}
-                                            onClick={() => {
-                                                setStrokeModifier(s => ({ ...s, style }));
-                                            }}
-                                            className={`w-full flex items-center gap-3 p-2 rounded-md text-sm ${strokeModifier.style === style ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}
-                                        >
-                                            <Icon className="w-5 h-5" />
-                                            <span>{label}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                                <div className="border-t border-[--bg-tertiary] pt-2 mt-2">
-                                    <label className="px-2 text-xs font-bold text-[--text-secondary]">Escala del Patrón: {strokeModifier.scale.toFixed(1)}</label>
-                                    <input
-                                        type="range"
-                                        min="0.5"
-                                        max="10"
-                                        step="0.5"
-                                        value={strokeModifier.scale}
-                                        onChange={(e) => setStrokeModifier(s => ({ ...s, scale: parseFloat(e.target.value) }))}
-                                        className="w-full mt-1"
-                                        disabled={strokeModifier.style === 'solid'}
-                                    />
-
-                                </div>
-                            </div>
-                        )}
                     </div>
 
                     <div className="w-10/12 h-px bg-[--bg-tertiary] my-2 self-center" />
@@ -960,24 +884,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         >
                             <ActiveDrawingIcon className="w-6 h-6" />
                         </button>
-                        {isDrawingToolsMenuOpen && (
-                            <div
-                                className="z-20 p-2 space-y-1 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-60"
-                                style={getMenuPositionStyle(drawingToolsMenuRef.current)}
-                            >
-                                {drawingToolsGroup.map(({ tool: t, name, icon: Icon }) => (
-                                    <div key={t} className={`flex items-center justify-between rounded-md text-sm ${tool === t ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}>
-                                        <button onClick={() => { handleToolClick(t); setIsDrawingToolsMenuOpen(false); }} className="flex items-center gap-3 p-2 flex-grow text-left">
-                                            <Icon className="w-5 h-5" />
-                                            <span>{name}</span>
-                                        </button>
-                                        <button onClick={(e) => { handleSettingsClick(e, t); }} className="p-2 mr-1 rounded-full hover:bg-black/10 flex-shrink-0" title="Configuración de la herramienta">
-                                            <MoreVerticalIcon className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
                     </div>
 
                     <button onClick={() => handleToolClick('eraser')} onDoubleClick={(e) => handleToolDoubleClick('eraser', e)} className={toolButtonClasses('eraser')} title="Goma de Borrar (doble clic para opciones)">
@@ -1031,9 +937,114 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         <ExportIcon className="w-6 h-6" />
                     </button>
                 </div>
-            </div>
+            </div >
 
-            {/* Popovers for non-AI tools */}
+            {/* Group Menus - Moved outside scrolling container for overflow-visible compliance */}
+            {
+                isSelectionToolsMenuOpen && (
+                    <div
+                        className="fixed z-50 p-2 space-y-1 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-xl w-60"
+                        style={getMenuPositionStyle(selectionToolsMenuRef.current)}
+                    >
+                        {selectionToolsGroup.map(({ tool: t, name, icon: Icon }) => (
+                            <div key={t} className={`flex items-center justify-between rounded-md text-sm ${tool === t ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}>
+                                <button onClick={() => { handleToolClick(t); setIsSelectionToolsMenuOpen(false); }} className="flex items-center gap-3 p-2 flex-grow text-left">
+                                    <Icon className="w-5 h-5" />
+                                    <span>{name}</span>
+                                </button>
+                                <button onClick={(e) => { handleSettingsClick(e, t); }} className="p-2 mr-1 rounded-full hover:bg-black/10 flex-shrink-0" title="Configuración de la herramienta">
+                                    <MoreVerticalIcon className="w-4 h-4" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )
+            }
+
+            {
+                isStrokeModeMenuOpen && (
+                    <div
+                        className="fixed z-50 p-2 space-y-1 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-xl w-60"
+                        style={getMenuPositionStyle(strokeModeMenuRef.current)}
+                    >
+                        <h4 className="px-2 pb-1 text-sm font-bold uppercase text-[--text-secondary]">Modos de Trazo</h4>
+                        {strokeModesList.map(({ mode, label, icon: Icon }) => (
+                            <button
+                                key={mode}
+                                onClick={() => {
+                                    setStrokeMode(mode);
+                                    setIsStrokeModeMenuOpen(false);
+                                }}
+                                className={`w-full flex items-center gap-3 p-2 rounded-md text-sm ${strokeMode === mode ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}
+                            >
+                                <Icon className="w-5 h-5" />
+                                <span>{label}</span>
+                            </button>
+                        ))}
+                    </div>
+                )
+            }
+
+            {
+                isStrokeModifierMenuOpen && (
+                    <div
+                        className="fixed z-50 p-2 space-y-2 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-xl w-60"
+                        style={getMenuPositionStyle(strokeModifierMenuRef.current)}
+                    >
+                        <h4 className="px-2 pb-1 text-sm font-bold uppercase text-[--text-secondary]">Estilo de Trazo</h4>
+                        <div className="space-y-1">
+                            {strokeModifierList.map(({ style, label, icon: Icon }) => (
+                                <button
+                                    key={style}
+                                    onClick={() => {
+                                        setStrokeModifier(s => ({ ...s, style }));
+                                    }}
+                                    className={`w-full flex items-center gap-3 p-2 rounded-md text-sm ${strokeModifier.style === style ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}
+                                >
+                                    <Icon className="w-5 h-5" />
+                                    <span>{label}</span>
+                                </button>
+                            ))}
+                        </div>
+                        <div className="border-t border-[--bg-tertiary] pt-2 mt-2">
+                            <label className="px-2 text-xs font-bold text-[--text-secondary]">Escala del Patrón: {strokeModifier.scale.toFixed(1)}</label>
+                            <input
+                                type="range"
+                                min="0.5"
+                                max="10"
+                                step="0.5"
+                                value={strokeModifier.scale}
+                                onChange={(e) => setStrokeModifier(s => ({ ...s, scale: parseFloat(e.target.value) }))}
+                                className="w-full mt-1"
+                                disabled={strokeModifier.style === 'solid'}
+                            />
+                        </div>
+                    </div>
+                )
+            }
+
+            {
+                isDrawingToolsMenuOpen && (
+                    <div
+                        className="fixed z-50 p-2 space-y-1 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-xl w-60"
+                        style={getMenuPositionStyle(drawingToolsMenuRef.current)}
+                    >
+                        {drawingToolsGroup.map(({ tool: t, name, icon: Icon }) => (
+                            <div key={t} className={`flex items-center justify-between rounded-md text-sm ${tool === t ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}>
+                                <button onClick={() => { handleToolClick(t); setIsDrawingToolsMenuOpen(false); }} className="flex items-center gap-3 p-2 flex-grow text-left">
+                                    <Icon className="w-5 h-5" />
+                                    <span>{name}</span>
+                                </button>
+                                <button onClick={(e) => { handleSettingsClick(e, t); }} className="p-2 mr-1 rounded-full hover:bg-black/10 flex-shrink-0" title="Configuración de la herramienta">
+                                    <MoreVerticalIcon className="w-4 h-4" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )
+            }
+
+            {/* Popovers for tool settings */}
             {
                 openSettings && settingsPanelPosition && (
                     <div

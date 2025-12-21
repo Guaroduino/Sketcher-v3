@@ -1498,8 +1498,8 @@ export function App() {
                 {/* Left Sidebar */}
                 <aside className={`
                      md:relative absolute z-30 h-full bg-[--bg-tertiary]
-                     transition-all duration-300 ease-in-out flex flex-col overflow-hidden
-                     ${ui.isLeftSidebarVisible ? 'w-20 translate-x-0 border-r border-[--bg-tertiary]' : 'w-0 -translate-x-full md:w-0 md:translate-x-0 border-none'}
+                     transition-all duration-300 ease-in-out flex flex-col ${ui.isLeftSidebarVisible ? 'overflow-visible' : 'overflow-hidden'}
+                     ${ui.isLeftSidebarVisible ? 'w-20 translate-x-0 border-r border-[--bg-tertiary] z-40' : 'w-0 -translate-x-full md:w-0 md:translate-x-0 border-none z-30'}
                 `}>
                     <Toolbar
                         tool={tool} setTool={setTool} {...toolSettings} brushPresets={toolSettings.brushPresets} onSavePreset={toolSettings.onSavePreset}
@@ -1620,9 +1620,9 @@ export function App() {
                 </main>
                 <aside ref={ui.rightSidebarRef} className={`
                     flex-shrink-0 bg-[--bg-secondary] flex flex-col z-30
-                    transition-all duration-300 ease-in-out overflow-hidden
-                    ${ui.isRightSidebarVisible ? 'w-80 translate-x-0 border-l border-[--bg-tertiary]' : 'w-0 translate-x-full border-none'}
-                    ${aiPanelState.isOpen ? 'z-50' : ''}
+                     transition-all duration-300 ease-in-out ${ui.isRightSidebarVisible ? 'overflow-visible' : 'overflow-hidden'}
+                     ${ui.isRightSidebarVisible ? 'w-80 translate-x-0 border-l border-[--bg-tertiary]' : 'w-0 translate-x-full border-none'}
+                     ${aiPanelState.isOpen ? 'z-50' : ''}
                 `}>
                     <div style={{ height: ui.rightSidebarTopHeight }} className="flex-shrink-0">
                         <Outliner
