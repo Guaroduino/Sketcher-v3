@@ -593,7 +593,7 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
     return (
         <div
             ref={containerRef}
-            className="w-full h-full overflow-hidden relative bg-[--bg-tertiary]"
+            className="w-full h-full overflow-hidden relative bg-theme-bg-tertiary"
             style={{ cursor: getCursorStyle(), touchAction: 'none' }}
             {...pointerHandlers}
             onContextMenu={e => e.preventDefault()}

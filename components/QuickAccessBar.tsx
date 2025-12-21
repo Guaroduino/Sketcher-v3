@@ -106,7 +106,7 @@ const ColorEditorPopover = ({
   const presets = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#f43f5e', '#78716c', '#ffffff', '#000000'];
 
   return (
-    <div ref={popoverRef} style={style} className="bg-[--bg-secondary] p-3 rounded-lg shadow-2xl border border-[--bg-tertiary] space-y-3" onPointerDown={e => e.stopPropagation()}>
+    <div ref={popoverRef} style={style} className="bg-theme-bg-secondary p-3 rounded-lg shadow-2xl border border-theme-bg-tertiary space-y-3" onPointerDown={e => e.stopPropagation()}>
       <div className="flex items-center gap-2">
         <div className="relative w-10 h-10">
           <input
@@ -115,21 +115,21 @@ const ColorEditorPopover = ({
             onChange={handlePickerChange}
             className="absolute inset-0 w-full h-full p-0 bg-transparent border-none rounded-md cursor-pointer opacity-0"
           />
-          <div className="w-10 h-10 rounded-md border border-[--bg-hover]" style={{ backgroundColor: color }}></div>
+          <div className="w-10 h-10 rounded-md border border-theme-bg-hover" style={{ backgroundColor: color }}></div>
         </div>
         <div className="relative">
-          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[--text-secondary] font-mono">#</span>
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-theme-text-secondary font-mono">#</span>
           <input
             type="text"
             value={color.substring(1)}
             onChange={handleHexChange}
-            className="w-24 bg-[--bg-tertiary] text-[--text-primary] rounded-md p-2 pl-5 font-mono text-sm"
+            className="w-24 bg-theme-bg-tertiary text-theme-text-primary rounded-md p-2 pl-5 font-mono text-sm"
             maxLength={6}
           />
         </div>
       </div>
       <div>
-        <h4 className="text-xs font-bold text-[--text-secondary] mb-2">Presets</h4>
+        <h4 className="text-xs font-bold text-theme-text-secondary mb-2">Presets</h4>
         <div className="grid grid-cols-7 gap-1">
           {presets.map(preset => (
             <button
@@ -138,7 +138,7 @@ const ColorEditorPopover = ({
                 setColor(preset);
                 onColorChange(preset);
               }}
-              className={`w-6 h-6 rounded-full border-2 transition-all ${preset === color ? 'border-[--accent-primary]' : 'border-transparent hover:border-gray-400'}`}
+              className={`w-6 h-6 rounded-full border-2 transition-all ${preset === color ? 'border-theme-accent-primary' : 'border-transparent hover:border-gray-400'}`}
               style={{ backgroundColor: preset }}
             />
           ))}
@@ -215,7 +215,7 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
 
 
   const renderToolIcon = (tool: QuickAccessTool | null) => {
-    if (!tool) return <PlusIcon className="w-5 h-5 text-[--text-secondary]" />;
+    if (!tool) return <PlusIcon className="w-5 h-5 text-theme-text-secondary" />;
     if (tool.type === 'tool') {
       const Icon = toolIconMap[tool.tool];
       return Icon ? <Icon className="w-5 h-5" /> : null;
@@ -317,7 +317,7 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
           // Fallback: Right click STILL opens it, for desktop users who prefer it.
           onOpenToolSelector(index);
         }}
-        className={`p-2 rounded-lg text-[--text-primary] transition-colors ${isActive ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'
+        className={`p-2 rounded-lg text-theme-text-primary transition-colors ${isActive ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'
           } select-none touch-manipulation`} // Add touch-manipulation to improve mobile response
         title={`${getToolTitle(tool)} (mantén presionado para cambiar)`}
       >
@@ -332,17 +332,17 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
 
   return (
     <>
-      <div className="absolute top-4 left-2 right-2 md:left-1/2 md:-translate-x-1/2 md:w-auto md:right-auto bg-[--bg-primary]/80 backdrop-blur-sm rounded-lg p-1 flex flex-nowrap md:flex-wrap overflow-x-auto md:overflow-visible items-center justify-start md:justify-center gap-2 shadow-lg z-10 scrollbar-hide">
+      <div className="absolute top-4 left-2 right-2 md:left-1/2 md:-translate-x-1/2 md:w-auto md:right-auto bg-theme-bg-primary/80 backdrop-blur-sm rounded-lg p-1 flex flex-nowrap md:flex-wrap overflow-x-auto md:overflow-visible items-center justify-start md:justify-center gap-2 shadow-lg z-10 scrollbar-hide">
         {/* Header Toggle */}
         <button
           onClick={onToggleHeader}
-          className="p-1 rounded-md text-[--text-secondary] hover:bg-[--bg-tertiary] hover:text-[--text-primary] transition-colors"
+          className="p-1 rounded-md text-theme-text-secondary hover:bg-theme-bg-tertiary hover:text-theme-text-primary transition-colors"
           title={isHeaderVisible ? "Ocultar Encabezado" : "Mostrar Encabezado"}
         >
           {isHeaderVisible ? <ChevronUpIcon className="w-5 h-5" /> : <ChevronDownIcon className="w-5 h-5" />}
         </button>
 
-        <div className="h-6 w-px bg-[--bg-hover]" />
+        <div className="h-6 w-px bg-theme-bg-hover" />
 
         {/* Color Palette */}
         <div className="flex items-center gap-2">
@@ -361,7 +361,7 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
                   e.preventDefault();
                   setColorContextMenu({ x: e.clientX, y: e.clientY, index });
                 }}
-                className={`w-7 h-7 rounded-full border-2 transition-all hover:border-[--accent-primary] ${isActive ? 'border-[--accent-primary]' : 'border-[--bg-secondary]'
+                className={`w-7 h-7 rounded-full border-2 transition-all hover:border-theme-accent-primary ${isActive ? 'border-theme-accent-primary' : 'border-theme-bg-secondary'
                   }`}
                 style={{ backgroundColor: color }}
                 title={`Color: ${color} (clic para seleccionar, doble clic para editar, clic derecho para eliminar)`}
@@ -370,14 +370,14 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
           })}
           <button
             onClick={() => onAddColor('#ffffff')}
-            className="w-7 h-7 rounded-full border-2 border-dashed border-[--bg-hover] flex items-center justify-center text-[--text-secondary] hover:bg-[--bg-tertiary] hover:border-[--accent-primary] transition-colors"
+            className="w-7 h-7 rounded-full border-2 border-dashed border-theme-bg-hover flex items-center justify-center text-theme-text-secondary hover:bg-theme-bg-tertiary hover:border-theme-accent-primary transition-colors"
             title="Agregar color"
           >
             <PlusIcon className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="h-6 w-px bg-[--bg-hover]" />
+        <div className="h-6 w-px bg-theme-bg-hover" />
 
         {/* Size Presets */}
         <div className="flex items-center gap-2">
@@ -393,13 +393,13 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
                     onChange={handleSizeChange}
                     onBlur={handleSizeBlur}
                     onKeyDown={handleSizeKeyDown}
-                    className="w-14 text-center bg-[--bg-hover] text-[--text-primary] p-1 rounded-md text-xs"
+                    className="w-14 text-center bg-theme-bg-hover text-theme-text-primary p-1 rounded-md text-xs"
                   />
                 ) : (
                   <button
                     onClick={() => onSelectSize(size)}
                     onDoubleClick={() => handleSizeDoubleClick(index, size)}
-                    className={`w-14 p-1 rounded-md text-xs transition-colors ${isActive ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'
+                    className={`w-14 p-1 rounded-md text-xs transition-colors ${isActive ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'
                       }`}
                     title={`Tamaño: ${size}px (doble clic para cambiar)`}
                   >
@@ -411,7 +411,7 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
           })}
         </div>
 
-        <div className="h-6 w-px bg-[--bg-hover]" />
+        <div className="h-6 w-px bg-theme-bg-hover" />
 
         {/* Tool Shortcuts */}
         <div className="flex items-center gap-2">
@@ -428,7 +428,7 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
           ))}
           <button
             onClick={onAddToolSlot}
-            className="w-9 h-9 rounded-lg border-2 border-dashed border-[--bg-hover] flex items-center justify-center text-[--text-secondary] hover:bg-[--bg-tertiary] hover:border-[--accent-primary] transition-colors"
+            className="w-9 h-9 rounded-lg border-2 border-dashed border-theme-bg-hover flex items-center justify-center text-theme-text-secondary hover:bg-theme-bg-tertiary hover:border-theme-accent-primary transition-colors"
             title="Agregar ranura de herramienta"
           >
             <PlusIcon className="w-5 h-5" />
@@ -452,7 +452,7 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
       {colorContextMenu && (
         <div
           ref={contextMenuRef}
-          className="fixed z-50 bg-[--bg-secondary] rounded-md shadow-lg border border-[--bg-tertiary] py-1"
+          className="fixed z-50 bg-theme-bg-secondary rounded-md shadow-lg border border-theme-bg-tertiary py-1"
           style={{ top: colorContextMenu.y, left: colorContextMenu.x }}
           onPointerDown={e => e.stopPropagation()}
         >
@@ -465,7 +465,7 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
               }
               setColorContextMenu(null);
             }}
-            className="block w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-[--bg-hover]"
+            className="block w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-theme-bg-hover"
           >
             Eliminar
           </button>

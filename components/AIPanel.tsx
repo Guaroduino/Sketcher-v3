@@ -25,8 +25,8 @@ const PromptManager: React.FC<{
     setPromptLoader: (state: { openFor: PromptType | null; anchorEl: HTMLElement | null }) => void;
 }> = ({ type, value, savePrompt, setPromptLoader }) => (
     <div className="flex justify-end gap-2 mt-1">
-        <button onClick={() => savePrompt(type, value)} className="text-xs px-2 py-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover]">Guardar</button>
-        <button onClick={(e) => setPromptLoader({ openFor: type, anchorEl: e.currentTarget })} className="text-xs px-2 py-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover]">Cargar</button>
+        <button onClick={() => savePrompt(type, value)} className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover">Guardar</button>
+        <button onClick={(e) => setPromptLoader({ openFor: type, anchorEl: e.currentTarget })} className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover">Cargar</button>
     </div>
 );
 
@@ -129,27 +129,27 @@ export const AIPanel: React.FC<AIPanelProps> = ({
         <>
             <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
             <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
-                <div ref={panelRef} className="bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg w-[500px] max-h-[90vh] flex flex-col pointer-events-auto">
-                    <div className="flex-shrink-0 p-4 border-b border-[--bg-tertiary] flex justify-between items-center">
-                        <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Mejora con IA</h4>
-                        <button onClick={onClose} className="p-1 rounded-full hover:bg-[--bg-hover]">
+                <div ref={panelRef} className="bg-theme-bg-primary border border-theme-bg-tertiary rounded-lg shadow-lg w-[500px] max-h-[90vh] flex flex-col pointer-events-auto">
+                    <div className="flex-shrink-0 p-4 border-b border-theme-bg-tertiary flex justify-between items-center">
+                        <h4 className="text-sm font-bold uppercase text-theme-text-secondary">Mejora con IA</h4>
+                        <button onClick={onClose} className="p-1 rounded-full hover:bg-theme-bg-hover">
                             <XIcon className="w-5 h-5" />
                         </button>
                     </div>
 
                     <div className="flex-grow overflow-y-auto p-4 space-y-4">
                         {/* Tabs */}
-                        <div className="flex border-b border-[--bg-tertiary]">
-                            <button onClick={() => setActiveAiTab('object')} className={`flex-1 p-2 text-sm font-semibold transition-colors ${activeAiTab === 'object' ? 'text-[--accent-primary] border-b-2 border-[--accent-primary]' : 'text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}>
+                        <div className="flex border-b border-theme-bg-tertiary">
+                            <button onClick={() => setActiveAiTab('object')} className={`flex-1 p-2 text-sm font-semibold transition-colors ${activeAiTab === 'object' ? 'text-theme-accent-primary border-b-2 border-theme-accent-primary' : 'text-theme-text-secondary hover:bg-theme-bg-tertiary'}`}>
                                 OBJETO
                             </button>
-                            <button onClick={() => setActiveAiTab('composition')} className={`flex-1 p-2 text-sm font-semibold transition-colors ${activeAiTab === 'composition' ? 'text-[--accent-primary] border-b-2 border-[--accent-primary]' : 'text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}>
+                            <button onClick={() => setActiveAiTab('composition')} className={`flex-1 p-2 text-sm font-semibold transition-colors ${activeAiTab === 'composition' ? 'text-theme-accent-primary border-b-2 border-theme-accent-primary' : 'text-theme-text-secondary hover:bg-theme-bg-tertiary'}`}>
                                 COMPOSICIÓN
                             </button>
-                            <button onClick={() => setActiveAiTab('free')} className={`flex-1 p-2 text-sm font-semibold transition-colors ${activeAiTab === 'free' ? 'text-[--accent-primary] border-b-2 border-[--accent-primary]' : 'text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}>
+                            <button onClick={() => setActiveAiTab('free')} className={`flex-1 p-2 text-sm font-semibold transition-colors ${activeAiTab === 'free' ? 'text-theme-accent-primary border-b-2 border-theme-accent-primary' : 'text-theme-text-secondary hover:bg-theme-bg-tertiary'}`}>
                                 LIBRE
                             </button>
-                            <button onClick={() => setActiveAiTab('upscale')} className={`flex-1 p-2 text-sm font-semibold transition-colors ${activeAiTab === 'upscale' ? 'text-[--accent-primary] border-b-2 border-[--accent-primary]' : 'text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}>
+                            <button onClick={() => setActiveAiTab('upscale')} className={`flex-1 p-2 text-sm font-semibold transition-colors ${activeAiTab === 'upscale' ? 'text-theme-accent-primary border-b-2 border-theme-accent-primary' : 'text-theme-text-secondary hover:bg-theme-bg-tertiary'}`}>
                                 ESCALAR
                             </button>
                         </div>
@@ -160,7 +160,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                 <div style={{ backgroundColor: enhancementPreviewBgColor }} className="rounded-md p-2 aspect-video flex items-center justify-center">
                                     {!enhancementPreview ? (
                                         <div className="flex flex-col items-center">
-                                            <span className="text-xs text-[--text-secondary]">Generando vista previa...</span>
+                                            <span className="text-xs text-theme-text-secondary">Generando vista previa...</span>
                                             {/* We trigger generation on mount/open if needed, usually passed prop controls this */}
                                         </div>
                                     ) : (
@@ -173,31 +173,31 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                 </div>
 
                                 <div>
-                                    <label htmlFor="preview-bg-color" className="text-xs font-bold text-[--text-secondary] block mb-1">Fondo</label>
+                                    <label htmlFor="preview-bg-color" className="text-xs font-bold text-theme-text-secondary block mb-1">Fondo</label>
                                     <input
                                         type="color"
                                         id="preview-bg-color"
                                         value={enhancementPreviewBgColor}
                                         onChange={(e) => setEnhancementPreviewBgColor(e.target.value)}
-                                        className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer"
+                                        className="w-full h-8 p-0.5 bg-theme-bg-tertiary border border-theme-bg-hover rounded-md cursor-pointer"
                                         disabled={isEnhancing}
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-2">Imagen de Entrada</label>
+                                    <label className="text-xs font-bold text-theme-text-secondary block mb-2">Imagen de Entrada</label>
                                     <div className="grid grid-cols-2 gap-2">
                                         <button
                                             onClick={() => setEnhancementInputMode('full')}
                                             disabled={isEnhancing}
-                                            className={`text-xs p-2 rounded transition-colors ${enhancementInputMode === 'full' ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}
+                                            className={`text-xs p-2 rounded transition-colors ${enhancementInputMode === 'full' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}
                                         >
                                             Lienzo Completo
                                         </button>
                                         <button
                                             onClick={() => setEnhancementInputMode('bbox')}
                                             disabled={isEnhancing || !enhancementPreview?.bbox}
-                                            className={`text-xs p-2 rounded transition-colors ${enhancementInputMode === 'bbox' ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed'}`}
+                                            className={`text-xs p-2 rounded transition-colors ${enhancementInputMode === 'bbox' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed'}`}
                                         >
                                             Ajustar a Contenido
                                         </button>
@@ -205,43 +205,43 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                 </div>
 
                                 <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Descripción del Objeto (Necesario)</label>
+                                    <label className="text-xs font-bold text-theme-text-secondary block mb-1">Descripción del Objeto (Necesario)</label>
                                     <textarea
                                         value={enhancementPrompt}
                                         onChange={(e) => setEnhancementPrompt(e.target.value)}
                                         placeholder="Ej: 'añade un castillo de fantasía en el fondo'"
-                                        className="w-full h-20 p-2 bg-[--bg-tertiary] text-[--text-primary] text-sm rounded-md resize-none"
+                                        className="w-full h-20 p-2 bg-theme-bg-tertiary text-theme-text-primary text-sm rounded-md resize-none"
                                         disabled={isEnhancing}
                                     />
                                     <PromptManager type="description" value={enhancementPrompt} savePrompt={savePrompt} setPromptLoader={setPromptLoader} />
                                 </div>
 
                                 <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Estilo (Necesario)</label>
+                                    <label className="text-xs font-bold text-theme-text-secondary block mb-1">Estilo (Necesario)</label>
                                     <textarea
                                         value={enhancementStylePrompt}
                                         onChange={(e) => setEnhancementStylePrompt(e.target.value)}
                                         placeholder="Ej: 'fotorrealista, colores vivos, pintura al óleo'"
-                                        className="w-full h-16 p-2 bg-[--bg-tertiary] text-[--text-primary] text-sm rounded-md resize-none"
+                                        className="w-full h-16 p-2 bg-theme-bg-tertiary text-theme-text-primary text-sm rounded-md resize-none"
                                         disabled={isEnhancing}
                                     />
                                     <PromptManager type="style" value={enhancementStylePrompt} savePrompt={savePrompt} setPromptLoader={setPromptLoader} />
                                 </div>
 
                                 <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Negativo/Evitar (Opcional)</label>
+                                    <label className="text-xs font-bold text-theme-text-secondary block mb-1">Negativo/Evitar (Opcional)</label>
                                     <textarea
                                         value={enhancementNegativePrompt}
                                         onChange={(e) => setEnhancementNegativePrompt(e.target.value)}
                                         placeholder="Ej: 'borroso, baja resolución, texto, marcas de agua'"
-                                        className="w-full h-16 p-2 bg-[--bg-tertiary] text-[--text-primary] text-sm rounded-md resize-none"
+                                        className="w-full h-16 p-2 bg-theme-bg-tertiary text-theme-text-primary text-sm rounded-md resize-none"
                                         disabled={isEnhancing}
                                     />
                                     <PromptManager type="negative" value={enhancementNegativePrompt} savePrompt={savePrompt} setPromptLoader={setPromptLoader} />
                                 </div>
 
                                 <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Creatividad: {enhancementCreativity}</label>
+                                    <label className="text-xs font-bold text-theme-text-secondary block mb-1">Creatividad: {enhancementCreativity}</label>
                                     <input
                                         type="range"
                                         min="0"
@@ -251,7 +251,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                         className="w-full"
                                         disabled={isEnhancing}
                                     />
-                                    <div className="flex justify-between text-xs text-[--text-secondary] mt-1">
+                                    <div className="flex justify-between text-xs text-theme-text-secondary mt-1">
                                         <span>Fiel</span>
                                         <span>Equilibrado</span>
                                         <span>Imaginativo</span>
@@ -259,7 +259,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                 </div>
 
                                 <div className="flex items-center justify-between py-1">
-                                    <label htmlFor="chroma-key-toggle" className="text-xs font-bold text-[--text-secondary]">
+                                    <label htmlFor="chroma-key-toggle" className="text-xs font-bold text-theme-text-secondary">
                                         Forzar Fondo Chroma
                                     </label>
                                     <button
@@ -267,7 +267,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                         role="switch"
                                         aria-checked={isChromaKeyEnabled}
                                         onClick={() => setIsChromaKeyEnabled(prev => !prev)}
-                                        className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[--accent-primary] focus:ring-offset-[--bg-primary] ${isChromaKeyEnabled ? 'bg-[--accent-primary]' : 'bg-[--bg-tertiary]'}`}
+                                        className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-accent-primary focus:ring-offset-theme-bg-primary ${isChromaKeyEnabled ? 'bg-theme-accent-primary' : 'bg-theme-bg-tertiary'}`}
                                         disabled={isEnhancing}
                                     >
                                         <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${isChromaKeyEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
@@ -275,8 +275,8 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                 </div>
                                 {isChromaKeyEnabled && (
                                     <div className="grid grid-cols-2 gap-2">
-                                        <button onClick={() => setEnhancementChromaKey('green')} disabled={isEnhancing} className={`text-xs p-2 rounded transition-colors ${enhancementChromaKey === 'green' ? 'bg-green-600 text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Verde</button>
-                                        <button onClick={() => setEnhancementChromaKey('blue')} disabled={isEnhancing} className={`text-xs p-2 rounded transition-colors ${enhancementChromaKey === 'blue' ? 'bg-blue-600 text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Azul</button>
+                                        <button onClick={() => setEnhancementChromaKey('green')} disabled={isEnhancing} className={`text-xs p-2 rounded transition-colors ${enhancementChromaKey === 'green' ? 'bg-green-600 text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>Verde</button>
+                                        <button onClick={() => setEnhancementChromaKey('blue')} disabled={isEnhancing} className={`text-xs p-2 rounded transition-colors ${enhancementChromaKey === 'blue' ? 'bg-blue-600 text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>Azul</button>
                                     </div>
                                 )}
 
@@ -287,10 +287,10 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                             id="add-to-canvas"
                                             checked={shouldAddToCanvas}
                                             onChange={(e) => setShouldAddToCanvas(e.target.checked)}
-                                            className="h-4 w-4 bg-[--bg-tertiary] border-[--bg-hover] rounded"
+                                            className="h-4 w-4 bg-theme-bg-tertiary border-theme-bg-hover rounded"
                                             disabled={isEnhancing}
                                         />
-                                        <label htmlFor="add-to-canvas" className="ml-2 text-xs text-[--text-secondary]">Añadir a Canvas</label>
+                                        <label htmlFor="add-to-canvas" className="ml-2 text-xs text-theme-text-secondary">Añadir a Canvas</label>
                                     </div>
                                     <div className="flex items-center">
                                         <input
@@ -298,10 +298,10 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                             id="add-to-library"
                                             checked={shouldAddToLibrary}
                                             onChange={(e) => setShouldAddToLibrary(e.target.checked)}
-                                            className="h-4 w-4 bg-[--bg-tertiary] border-[--bg-hover] rounded"
+                                            className="h-4 w-4 bg-theme-bg-tertiary border-theme-bg-hover rounded"
                                             disabled={isEnhancing}
                                         />
-                                        <label htmlFor="add-to-library" className="ml-2 text-xs text-[--text-secondary]">Añadir a Librería</label>
+                                        <label htmlFor="add-to-library" className="ml-2 text-xs text-theme-text-secondary">Añadir a Librería</label>
                                     </div>
                                     <div className="flex items-center">
                                         <input
@@ -309,10 +309,10 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                             id="remove-content"
                                             checked={shouldRemoveContent}
                                             onChange={(e) => setShouldRemoveContent(e.target.checked)}
-                                            className="h-4 w-4 bg-[--bg-tertiary] border-[--bg-hover] rounded"
+                                            className="h-4 w-4 bg-theme-bg-tertiary border-theme-bg-hover rounded"
                                             disabled={isEnhancing}
                                         />
-                                        <label htmlFor="remove-content" className="ml-2 text-xs text-[--text-secondary]">Quitar Contenido</label>
+                                        <label htmlFor="remove-content" className="ml-2 text-xs text-theme-text-secondary">Quitar Contenido</label>
                                     </div>
                                 </div>
 
@@ -344,7 +344,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                 <div className="rounded-md p-2 aspect-video flex items-center justify-center bg-gray-800 border border-gray-700">
                                     {!enhancementPreview ? (
                                         <div className="flex flex-col items-center">
-                                            <span className="text-xs text-[--text-secondary]">Generando vista previa...</span>
+                                            <span className="text-xs text-theme-text-secondary">Generando vista previa...</span>
                                         </div>
                                     ) : (
                                         <img
@@ -355,19 +355,19 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                     )}
                                 </div>
                                 <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Descripción de la Composición</label>
+                                    <label className="text-xs font-bold text-theme-text-secondary block mb-1">Descripción de la Composición</label>
                                     <textarea
                                         value={compositionPrompt}
                                         onChange={(e) => setCompositionPrompt(e.target.value)}
                                         placeholder="Describe la escena completa..."
-                                        className="w-full h-24 p-2 bg-[--bg-tertiary] text-[--text-primary] text-sm rounded-md resize-none"
+                                        className="w-full h-24 p-2 bg-theme-bg-tertiary text-theme-text-primary text-sm rounded-md resize-none"
                                         disabled={isEnhancing}
                                     />
                                     <PromptManager type="description" value={compositionPrompt} savePrompt={savePrompt} setPromptLoader={setPromptLoader} />
                                 </div>
 
                                 <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Referencia de Estilo (Opcional)</label>
+                                    <label className="text-xs font-bold text-theme-text-secondary block mb-1">Referencia de Estilo (Opcional)</label>
                                     <div className="flex items-center gap-2">
                                         <input
                                             type="file"
@@ -382,7 +382,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                                     reader.readAsDataURL(file);
                                                 }
                                             }}
-                                            className="text-xs text-[--text-secondary] file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:bg-[--bg-tertiary] file:text-[--text-primary] hover:file:bg-[--bg-hover]"
+                                            className="text-xs text-theme-text-secondary file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:bg-theme-bg-tertiary file:text-theme-text-primary hover:file:bg-theme-bg-hover"
                                             disabled={isEnhancing}
                                         />
                                         {styleRef && (
@@ -391,7 +391,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                             </button>
                                         )}
                                     </div>
-                                    {styleRef && <div className="mt-2 h-20 w-full bg-cover bg-center rounded-md border border-[--bg-tertiary]" style={{ backgroundImage: `url(${styleRef.url})` }}></div>}
+                                    {styleRef && <div className="mt-2 h-20 w-full bg-cover bg-center rounded-md border border-theme-bg-tertiary" style={{ backgroundImage: `url(${styleRef.url})` }}></div>}
                                 </div>
 
                                 <div className="flex items-center gap-4 mt-2 flex-wrap">
@@ -401,10 +401,10 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                             id="comp-update-bg"
                                             checked={shouldUpdateBackground}
                                             onChange={(e) => setShouldUpdateBackground(e.target.checked)}
-                                            className="h-4 w-4 bg-[--bg-tertiary] border-[--bg-hover] rounded"
+                                            className="h-4 w-4 bg-theme-bg-tertiary border-theme-bg-hover rounded"
                                             disabled={isEnhancing}
                                         />
-                                        <label htmlFor="comp-update-bg" className="ml-2 text-xs text-[--text-secondary]">Reemplazar Fondo</label>
+                                        <label htmlFor="comp-update-bg" className="ml-2 text-xs text-theme-text-secondary">Reemplazar Fondo</label>
                                     </div>
                                     <div className="flex items-center">
                                         <input
@@ -412,10 +412,10 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                             id="comp-add-to-canvas"
                                             checked={shouldAddToCanvas}
                                             onChange={(e) => setShouldAddToCanvas(e.target.checked)}
-                                            className="h-4 w-4 bg-[--bg-tertiary] border-[--bg-hover] rounded"
+                                            className="h-4 w-4 bg-theme-bg-tertiary border-theme-bg-hover rounded"
                                             disabled={isEnhancing}
                                         />
-                                        <label htmlFor="comp-add-to-canvas" className="ml-2 text-xs text-[--text-secondary]">Añadir como Capa</label>
+                                        <label htmlFor="comp-add-to-canvas" className="ml-2 text-xs text-theme-text-secondary">Añadir como Capa</label>
                                     </div>
                                     <div className="flex items-center">
                                         <input
@@ -423,10 +423,10 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                             id="comp-remove-content"
                                             checked={shouldRemoveContent}
                                             onChange={(e) => setShouldRemoveContent(e.target.checked)}
-                                            className="h-4 w-4 bg-[--bg-tertiary] border-[--bg-hover] rounded"
+                                            className="h-4 w-4 bg-theme-bg-tertiary border-theme-bg-hover rounded"
                                             disabled={isEnhancing}
                                         />
-                                        <label htmlFor="comp-remove-content" className="ml-2 text-xs text-[--text-secondary]">Quitar Contenido Usado</label>
+                                        <label htmlFor="comp-remove-content" className="ml-2 text-xs text-theme-text-secondary">Quitar Contenido Usado</label>
                                     </div>
                                 </div>
 
@@ -451,25 +451,25 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                         {activeAiTab === 'free' && (
                             <div className="space-y-4">
                                 <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-1">Descripción Libre</label>
+                                    <label className="text-xs font-bold text-theme-text-secondary block mb-1">Descripción Libre</label>
                                     <textarea
                                         value={freeFormPrompt}
                                         onChange={(e) => setFreeFormPrompt(e.target.value)}
                                         placeholder="Describe lo que quieres generar..."
-                                        className="w-full h-24 p-2 bg-[--bg-tertiary] text-[--text-primary] text-sm rounded-md resize-none"
+                                        className="w-full h-24 p-2 bg-theme-bg-tertiary text-theme-text-primary text-sm rounded-md resize-none"
                                         disabled={isEnhancing}
                                     />
                                     <PromptManager type="description" value={freeFormPrompt} savePrompt={savePrompt} setPromptLoader={setPromptLoader} />
                                 </div>
 
                                 <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-2">Elementos (Opcional)</label>
+                                    <label className="text-xs font-bold text-theme-text-secondary block mb-2">Elementos (Opcional)</label>
                                     <div className="grid grid-cols-2 gap-2">
                                         {(['main', 'a', 'b', 'c'] as const).map((slot) => (
-                                            <div key={slot} className="border border-[--bg-tertiary] rounded p-2 bg-[--bg-secondary]">
-                                                <span className="text-[10px] text-[--text-secondary] uppercase font-bold block mb-1">{slot === 'main' ? 'Principal' : `Ranura ${slot.toUpperCase()}`}</span>
+                                            <div key={slot} className="border border-theme-bg-tertiary rounded p-2 bg-theme-bg-secondary">
+                                                <span className="text-[10px] text-theme-text-secondary uppercase font-bold block mb-1">{slot === 'main' ? 'Principal' : `Ranura ${slot.toUpperCase()}`}</span>
                                                 {freeFormSlots[slot] ? (
-                                                    <div className="relative group aspect-square bg-[--bg-tertiary] rounded overflow-hidden">
+                                                    <div className="relative group aspect-square bg-theme-bg-tertiary rounded overflow-hidden">
                                                         <img src={freeFormSlots[slot]!.url} alt={slot} className="w-full h-full object-cover" />
                                                         <button
                                                             onClick={() => setFreeFormSlots({ ...freeFormSlots, [slot]: null })}
@@ -479,9 +479,9 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                                         </button>
                                                     </div>
                                                 ) : (
-                                                    <label className="flex flex-col items-center justify-center aspect-square bg-[--bg-tertiary] rounded cursor-pointer hover:bg-[--bg-hover] transition-colors">
-                                                        <UploadIcon className="w-5 h-5 text-[--text-secondary] mb-1" />
-                                                        <span className="text-[10px] text-[--text-secondary]">Subir</span>
+                                                    <label className="flex flex-col items-center justify-center aspect-square bg-theme-bg-tertiary rounded cursor-pointer hover:bg-theme-bg-hover transition-colors">
+                                                        <UploadIcon className="w-5 h-5 text-theme-text-secondary mb-1" />
+                                                        <span className="text-[10px] text-theme-text-secondary">Subir</span>
                                                         <input
                                                             type="file"
                                                             accept="image/*"
@@ -516,10 +516,10 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                             id="free-add-to-canvas"
                                             checked={shouldAddToCanvas}
                                             onChange={(e) => setShouldAddToCanvas(e.target.checked)}
-                                            className="h-4 w-4 bg-[--bg-tertiary] border-[--bg-hover] rounded"
+                                            className="h-4 w-4 bg-theme-bg-tertiary border-theme-bg-hover rounded"
                                             disabled={isEnhancing}
                                         />
-                                        <label htmlFor="free-add-to-canvas" className="ml-2 text-xs text-[--text-secondary]">Añadir a Canvas</label>
+                                        <label htmlFor="free-add-to-canvas" className="ml-2 text-xs text-theme-text-secondary">Añadir a Canvas</label>
                                     </div>
                                 </div>
 
@@ -536,24 +536,24 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                         {/* Upscale Tab Implementation */}
                         {activeAiTab === 'upscale' && (
                             <div className="space-y-4">
-                                <div className="p-4 bg-[--bg-secondary] rounded-md border border-[--bg-tertiary] text-sm text-[--text-secondary]">
+                                <div className="p-4 bg-theme-bg-secondary rounded-md border border-theme-bg-tertiary text-sm text-theme-text-secondary">
                                     <p className="mb-2"><strong>Modo Escalado 4K</strong></p>
                                     <p>Este modo generará una versión de súper alta resolución (aprox 4K) de tu composición actual.</p>
                                     <p className="mt-2 text-xs opacity-70">Nota: La IA realizará una "remasterización creativa", mejorando detalles y texturas manteniendo la estructura original.</p>
                                 </div>
 
                                 <div>
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-2">Formato de Descarga</label>
+                                    <label className="text-xs font-bold text-theme-text-secondary block mb-2">Formato de Descarga</label>
                                     <div className="flex gap-4">
                                         <button
                                             onClick={() => setUpscaleFormat('png')}
-                                            className={`flex-1 py-2 px-4 rounded border ${upscaleFormat === 'png' ? 'bg-[--accent-primary] text-white border-[--accent-primary]' : 'bg-[--bg-tertiary] border-[--bg-tertiary] hover:bg-[--bg-hover]'}`}
+                                            className={`flex-1 py-2 px-4 rounded border ${upscaleFormat === 'png' ? 'bg-theme-accent-primary text-white border-theme-accent-primary' : 'bg-theme-bg-tertiary border-theme-bg-tertiary hover:bg-theme-bg-hover'}`}
                                         >
                                             PNG
                                         </button>
                                         <button
                                             onClick={() => setUpscaleFormat('jpg')}
-                                            className={`flex-1 py-2 px-4 rounded border ${upscaleFormat === 'jpg' ? 'bg-[--accent-primary] text-white border-[--accent-primary]' : 'bg-[--bg-tertiary] border-[--bg-tertiary] hover:bg-[--bg-hover]'}`}
+                                            className={`flex-1 py-2 px-4 rounded border ${upscaleFormat === 'jpg' ? 'bg-theme-accent-primary text-white border-theme-accent-primary' : 'bg-theme-bg-tertiary border-theme-bg-tertiary hover:bg-theme-bg-hover'}`}
                                         >
                                             JPG
                                         </button>
@@ -561,7 +561,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                 </div>
 
                                 <div className="mt-4">
-                                    <label className="text-xs font-bold text-[--text-secondary] block mb-2">Creatividad de Escalado: {upscaleCreativity}</label>
+                                    <label className="text-xs font-bold text-theme-text-secondary block mb-2">Creatividad de Escalado: {upscaleCreativity}</label>
                                     <input
                                         type="range"
                                         min="0"
@@ -571,12 +571,12 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                         className="w-full"
                                         disabled={isEnhancing}
                                     />
-                                    <div className="flex justify-between text-xs text-[--text-secondary] mt-1">
+                                    <div className="flex justify-between text-xs text-theme-text-secondary mt-1">
                                         <span>Fiel (0)</span>
                                         <span>Equilibrado (75)</span>
                                         <span>Imaginativo (150)</span>
                                     </div>
-                                    <p className="text-xs text-[--text-secondary] opacity-70 mt-2 mb-4">
+                                    <p className="text-xs text-theme-text-secondary opacity-70 mt-2 mb-4">
                                         <strong>0-30:</strong> Solo enfoca. <strong>30-100:</strong> Añade detalle. <strong>100+:</strong> Reinterpreta texturas.
                                     </p>
                                 </div>
@@ -599,7 +599,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
             {promptLoader.openFor && promptLoader.anchorEl && (
                 <div
                     ref={promptLoaderRef}
-                    className="absolute z-[60] bg-[--bg-secondary] border border-[--bg-tertiary] rounded-lg shadow-lg w-64 max-h-60 overflow-y-auto"
+                    className="absolute z-[60] bg-theme-bg-secondary border border-theme-bg-tertiary rounded-lg shadow-lg w-64 max-h-60 overflow-y-auto"
                     style={{
                         left: promptLoader.anchorEl.getBoundingClientRect().right + 8,
                         top: promptLoader.anchorEl.getBoundingClientRect().top
@@ -608,17 +608,17 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                     <ul className="p-1">
                         {savedPrompts[promptLoader.openFor].length > 0 ? (
                             savedPrompts[promptLoader.openFor].map((prompt, i) => (
-                                <li key={i} className="group flex items-center justify-between text-sm text-[--text-primary] rounded-md hover:bg-[--bg-hover]">
+                                <li key={i} className="group flex items-center justify-between text-sm text-theme-text-primary rounded-md hover:bg-theme-bg-hover">
                                     <button onClick={() => loadPrompt(promptLoader.openFor!, prompt)} className="flex-grow text-left p-2 truncate">
                                         {prompt}
                                     </button>
-                                    <button onClick={() => deletePrompt(promptLoader.openFor!, prompt)} className="p-2 text-[--text-secondary] opacity-0 group-hover:opacity-100 hover:text-red-500">
+                                    <button onClick={() => deletePrompt(promptLoader.openFor!, prompt)} className="p-2 text-theme-text-secondary opacity-0 group-hover:opacity-100 hover:text-red-500">
                                         <TrashIcon className="w-4 h-4" />
                                     </button>
                                 </li>
                             ))
                         ) : (
-                            <li className="p-2 text-center text-xs text-[--text-secondary]">No hay prompts guardados.</li>
+                            <li className="p-2 text-center text-xs text-theme-text-secondary">No hay prompts guardados.</li>
                         )}
                     </ul>
                 </div>

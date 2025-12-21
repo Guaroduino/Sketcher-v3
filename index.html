@@ -6,69 +6,7 @@
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Sketcher RC 0.2</title>
-  <script src="https://cdn.tailwindcss.com"></script>
 
-  <style>
-    :root {
-      --bg-primary: rgb(243 244 246);
-      --bg-secondary: rgb(255 255 255);
-      --bg-tertiary: rgb(229 231 235);
-      --bg-hover: rgb(209 213 219);
-      --text-primary: rgb(17 24 39);
-      --text-secondary: rgb(107 114 128);
-      --accent-primary: rgb(239 68 68);
-      --accent-hover: rgb(220 38 38);
-    }
-
-    .dark {
-      --bg-primary: rgb(24 24 27);
-      --bg-secondary: rgb(39 39 42);
-      --bg-tertiary: rgb(63 63 70);
-      --bg-hover: rgb(82 82 91);
-      --text-primary: rgb(229 231 235);
-      --text-secondary: rgb(156 163 175);
-      --accent-primary: rgb(239 68 68);
-      --accent-hover: rgb(220 38 38);
-    }
-
-    html {
-      background-color: #000000;
-      /* Force black background for the document root */
-    }
-
-    html,
-    body,
-    #root {
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      overscroll-behavior: none;
-      touch-action: none;
-    }
-
-    body,
-    #root {
-      background-color: var(--bg-secondary);
-      /* App background applies here */
-    }
-
-    body {
-      color: var(--text-primary);
-    }
-
-    .scrollbar-hide::-webkit-scrollbar {
-      display: none;
-    }
-
-    .scrollbar-hide {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-    }
-  </style>
   <link rel="stylesheet" href="/index.css">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/icon.svg">

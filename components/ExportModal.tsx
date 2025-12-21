@@ -153,11 +153,11 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-      <div className="bg-[--bg-secondary] text-[--text-primary] rounded-lg shadow-xl p-6 w-full max-w-2xl flex flex-col space-y-4">
+      <div className="bg-theme-bg-secondary text-theme-text-primary rounded-lg shadow-xl p-6 w-full max-w-2xl flex flex-col space-y-4">
         <h2 className="text-xl font-bold">Exportar Imagen</h2>
         
         {/* Preview Area */}
-        <div className="flex-grow p-2 rounded-md flex justify-center items-center min-h-0 bg-[--bg-primary]"
+        <div className="flex-grow p-2 rounded-md flex justify-center items-center min-h-0 bg-theme-bg-primary"
           style={{
             minHeight: '20rem',
             backgroundImage: 'linear-gradient(45deg, #808080 25%, transparent 25%), linear-gradient(-45deg, #808080 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #808080 75%), linear-gradient(-45deg, transparent 75%, #808080 75%)',
@@ -175,24 +175,24 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         {/* Controls */}
         <div className="space-y-4">
           <div>
-            <label htmlFor="filename" className="block text-sm text-[--text-secondary] mb-1">Nombre del Archivo</label>
+            <label htmlFor="filename" className="block text-sm text-theme-text-secondary mb-1">Nombre del Archivo</label>
             <input
               type="text"
               id="filename"
               value={filename}
               onChange={(e) => setFilename(e.target.value)}
-              className="w-full bg-[--bg-tertiary] text-[--text-primary] text-sm rounded-md p-2"
+              className="w-full bg-theme-bg-tertiary text-theme-text-primary text-sm rounded-md p-2"
             />
           </div>
           <div>
-            <label className="block text-sm text-[--text-secondary] mb-2">Tamaño de Exportación</label>
+            <label className="block text-sm text-theme-text-secondary mb-2">Tamaño de Exportación</label>
             <div className="flex space-x-4">
               <label className="flex items-center">
-                <input type="radio" name="exportMode" value="full" checked={exportMode === 'full'} onChange={() => setExportMode('full')} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] focus:ring-[--accent-primary]"/>
+                <input type="radio" name="exportMode" value="full" checked={exportMode === 'full'} onChange={() => setExportMode('full')} className="w-4 h-4 text-theme-accent-primary bg-theme-bg-tertiary border-theme-bg-hover focus:ring-theme-accent-primary"/>
                 <span className="ml-2 text-sm">Tamaño completo del lienzo</span>
               </label>
               <label className="flex items-center">
-                <input type="radio" name="exportMode" value="bbox" checked={exportMode === 'bbox'} onChange={() => setExportMode('bbox')} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] focus:ring-[--accent-primary]"/>
+                <input type="radio" name="exportMode" value="bbox" checked={exportMode === 'bbox'} onChange={() => setExportMode('bbox')} className="w-4 h-4 text-theme-accent-primary bg-theme-bg-tertiary border-theme-bg-hover focus:ring-theme-accent-primary"/>
                 <span className="ml-2 text-sm">Ajustar a contenido</span>
               </label>
             </div>
@@ -204,9 +204,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               checked={includeBackground}
               onChange={(e) => setIncludeBackground(e.target.checked)}
               disabled={!isBackgroundVisible}
-              className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary] disabled:opacity-50"
+              className="w-4 h-4 text-theme-accent-primary bg-theme-bg-tertiary border-theme-bg-hover rounded focus:ring-theme-accent-primary disabled:opacity-50"
             />
-            <label htmlFor="includeBackground" className={`ml-2 text-sm ${!isBackgroundVisible ? 'text-[--text-secondary] opacity-50' : 'text-[--text-primary]'}`}>
+            <label htmlFor="includeBackground" className={`ml-2 text-sm ${!isBackgroundVisible ? 'text-theme-text-secondary opacity-50' : 'text-theme-text-primary'}`}>
               Incluir fondo
             </label>
           </div>
@@ -214,10 +214,10 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
         {/* Action Buttons */}
         <div className="flex justify-end space-x-4 pt-2">
-          <button onClick={onClose} className="px-4 py-2 rounded-md bg-[--bg-tertiary] hover:bg-[--bg-hover]" disabled={isGenerating}>
+          <button onClick={onClose} className="px-4 py-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover" disabled={isGenerating}>
             Cancelar
           </button>
-          <button onClick={handleExport} className="px-4 py-2 rounded-md bg-[--accent-primary] hover:bg-[--accent-hover] text-white disabled:bg-gray-500 disabled:cursor-wait" disabled={isGenerating}>
+          <button onClick={handleExport} className="px-4 py-2 rounded-md bg-theme-accent-primary hover:bg-theme-accent-hover text-white disabled:bg-gray-500 disabled:cursor-wait" disabled={isGenerating}>
             {isGenerating ? 'Exportando...' : 'Exportar como PNG'}
           </button>
         </div>

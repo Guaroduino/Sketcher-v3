@@ -60,8 +60,8 @@ interface ToolbarProps {
 const Accordion: React.FC<{ title: string, children: React.ReactNode, defaultOpen?: boolean }> = ({ title, children, defaultOpen = false }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
     return (
-        <div className="border-b border-[--bg-tertiary]">
-            <button onClick={() => setIsOpen(!isOpen)} className="w-full flex justify-between items-center p-2 text-xs font-bold uppercase text-[--text-secondary] hover:bg-[--bg-tertiary]">
+        <div className="border-b border-theme-bg-tertiary">
+            <button onClick={() => setIsOpen(!isOpen)} className="w-full flex justify-between items-center p-2 text-xs font-bold uppercase text-theme-text-secondary hover:bg-theme-bg-tertiary">
                 <span>{title}</span>
                 <ChevronDownIcon className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -301,7 +301,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
 
     const toolButtonClasses = (t: Tool) =>
-        `p-3 rounded-lg transition-colors ${tool === t ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'
+        `p-3 rounded-lg transition-colors ${tool === t ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-tertiary'
         }`;
 
 
@@ -313,11 +313,11 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         onChange: (value: BlendMode) => void;
     }> = ({ value, onChange }) => (
         <div>
-            <label className="text-xs text-[--text-secondary] block mb-1">Modo de Fusión</label>
+            <label className="text-xs text-theme-text-secondary block mb-1">Modo de Fusión</label>
             <select
                 value={value}
                 onChange={(e) => onChange(e.target.value as BlendMode)}
-                className="w-full bg-[--bg-tertiary] text-[--text-primary] text-xs rounded-md p-2"
+                className="w-full bg-theme-bg-tertiary text-theme-text-primary text-xs rounded-md p-2"
             >
                 {BlendModes.map(mode => <option key={mode.value} value={mode.value}>{mode.name}</option>)}
             </select>
@@ -337,39 +337,39 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 // ... (rest of text case)
                 return (
                     <div className="p-4 space-y-4">
-                        <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Herramienta de Texto</h4>
+                        <h4 className="text-sm font-bold uppercase text-theme-text-secondary">Herramienta de Texto</h4>
                         <div>
-                            <label className="text-xs text-[--text-secondary] block mb-1">Fuente</label>
+                            <label className="text-xs text-theme-text-secondary block mb-1">Fuente</label>
                             <select
                                 value={textSettings.fontFamily}
                                 onChange={(e) => setTextSettings(s => ({ ...s, fontFamily: e.target.value }))}
-                                className="w-full bg-[--bg-tertiary] text-[--text-primary] text-xs rounded-md p-2"
+                                className="w-full bg-theme-bg-tertiary text-theme-text-primary text-xs rounded-md p-2"
                             >
                                 {FontFamilies.map(font => <option key={font} value={font}>{font}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {textSettings.fontSize}px</label>
+                            <label className="text-xs text-theme-text-secondary block mb-1">Tamaño: {textSettings.fontSize}px</label>
                             <input type="range" min="8" max="256" value={textSettings.fontSize} onChange={(e) => setTextSettings(s => ({ ...s, fontSize: parseInt(e.target.value) }))} className="w-full" />
                         </div>
                         <div>
-                            <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
-                            <input type="color" value={textSettings.color} onChange={(e) => setTextSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                            <label className="text-xs text-theme-text-secondary block mb-1">Color</label>
+                            <input type="color" value={textSettings.color} onChange={(e) => setTextSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-theme-bg-tertiary border border-theme-bg-hover rounded-md cursor-pointer" />
                         </div>
                         <div>
-                            <label className="text-xs text-[--text-secondary] block mb-1">Alineación</label>
+                            <label className="text-xs text-theme-text-secondary block mb-1">Alineación</label>
                             <div className="grid grid-cols-3 gap-2">
-                                <button onClick={() => setTextSettings(s => ({ ...s, textAlign: 'left' }))} className={`text-xs p-2 rounded ${textSettings.textAlign === 'left' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Izquierda</button>
-                                <button onClick={() => setTextSettings(s => ({ ...s, textAlign: 'center' }))} className={`text-xs p-2 rounded ${textSettings.textAlign === 'center' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Centro</button>
-                                <button onClick={() => setTextSettings(s => ({ ...s, textAlign: 'right' }))} className={`text-xs p-2 rounded ${textSettings.textAlign === 'right' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Derecha</button>
+                                <button onClick={() => setTextSettings(s => ({ ...s, textAlign: 'left' }))} className={`text-xs p-2 rounded ${textSettings.textAlign === 'left' ? 'bg-theme-accent-hover text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>Izquierda</button>
+                                <button onClick={() => setTextSettings(s => ({ ...s, textAlign: 'center' }))} className={`text-xs p-2 rounded ${textSettings.textAlign === 'center' ? 'bg-theme-accent-hover text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>Centro</button>
+                                <button onClick={() => setTextSettings(s => ({ ...s, textAlign: 'right' }))} className={`text-xs p-2 rounded ${textSettings.textAlign === 'right' ? 'bg-theme-accent-hover text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>Derecha</button>
                             </div>
                         </div>
                         <div>
-                            <label className="text-xs text-[--text-secondary] block mb-1">Estilo</label>
+                            <label className="text-xs text-theme-text-secondary block mb-1">Estilo</label>
                             <div className="grid grid-cols-3 gap-2">
-                                <button onClick={() => setTextSettings(s => ({ ...s, fontWeight: 'normal' }))} className={`text-xs p-2 rounded ${textSettings.fontWeight === 'normal' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Normal</button>
-                                <button onClick={() => setTextSettings(s => ({ ...s, fontWeight: 'bold' }))} className={`text-xs p-2 rounded ${textSettings.fontWeight === 'bold' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Negrita</button>
-                                <button onClick={() => setTextSettings(s => ({ ...s, fontWeight: 'italic' }))} className={`text-xs p-2 rounded ${textSettings.fontWeight === 'italic' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Cursiva</button>
+                                <button onClick={() => setTextSettings(s => ({ ...s, fontWeight: 'normal' }))} className={`text-xs p-2 rounded ${textSettings.fontWeight === 'normal' ? 'bg-theme-accent-hover text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>Normal</button>
+                                <button onClick={() => setTextSettings(s => ({ ...s, fontWeight: 'bold' }))} className={`text-xs p-2 rounded ${textSettings.fontWeight === 'bold' ? 'bg-theme-accent-hover text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>Negrita</button>
+                                <button onClick={() => setTextSettings(s => ({ ...s, fontWeight: 'italic' }))} className={`text-xs p-2 rounded ${textSettings.fontWeight === 'italic' ? 'bg-theme-accent-hover text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>Cursiva</button>
                             </div>
                         </div>
                     </div>
@@ -377,13 +377,13 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             case 'magic-wand':
                 return (
                     <div className="p-4 space-y-4">
-                        <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Varita Mágica</h4>
+                        <h4 className="text-sm font-bold uppercase text-theme-text-secondary">Varita Mágica</h4>
                         <div>
-                            <label className="text-xs text-[--text-secondary] block mb-1">Tolerancia: {magicWandSettings.tolerance}</label>
+                            <label className="text-xs text-theme-text-secondary block mb-1">Tolerancia: {magicWandSettings.tolerance}</label>
                             <input type="range" min="0" max="100" value={magicWandSettings.tolerance} onChange={(e) => setMagicWandSettings(s => ({ ...s, tolerance: parseInt(e.target.value) }))} className="w-full" />
                         </div>
                         <div className="flex items-center justify-between py-1">
-                            <label htmlFor="contiguous-toggle" className="text-xs text-[--text-secondary]">
+                            <label htmlFor="contiguous-toggle" className="text-xs text-theme-text-secondary">
                                 Contiguo (solo píxeles adyacentes)
                             </label>
                             <button
@@ -391,7 +391,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 role="switch"
                                 aria-checked={magicWandSettings.contiguous}
                                 onClick={() => setMagicWandSettings(s => ({ ...s, contiguous: !s.contiguous }))}
-                                className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[--accent-primary] focus:ring-offset-[--bg-primary] ${magicWandSettings.contiguous ? 'bg-[--accent-primary]' : 'bg-[--bg-tertiary]'
+                                className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-accent-primary focus:ring-offset-theme-bg-primary ${magicWandSettings.contiguous ? 'bg-theme-accent-primary' : 'bg-theme-bg-tertiary'
                                     }`}
                             >
                                 <span
@@ -406,12 +406,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             case 'brush':
                 return (
                     <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
-                        <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
-                            <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Rapidograph Solido</h4>
+                        <div className="p-4 space-y-3 bg-theme-bg-secondary sticky top-0 z-10 border-b border-theme-bg-tertiary">
+                            <h4 className="text-sm font-bold uppercase text-theme-text-secondary">Rapidograph Solido</h4>
                         </div>
                         <Accordion title="General" defaultOpen>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {brushSettings.size}px</label>
+                                <label className="text-xs text-theme-text-secondary block mb-1">Tamaño: {brushSettings.size}px</label>
                                 <input type="range" min="1" max="200" value={brushSettings.size} onChange={(e) => setBrushSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
                             </div>
                             <div className="pt-2">
@@ -420,7 +420,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                         <button
                                             key={size}
                                             onClick={() => setBrushSettings(s => ({ ...s, size }))}
-                                            className={`text-xs p-2 rounded ${brushSettings.size === size ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}
+                                            className={`text-xs p-2 rounded ${brushSettings.size === size ? 'bg-theme-accent-hover text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}
                                         >
                                             {size}px
                                         </button>
@@ -428,29 +428,29 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 </div>
                             </div>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Color de Trazo</label>
-                                <input type="color" value={brushSettings.color} onChange={(e) => setBrushSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                                <label className="text-xs text-theme-text-secondary block mb-1">Color de Trazo</label>
+                                <input type="color" value={brushSettings.color} onChange={(e) => setBrushSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-theme-bg-tertiary border border-theme-bg-hover rounded-md cursor-pointer" />
                             </div>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Relleno</label>
+                                <label className="text-xs text-theme-text-secondary block mb-1">Relleno</label>
                                 <div className="flex flex-col gap-2">
-                                    <div className="flex rounded-md bg-[--bg-tertiary] p-1 gap-1">
+                                    <div className="flex rounded-md bg-theme-bg-tertiary p-1 gap-1">
                                         <button
                                             onClick={() => setBrushSettings(s => ({ ...s, fillColor: 'transparent' }))}
-                                            className={`flex-1 text-xs py-1 px-2 rounded-sm ${brushSettings.fillColor === 'transparent' ? 'bg-[--bg-primary] shadow text-[--text-primary]' : 'text-[--text-secondary] hover:text-[--text-primary]'}`}
+                                            className={`flex-1 text-xs py-1 px-2 rounded-sm ${brushSettings.fillColor === 'transparent' ? 'bg-theme-bg-primary shadow text-theme-text-primary' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}
                                         >
                                             Solo Trazo
                                         </button>
                                         <button
                                             onClick={() => setBrushSettings(s => ({ ...s, fillColor: s.color }))} // Set to current stroke color initially if enabling
-                                            className={`flex-1 text-xs py-1 px-2 rounded-sm ${brushSettings.fillColor !== 'transparent' ? 'bg-[--bg-primary] shadow text-[--text-primary]' : 'text-[--text-secondary] hover:text-[--text-primary]'}`}
+                                            className={`flex-1 text-xs py-1 px-2 rounded-sm ${brushSettings.fillColor !== 'transparent' ? 'bg-theme-bg-primary shadow text-theme-text-primary' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}
                                         >
                                             Relleno
                                         </button>
                                     </div>
                                     {brushSettings.fillColor !== 'transparent' && (
                                         <div className="flex gap-2 items-center">
-                                            <input type="color" value={brushSettings.fillColor} onChange={(e) => setBrushSettings(s => ({ ...s, fillColor: e.target.value }))} className="flex-grow h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                                            <input type="color" value={brushSettings.fillColor} onChange={(e) => setBrushSettings(s => ({ ...s, fillColor: e.target.value }))} className="flex-grow h-8 p-0.5 bg-theme-bg-tertiary border border-theme-bg-hover rounded-md cursor-pointer" />
                                         </div>
                                     )}
                                 </div>
@@ -458,8 +458,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         </Accordion >
                         <Accordion title="Dinámica de Presión">
                             <div className="flex items-center justify-between py-1">
-                                <label htmlFor="pressure-size-brush" className="text-xs text-[--text-secondary]">Controlar Tamaño</label>
-                                <input id="pressure-size-brush" type="checkbox" checked={brushSettings.pressureControl.size} onChange={(e) => setBrushSettings(s => ({ ...s, pressureControl: { ...s.pressureControl, size: e.target.checked } }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+                                <label htmlFor="pressure-size-brush" className="text-xs text-theme-text-secondary">Controlar Tamaño</label>
+                                <input id="pressure-size-brush" type="checkbox" checked={brushSettings.pressureControl.size} onChange={(e) => setBrushSettings(s => ({ ...s, pressureControl: { ...s.pressureControl, size: e.target.checked } }))} className="w-4 h-4 text-theme-accent-primary bg-theme-bg-tertiary border-theme-bg-hover rounded focus:ring-theme-accent-primary" />
                             </div>
                         </Accordion>
                     </div >
@@ -467,42 +467,42 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             case 'simple-marker':
                 return (
                     <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
-                        <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
-                            <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Marcador Sólido</h4>
+                        <div className="p-4 space-y-3 bg-theme-bg-secondary sticky top-0 z-10 border-b border-theme-bg-tertiary">
+                            <h4 className="text-sm font-bold uppercase text-theme-text-secondary">Marcador Sólido</h4>
                         </div>
                         <Accordion title="General" defaultOpen>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {simpleMarkerSettings.size}px</label>
+                                <label className="text-xs text-theme-text-secondary block mb-1">Tamaño: {simpleMarkerSettings.size}px</label>
                                 <input type="range" min="1" max="200" value={simpleMarkerSettings.size} onChange={(e) => setSimpleMarkerSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
                             </div>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Opacidad: {Math.round(simpleMarkerSettings.opacity * 100)}%</label>
+                                <label className="text-xs text-theme-text-secondary block mb-1">Opacidad: {Math.round(simpleMarkerSettings.opacity * 100)}%</label>
                                 <input type="range" min="1" max="100" value={simpleMarkerSettings.opacity * 100} onChange={(e) => setSimpleMarkerSettings(s => ({ ...s, opacity: parseInt(e.target.value) / 100 }))} className="w-full" />
                             </div>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
-                                <input type="color" value={simpleMarkerSettings.color} onChange={(e) => setSimpleMarkerSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                                <label className="text-xs text-theme-text-secondary block mb-1">Color</label>
+                                <input type="color" value={simpleMarkerSettings.color} onChange={(e) => setSimpleMarkerSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-theme-bg-tertiary border border-theme-bg-hover rounded-md cursor-pointer" />
                             </div>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Relleno</label>
+                                <label className="text-xs text-theme-text-secondary block mb-1">Relleno</label>
                                 <div className="flex flex-col gap-2">
-                                    <div className="flex rounded-md bg-[--bg-tertiary] p-1 gap-1">
+                                    <div className="flex rounded-md bg-theme-bg-tertiary p-1 gap-1">
                                         <button
                                             onClick={() => setSimpleMarkerSettings(s => ({ ...s, fillColor: 'transparent' }))}
-                                            className={`flex-1 text-xs py-1 px-2 rounded-sm ${simpleMarkerSettings.fillColor === 'transparent' ? 'bg-[--bg-primary] shadow text-[--text-primary]' : 'text-[--text-secondary] hover:text-[--text-primary]'}`}
+                                            className={`flex-1 text-xs py-1 px-2 rounded-sm ${simpleMarkerSettings.fillColor === 'transparent' ? 'bg-theme-bg-primary shadow text-theme-text-primary' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}
                                         >
                                             Solo Trazo
                                         </button>
                                         <button
                                             onClick={() => setSimpleMarkerSettings(s => ({ ...s, fillColor: s.color }))}
-                                            className={`flex-1 text-xs py-1 px-2 rounded-sm ${simpleMarkerSettings.fillColor !== 'transparent' ? 'bg-[--bg-primary] shadow text-[--text-primary]' : 'text-[--text-secondary] hover:text-[--text-primary]'}`}
+                                            className={`flex-1 text-xs py-1 px-2 rounded-sm ${simpleMarkerSettings.fillColor !== 'transparent' ? 'bg-theme-bg-primary shadow text-theme-text-primary' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}
                                         >
                                             Relleno
                                         </button>
                                     </div>
                                     {simpleMarkerSettings.fillColor !== 'transparent' && (
                                         <div className="flex gap-2 items-center">
-                                            <input type="color" value={simpleMarkerSettings.fillColor} onChange={(e) => setSimpleMarkerSettings(s => ({ ...s, fillColor: e.target.value }))} className="flex-grow h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                                            <input type="color" value={simpleMarkerSettings.fillColor} onChange={(e) => setSimpleMarkerSettings(s => ({ ...s, fillColor: e.target.value }))} className="flex-grow h-8 p-0.5 bg-theme-bg-tertiary border border-theme-bg-hover rounded-md cursor-pointer" />
                                         </div>
                                     )}
                                 </div>
@@ -514,17 +514,17 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         </Accordion >
                         <Accordion title="Punta">
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Forma de la punta</label>
+                                <label className="text-xs text-theme-text-secondary block mb-1">Forma de la punta</label>
                                 <div className="flex gap-2">
-                                    <button onClick={() => setSimpleMarkerSettings(s => ({ ...s, tipShape: 'square' }))} className={`flex-1 text-xs p-2 rounded ${simpleMarkerSettings.tipShape === 'square' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Cuadrada</button>
-                                    <button onClick={() => setSimpleMarkerSettings(s => ({ ...s, tipShape: 'line' }))} className={`flex-1 text-xs p-2 rounded ${simpleMarkerSettings.tipShape === 'line' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Línea</button>
+                                    <button onClick={() => setSimpleMarkerSettings(s => ({ ...s, tipShape: 'square' }))} className={`flex-1 text-xs p-2 rounded ${simpleMarkerSettings.tipShape === 'square' ? 'bg-theme-accent-hover text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>Cuadrada</button>
+                                    <button onClick={() => setSimpleMarkerSettings(s => ({ ...s, tipShape: 'line' }))} className={`flex-1 text-xs p-2 rounded ${simpleMarkerSettings.tipShape === 'line' ? 'bg-theme-accent-hover text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>Línea</button>
                                 </div>
                             </div>
                         </Accordion>
                         <Accordion title="Dinámica de Presión">
                             <div className="flex items-center justify-between py-1">
-                                <label htmlFor="pressure-opacity-marker" className="text-xs text-[--text-secondary]">Controlar Opacidad</label>
-                                <input id="pressure-opacity-marker" type="checkbox" checked={simpleMarkerSettings.pressureControl.opacity} onChange={(e) => setSimpleMarkerSettings(s => ({ ...s, pressureControl: { ...s.pressureControl, opacity: e.target.checked } }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+                                <label htmlFor="pressure-opacity-marker" className="text-xs text-theme-text-secondary">Controlar Opacidad</label>
+                                <input id="pressure-opacity-marker" type="checkbox" checked={simpleMarkerSettings.pressureControl.opacity} onChange={(e) => setSimpleMarkerSettings(s => ({ ...s, pressureControl: { ...s.pressureControl, opacity: e.target.checked } }))} className="w-4 h-4 text-theme-accent-primary bg-theme-bg-tertiary border-theme-bg-hover rounded focus:ring-theme-accent-primary" />
                             </div>
                         </Accordion>
                     </div >
@@ -532,42 +532,42 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             case 'advanced-marker':
                 return (
                     <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
-                        <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
-                            <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Marcador Avanzado</h4>
+                        <div className="p-4 space-y-3 bg-theme-bg-secondary sticky top-0 z-10 border-b border-theme-bg-tertiary">
+                            <h4 className="text-sm font-bold uppercase text-theme-text-secondary">Marcador Avanzado</h4>
                         </div>
                         <Accordion title="General" defaultOpen>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {advancedMarkerSettings.size}px</label>
+                                <label className="text-xs text-theme-text-secondary block mb-1">Tamaño: {advancedMarkerSettings.size}px</label>
                                 <input type="range" min="1" max="300" value={advancedMarkerSettings.size} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
                             </div>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Flujo: {advancedMarkerSettings.flow}%</label>
+                                <label className="text-xs text-theme-text-secondary block mb-1">Flujo: {advancedMarkerSettings.flow}%</label>
                                 <input type="range" min="1" max="100" value={advancedMarkerSettings.flow} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, flow: parseInt(e.target.value) }))} className="w-full" />
                             </div>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
-                                <input type="color" value={advancedMarkerSettings.color} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                                <label className="text-xs text-theme-text-secondary block mb-1">Color</label>
+                                <input type="color" value={advancedMarkerSettings.color} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-theme-bg-tertiary border border-theme-bg-hover rounded-md cursor-pointer" />
                             </div>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Relleno</label>
+                                <label className="text-xs text-theme-text-secondary block mb-1">Relleno</label>
                                 <div className="flex flex-col gap-2">
-                                    <div className="flex rounded-md bg-[--bg-tertiary] p-1 gap-1">
+                                    <div className="flex rounded-md bg-theme-bg-tertiary p-1 gap-1">
                                         <button
                                             onClick={() => setAdvancedMarkerSettings(s => ({ ...s, fillColor: 'transparent' }))}
-                                            className={`flex-1 text-xs py-1 px-2 rounded-sm ${advancedMarkerSettings.fillColor === 'transparent' ? 'bg-[--bg-primary] shadow text-[--text-primary]' : 'text-[--text-secondary] hover:text-[--text-primary]'}`}
+                                            className={`flex-1 text-xs py-1 px-2 rounded-sm ${advancedMarkerSettings.fillColor === 'transparent' ? 'bg-theme-bg-primary shadow text-theme-text-primary' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}
                                         >
                                             Solo Trazo
                                         </button>
                                         <button
                                             onClick={() => setAdvancedMarkerSettings(s => ({ ...s, fillColor: s.color }))}
-                                            className={`flex-1 text-xs py-1 px-2 rounded-sm ${advancedMarkerSettings.fillColor !== 'transparent' ? 'bg-[--bg-primary] shadow text-[--text-primary]' : 'text-[--text-secondary] hover:text-[--text-primary]'}`}
+                                            className={`flex-1 text-xs py-1 px-2 rounded-sm ${advancedMarkerSettings.fillColor !== 'transparent' ? 'bg-theme-bg-primary shadow text-theme-text-primary' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}
                                         >
                                             Relleno
                                         </button>
                                     </div>
                                     {advancedMarkerSettings.fillColor !== 'transparent' && (
                                         <div className="flex gap-2 items-center">
-                                            <input type="color" value={advancedMarkerSettings.fillColor} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, fillColor: e.target.value }))} className="flex-grow h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                                            <input type="color" value={advancedMarkerSettings.fillColor} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, fillColor: e.target.value }))} className="flex-grow h-8 p-0.5 bg-theme-bg-tertiary border border-theme-bg-hover rounded-md cursor-pointer" />
                                         </div>
                                     )}
                                 </div>
@@ -579,22 +579,22 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         </Accordion >
                         <Accordion title="Punta">
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Dureza: {advancedMarkerSettings.hardness}%</label>
+                                <label className="text-xs text-theme-text-secondary block mb-1">Dureza: {advancedMarkerSettings.hardness}%</label>
                                 <input type="range" min="0" max="100" value={advancedMarkerSettings.hardness} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, hardness: parseInt(e.target.value) }))} className="w-full" />
                             </div>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Espaciado: {advancedMarkerSettings.spacing}%</label>
+                                <label className="text-xs text-theme-text-secondary block mb-1">Espaciado: {advancedMarkerSettings.spacing}%</label>
                                 <input type="range" min="1" max="100" value={advancedMarkerSettings.spacing} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, spacing: parseInt(e.target.value) }))} className="w-full" />
                             </div>
                         </Accordion>
                         <Accordion title="Dinámica de Presión">
                             <div className="flex items-center justify-between py-1">
-                                <label htmlFor="pressure-size-adv" className="text-xs text-[--text-secondary]">Controlar Tamaño</label>
-                                <input id="pressure-size-adv" type="checkbox" checked={advancedMarkerSettings.pressureControl.size} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, pressureControl: { ...s.pressureControl, size: e.target.checked } }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+                                <label htmlFor="pressure-size-adv" className="text-xs text-theme-text-secondary">Controlar Tamaño</label>
+                                <input id="pressure-size-adv" type="checkbox" checked={advancedMarkerSettings.pressureControl.size} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, pressureControl: { ...s.pressureControl, size: e.target.checked } }))} className="w-4 h-4 text-theme-accent-primary bg-theme-bg-tertiary border-theme-bg-hover rounded focus:ring-theme-accent-primary" />
                             </div>
                             <div className="flex items-center justify-between py-1">
-                                <label htmlFor="pressure-flow-adv" className="text-xs text-[--text-secondary]">Controlar Flujo</label>
-                                <input id="pressure-flow-adv" type="checkbox" checked={advancedMarkerSettings.pressureControl.flow} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, pressureControl: { ...s.pressureControl, flow: e.target.checked } }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+                                <label htmlFor="pressure-flow-adv" className="text-xs text-theme-text-secondary">Controlar Flujo</label>
+                                <input id="pressure-flow-adv" type="checkbox" checked={advancedMarkerSettings.pressureControl.flow} onChange={(e) => setAdvancedMarkerSettings(s => ({ ...s, pressureControl: { ...s.pressureControl, flow: e.target.checked } }))} className="w-4 h-4 text-theme-accent-primary bg-theme-bg-tertiary border-theme-bg-hover rounded focus:ring-theme-accent-primary" />
                             </div>
                         </Accordion>
                     </div >
@@ -603,35 +603,35 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             case 'watercolor':
                 return (
                     <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
-                        <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
-                            <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Acuarela</h4>
+                        <div className="p-4 space-y-3 bg-theme-bg-secondary sticky top-0 z-10 border-b border-theme-bg-tertiary">
+                            <h4 className="text-sm font-bold uppercase text-theme-text-secondary">Acuarela</h4>
                         </div>
                         <Accordion title="General" defaultOpen>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {watercolorSettings.size}px</label>
+                                <label className="text-xs text-theme-text-secondary block mb-1">Tamaño: {watercolorSettings.size}px</label>
                                 <input type="range" min="1" max="300" value={watercolorSettings.size} onChange={(e) => setWatercolorSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
                             </div>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Flujo (Densidad): {watercolorSettings.flow}%</label>
+                                <label className="text-xs text-theme-text-secondary block mb-1">Flujo (Densidad): {watercolorSettings.flow}%</label>
                                 <input type="range" min="1" max="100" value={watercolorSettings.flow} onChange={(e) => setWatercolorSettings(s => ({ ...s, flow: parseInt(e.target.value) }))} className="w-full" />
                             </div>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Humedad (Opacidad): {watercolorSettings.wetness}%</label>
+                                <label className="text-xs text-theme-text-secondary block mb-1">Humedad (Opacidad): {watercolorSettings.wetness}%</label>
                                 <input type="range" min="1" max="100" value={watercolorSettings.wetness} onChange={(e) => setWatercolorSettings(s => ({ ...s, wetness: parseInt(e.target.value) }))} className="w-full" />
                             </div>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
-                                <input type="color" value={watercolorSettings.color} onChange={(e) => setWatercolorSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                                <label className="text-xs text-theme-text-secondary block mb-1">Color</label>
+                                <input type="color" value={watercolorSettings.color} onChange={(e) => setWatercolorSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-theme-bg-tertiary border border-theme-bg-hover rounded-md cursor-pointer" />
                             </div>
                         </Accordion>
                         <Accordion title="Dinámica de Presión">
                             <div className="flex items-center justify-between py-1">
-                                <label htmlFor="pressure-size-wc" className="text-xs text-[--text-secondary]">Controlar Tamaño</label>
-                                <input id="pressure-size-wc" type="checkbox" checked={watercolorSettings.pressureControl.size} onChange={(e) => setWatercolorSettings(s => ({ ...s, pressureControl: { ...s.pressureControl, size: e.target.checked } }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+                                <label htmlFor="pressure-size-wc" className="text-xs text-theme-text-secondary">Controlar Tamaño</label>
+                                <input id="pressure-size-wc" type="checkbox" checked={watercolorSettings.pressureControl.size} onChange={(e) => setWatercolorSettings(s => ({ ...s, pressureControl: { ...s.pressureControl, size: e.target.checked } }))} className="w-4 h-4 text-theme-accent-primary bg-theme-bg-tertiary border-theme-bg-hover rounded focus:ring-theme-accent-primary" />
                             </div>
                             <div className="flex items-center justify-between py-1">
-                                <label htmlFor="pressure-flow-wc" className="text-xs text-[--text-secondary]">Controlar Flujo</label>
-                                <input id="pressure-flow-wc" type="checkbox" checked={watercolorSettings.pressureControl.flow} onChange={(e) => setWatercolorSettings(s => ({ ...s, pressureControl: { ...s.pressureControl, flow: e.target.checked } }))} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] rounded focus:ring-[--accent-primary]" />
+                                <label htmlFor="pressure-flow-wc" className="text-xs text-theme-text-secondary">Controlar Flujo</label>
+                                <input id="pressure-flow-wc" type="checkbox" checked={watercolorSettings.pressureControl.flow} onChange={(e) => setWatercolorSettings(s => ({ ...s, pressureControl: { ...s.pressureControl, flow: e.target.checked } }))} className="w-4 h-4 text-theme-accent-primary bg-theme-bg-tertiary border-theme-bg-hover rounded focus:ring-theme-accent-primary" />
                             </div>
                         </Accordion>
                     </div>
@@ -639,49 +639,49 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             case 'natural-marker':
                 return (
                     <div className="p-4 space-y-4">
-                        <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Marcador Natural</h4>
+                        <h4 className="text-sm font-bold uppercase text-theme-text-secondary">Marcador Natural</h4>
                         <div>
-                            <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {naturalMarkerSettings.size}px</label>
+                            <label className="text-xs text-theme-text-secondary block mb-1">Tamaño: {naturalMarkerSettings.size}px</label>
                             <input type="range" min="1" max="200" value={naturalMarkerSettings.size} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
                         </div>
                         <div>
-                            <label className="text-xs text-[--text-secondary] block mb-1">Opacidad: {Math.round(naturalMarkerSettings.opacity * 100)}%</label>
+                            <label className="text-xs text-theme-text-secondary block mb-1">Opacidad: {Math.round(naturalMarkerSettings.opacity * 100)}%</label>
                             <input type="range" min="1" max="100" value={naturalMarkerSettings.opacity * 100} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, opacity: parseInt(e.target.value) / 100 }))} className="w-full" />
                         </div>
                         <div>
-                            <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
-                            <input type="color" value={naturalMarkerSettings.color} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                            <label className="text-xs text-theme-text-secondary block mb-1">Color</label>
+                            <input type="color" value={naturalMarkerSettings.color} onChange={(e) => setNaturalMarkerSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-theme-bg-tertiary border border-theme-bg-hover rounded-md cursor-pointer" />
                         </div>
                     </div>
                 );
             case 'airbrush':
                 return (
                     <div className="p-4 space-y-4">
-                        <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Aerógrafo</h4>
+                        <h4 className="text-sm font-bold uppercase text-theme-text-secondary">Aerógrafo</h4>
                         <div>
-                            <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {airbrushSettings.size}px</label>
+                            <label className="text-xs text-theme-text-secondary block mb-1">Tamaño: {airbrushSettings.size}px</label>
                             <input type="range" min="1" max="500" value={airbrushSettings.size} onChange={(e) => setAirbrushSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
                         </div>
                         <div>
-                            <label className="text-xs text-[--text-secondary] block mb-1">Flujo: {Math.round(airbrushSettings.flow * 100)}%</label>
+                            <label className="text-xs text-theme-text-secondary block mb-1">Flujo: {Math.round(airbrushSettings.flow * 100)}%</label>
                             <input type="range" min="1" max="100" value={airbrushSettings.flow * 100} onChange={(e) => setAirbrushSettings(s => ({ ...s, flow: parseInt(e.target.value) / 100 }))} className="w-full" />
                         </div>
                         <div>
-                            <label className="text-xs text-[--text-secondary] block mb-1">Color</label>
-                            <input type="color" value={airbrushSettings.color} onChange={(e) => setAirbrushSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer" />
+                            <label className="text-xs text-theme-text-secondary block mb-1">Color</label>
+                            <input type="color" value={airbrushSettings.color} onChange={(e) => setAirbrushSettings(s => ({ ...s, color: e.target.value }))} className="w-full h-8 p-0.5 bg-theme-bg-tertiary border border-theme-bg-hover rounded-md cursor-pointer" />
                         </div>
                     </div>
                 );
             case 'fx-brush':
                 return (
                     <div className="p-4 space-y-4">
-                        <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Pincel de Efectos</h4>
+                        <h4 className="text-sm font-bold uppercase text-theme-text-secondary">Pincel de Efectos</h4>
                         <div>
-                            <label className="text-xs text-[--text-secondary] block mb-1">Preset</label>
+                            <label className="text-xs text-theme-text-secondary block mb-1">Preset</label>
                             <select
                                 value={fxBrushSettings.presetId || ''}
                                 onChange={(e) => setFxBrushSettings(s => ({ ...s, presetId: e.target.value || null }))}
-                                className="w-full bg-[--bg-tertiary] text-[--text-primary] text-xs rounded-md p-2"
+                                className="w-full bg-theme-bg-tertiary text-theme-text-primary text-xs rounded-md p-2"
                             >
                                 <option value="">Ninguno</option>
                                 {brushPresets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -692,29 +692,29 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             case 'eraser':
                 return (
                     <div className="max-h-[calc(100vh-80px)] overflow-y-auto">
-                        <div className="p-4 space-y-3 bg-[--bg-secondary] sticky top-0 z-10 border-b border-[--bg-tertiary]">
-                            <h4 className="text-sm font-bold uppercase text-[--text-secondary]">Goma de Borrar</h4>
+                        <div className="p-4 space-y-3 bg-theme-bg-secondary sticky top-0 z-10 border-b border-theme-bg-tertiary">
+                            <h4 className="text-sm font-bold uppercase text-theme-text-secondary">Goma de Borrar</h4>
                         </div>
                         <Accordion title="General" defaultOpen>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Tamaño: {eraserSettings.size}px</label>
+                                <label className="text-xs text-theme-text-secondary block mb-1">Tamaño: {eraserSettings.size}px</label>
                                 <input type="range" min="1" max="500" value={eraserSettings.size} onChange={(e) => setEraserSettings(s => ({ ...s, size: parseInt(e.target.value) }))} className="w-full" />
                             </div>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Opacidad: {Math.round(eraserSettings.opacity * 100)}%</label>
+                                <label className="text-xs text-theme-text-secondary block mb-1">Opacidad: {Math.round(eraserSettings.opacity * 100)}%</label>
                                 <input type="range" min="1" max="100" value={eraserSettings.opacity * 100} onChange={(e) => setEraserSettings(s => ({ ...s, opacity: parseInt(e.target.value) / 100 }))} className="w-full" />
                             </div>
                         </Accordion>
                         <Accordion title="Punta" defaultOpen>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Dureza: {eraserSettings.hardness}%</label>
+                                <label className="text-xs text-theme-text-secondary block mb-1">Dureza: {eraserSettings.hardness}%</label>
                                 <input type="range" min="0" max="100" value={eraserSettings.hardness} onChange={(e) => setEraserSettings(s => ({ ...s, hardness: parseInt(e.target.value) }))} className="w-full" />
                             </div>
                             <div>
-                                <label className="text-xs text-[--text-secondary] block mb-1">Forma</label>
+                                <label className="text-xs text-theme-text-secondary block mb-1">Forma</label>
                                 <div className="grid grid-cols-2 gap-2">
-                                    <button onClick={() => setEraserSettings(s => ({ ...s, tipShape: 'round' }))} className={`text-xs p-2 rounded ${eraserSettings.tipShape === 'round' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Redonda</button>
-                                    <button onClick={() => setEraserSettings(s => ({ ...s, tipShape: 'square' }))} className={`text-xs p-2 rounded ${eraserSettings.tipShape === 'square' ? 'bg-[--accent-hover] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Cuadrada</button>
+                                    <button onClick={() => setEraserSettings(s => ({ ...s, tipShape: 'round' }))} className={`text-xs p-2 rounded ${eraserSettings.tipShape === 'round' ? 'bg-theme-accent-hover text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>Redonda</button>
+                                    <button onClick={() => setEraserSettings(s => ({ ...s, tipShape: 'square' }))} className={`text-xs p-2 rounded ${eraserSettings.tipShape === 'square' ? 'bg-theme-accent-hover text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>Cuadrada</button>
                                 </div>
                             </div>
                         </Accordion>
@@ -765,9 +765,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
     // FIX: Added 'watercolor' to the list of paint tools.
     const isPaintTool = ['brush', 'simple-marker', 'eraser', 'natural-marker', 'advanced-marker', 'airbrush', 'fx-brush', 'watercolor'].includes(tool);
-    const strokeModeButtonClasses = `p-3 rounded-lg transition-colors ${isPaintTool ? 'bg-[--accent-primary] text-white hover:bg-[--accent-hover]' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`;
+    const strokeModeButtonClasses = `p-3 rounded-lg transition-colors ${isPaintTool ? 'bg-theme-accent-primary text-white hover:bg-theme-accent-hover' : 'bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-tertiary'}`;
     const isStrokeModifierActive = strokeModifier.style !== 'solid';
-    const strokeModifierButtonClasses = `p-3 rounded-lg transition-colors ${isStrokeModifierActive ? 'bg-[--accent-primary] text-white hover:bg-[--accent-hover]' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`;
+    const strokeModifierButtonClasses = `p-3 rounded-lg transition-colors ${isStrokeModifierActive ? 'bg-theme-accent-primary text-white hover:bg-theme-accent-hover' : 'bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-tertiary'}`;
 
     // Grouped Tools Logic
     const selectionToolTools: Tool[] = ['marquee-rect', 'lasso', 'magic-wand'];
@@ -821,14 +821,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
     return (
         <aside ref={toolbarWrapperRef} className="relative flex-shrink-0 h-full">
-            <div className="bg-[--bg-primary] text-[--text-primary] h-full flex flex-col p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-[--bg-tertiary] scrollbar-track-transparent">
+            <div className="bg-theme-bg-primary text-theme-text-primary h-full flex flex-col p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-theme-bg-tertiary scrollbar-track-transparent">
                 {/* Main Tools */}
                 <div className="flex flex-col items-center space-y-2">
                     <button onClick={() => handleToolClick('select')} className={toolButtonClasses('select')} title="Seleccionar">
                         <SelectIcon className="w-6 h-6" />
                     </button>
 
-                    <div className="w-10/12 h-px bg-[--bg-tertiary] my-2 self-center" />
+                    <div className="w-10/12 h-px bg-theme-bg-tertiary my-2 self-center" />
 
                     {/* Selection Tools Group */}
                     <div className="relative" ref={selectionToolsMenuRef}>
@@ -840,7 +840,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 setIsSelectionToolsMenuOpen(prev => !prev);
                             }}
                             onDoubleClick={(e) => handleToolDoubleClick(isSelectionGroupActive ? tool : lastActiveSelectionTool, e)}
-                            className={`p-3 rounded-lg transition-colors ${isSelectionGroupActive ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}
+                            className={`p-3 rounded-lg transition-colors ${isSelectionGroupActive ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-tertiary'}`}
                             title="Herramientas de Selección (doble clic para opciones)"
                         >
                             <ActiveSelectionIcon className="w-6 h-6" />
@@ -877,7 +877,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         </button>
                     </div>
 
-                    <div className="w-10/12 h-px bg-[--bg-tertiary] my-2 self-center" />
+                    <div className="w-10/12 h-px bg-theme-bg-tertiary my-2 self-center" />
 
                     {/* Drawing Tools Group */}
                     <div className="relative" ref={drawingToolsMenuRef}>
@@ -889,7 +889,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 setIsDrawingToolsMenuOpen(prev => !prev);
                             }}
                             onDoubleClick={(e) => handleToolDoubleClick(isDrawingGroupActive ? tool : lastActiveDrawingTool, e)}
-                            className={`p-3 rounded-lg transition-colors ${isDrawingGroupActive ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`}
+                            className={`p-3 rounded-lg transition-colors ${isDrawingGroupActive ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-tertiary'}`}
                             title="Herramientas de Dibujo (doble clic para opciones)"
                         >
                             <ActiveDrawingIcon className="w-6 h-6" />
@@ -900,7 +900,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         <EraserIcon className="w-6 h-6" />
                     </button>
 
-                    <div className="w-10/12 h-px bg-[--bg-tertiary] my-2 self-center" />
+                    <div className="w-10/12 h-px bg-theme-bg-tertiary my-2 self-center" />
 
                     <button onClick={() => handleToolClick('text')} onDoubleClick={(e) => handleToolDoubleClick('text', e)} className={toolButtonClasses('text')} title="Texto (doble clic para opciones)">
                         <TextIcon className="w-6 h-6" />
@@ -908,26 +908,26 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
                 </div>
 
-                <div className="w-10/12 h-px bg-[--bg-tertiary] my-2 self-center" />
+                <div className="w-10/12 h-px bg-theme-bg-tertiary my-2 self-center" />
 
                 {/* Guide Tools */}
                 <div className="flex flex-col items-center space-y-2">
-                    <button onClick={() => setActiveGuide('ruler')} className={`p-3 rounded-lg transition-colors ${activeGuide === 'ruler' ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`} title="Guía de Regla">
+                    <button onClick={() => setActiveGuide('ruler')} className={`p-3 rounded-lg transition-colors ${activeGuide === 'ruler' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-tertiary'}`} title="Guía de Regla">
                         <RulerIcon className="w-6 h-6" />
                     </button>
-                    <button onClick={() => setActiveGuide('perspective')} className={`p-3 rounded-lg transition-colors ${activeGuide === 'perspective' ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`} title="Guía de Perspectiva">
+                    <button onClick={() => setActiveGuide('perspective')} className={`p-3 rounded-lg transition-colors ${activeGuide === 'perspective' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-tertiary'}`} title="Guía de Perspectiva">
                         <PerspectiveIcon className="w-6 h-6" />
                     </button>
-                    <button onClick={onToggleOrthogonal} className={`p-3 rounded-lg transition-colors ${isOrthogonalVisible ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`} title="Guía Ortogonal">
+                    <button onClick={onToggleOrthogonal} className={`p-3 rounded-lg transition-colors ${isOrthogonalVisible ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-tertiary'}`} title="Guía Ortogonal">
                         <OrthogonalIcon className="w-6 h-6" />
                     </button>
-                    <button onClick={() => setActiveGuide('mirror')} className={`p-3 rounded-lg transition-colors ${activeGuide === 'mirror' ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]'}`} title="Guía de Espejo">
+                    <button onClick={() => setActiveGuide('mirror')} className={`p-3 rounded-lg transition-colors ${activeGuide === 'mirror' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-tertiary'}`} title="Guía de Espejo">
                         <MirrorIcon className="w-6 h-6" />
                     </button>
                 </div>
 
                 {/* Editing Tools */}
-                <div className="w-10/12 h-px bg-[--bg-tertiary] my-2 self-center" />
+                <div className="w-10/12 h-px bg-theme-bg-tertiary my-2 self-center" />
                 <div className="flex flex-col items-center space-y-2">
                     <button onClick={() => handleToolClick('transform')} className={toolButtonClasses('transform')} title="Transformar (Escalar/Rotar)">
                         <TransformIcon className="w-6 h-6" />
@@ -943,7 +943,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                     <button onClick={() => handleToolClick('crop')} className={toolButtonClasses('crop')} title="Recortar">
                         <CropIcon className="w-6 h-6" />
                     </button>
-                    <button onClick={onExportClick} className="p-3 rounded-lg bg-[--bg-secondary] text-[--text-secondary] hover:bg-[--bg-tertiary]" title="Exportar Imagen">
+                    <button onClick={onExportClick} className="p-3 rounded-lg bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-tertiary" title="Exportar Imagen">
                         <ExportIcon className="w-6 h-6" />
                     </button>
                 </div>
@@ -954,11 +954,11 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 isSelectionToolsMenuOpen && (
                     <div
                         ref={selectionToolsDropdownRef}
-                        className="fixed z-50 p-2 space-y-1 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-xl w-60"
+                        className="fixed z-50 p-2 space-y-1 bg-theme-bg-primary border border-theme-bg-tertiary rounded-lg shadow-xl w-60"
                         style={getMenuPositionStyle(selectionToolsMenuRef.current)}
                     >
                         {selectionToolsGroup.map(({ tool: t, name, icon: Icon }) => (
-                            <div key={t} className={`flex items-center justify-between rounded-md text-sm ${tool === t ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}>
+                            <div key={t} className={`flex items-center justify-between rounded-md text-sm ${tool === t ? 'bg-theme-accent-primary text-white' : 'hover:bg-theme-bg-tertiary'}`}>
                                 <button onClick={() => { handleToolClick(t); setIsSelectionToolsMenuOpen(false); }} className="flex items-center gap-3 p-2 flex-grow text-left">
                                     <Icon className="w-5 h-5" />
                                     <span>{name}</span>
@@ -976,10 +976,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 isStrokeModeMenuOpen && (
                     <div
                         ref={strokeModeDropdownRef}
-                        className="fixed z-50 p-2 space-y-1 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-xl w-60"
+                        className="fixed z-50 p-2 space-y-1 bg-theme-bg-primary border border-theme-bg-tertiary rounded-lg shadow-xl w-60"
                         style={getMenuPositionStyle(strokeModeMenuRef.current)}
                     >
-                        <h4 className="px-2 pb-1 text-sm font-bold uppercase text-[--text-secondary]">Modos de Trazo</h4>
+                        <h4 className="px-2 pb-1 text-sm font-bold uppercase text-theme-text-secondary">Modos de Trazo</h4>
                         {strokeModesList.map(({ mode, label, icon: Icon }) => (
                             <button
                                 key={mode}
@@ -987,7 +987,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                     setStrokeMode(mode);
                                     setIsStrokeModeMenuOpen(false);
                                 }}
-                                className={`w-full flex items-center gap-3 p-2 rounded-md text-sm ${strokeMode === mode ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}
+                                className={`w-full flex items-center gap-3 p-2 rounded-md text-sm ${strokeMode === mode ? 'bg-theme-accent-primary text-white' : 'hover:bg-theme-bg-tertiary'}`}
                             >
                                 <Icon className="w-5 h-5" />
                                 <span>{label}</span>
@@ -1001,10 +1001,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 isStrokeModifierMenuOpen && (
                     <div
                         ref={strokeModifierDropdownRef}
-                        className="fixed z-50 p-2 space-y-2 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-xl w-60"
+                        className="fixed z-50 p-2 space-y-2 bg-theme-bg-primary border border-theme-bg-tertiary rounded-lg shadow-xl w-60"
                         style={getMenuPositionStyle(strokeModifierMenuRef.current)}
                     >
-                        <h4 className="px-2 pb-1 text-sm font-bold uppercase text-[--text-secondary]">Estilo de Trazo</h4>
+                        <h4 className="px-2 pb-1 text-sm font-bold uppercase text-theme-text-secondary">Estilo de Trazo</h4>
                         <div className="space-y-1">
                             {strokeModifierList.map(({ style, label, icon: Icon }) => (
                                 <button
@@ -1012,15 +1012,15 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                     onClick={() => {
                                         setStrokeModifier(s => ({ ...s, style }));
                                     }}
-                                    className={`w-full flex items-center gap-3 p-2 rounded-md text-sm ${strokeModifier.style === style ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}
+                                    className={`w-full flex items-center gap-3 p-2 rounded-md text-sm ${strokeModifier.style === style ? 'bg-theme-accent-primary text-white' : 'hover:bg-theme-bg-tertiary'}`}
                                 >
                                     <Icon className="w-5 h-5" />
                                     <span>{label}</span>
                                 </button>
                             ))}
                         </div>
-                        <div className="border-t border-[--bg-tertiary] pt-2 mt-2">
-                            <label className="px-2 text-xs font-bold text-[--text-secondary]">Escala del Patrón: {strokeModifier.scale.toFixed(1)}</label>
+                        <div className="border-t border-theme-bg-tertiary pt-2 mt-2">
+                            <label className="px-2 text-xs font-bold text-theme-text-secondary">Escala del Patrón: {strokeModifier.scale.toFixed(1)}</label>
                             <input
                                 type="range"
                                 min="0.5"
@@ -1040,11 +1040,11 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 isDrawingToolsMenuOpen && (
                     <div
                         ref={drawingToolsDropdownRef}
-                        className="fixed z-50 p-2 space-y-1 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-xl w-60"
+                        className="fixed z-50 p-2 space-y-1 bg-theme-bg-primary border border-theme-bg-tertiary rounded-lg shadow-xl w-60"
                         style={getMenuPositionStyle(drawingToolsMenuRef.current)}
                     >
                         {drawingToolsGroup.map(({ tool: t, name, icon: Icon }) => (
-                            <div key={t} className={`flex items-center justify-between rounded-md text-sm ${tool === t ? 'bg-[--accent-primary] text-white' : 'hover:bg-[--bg-tertiary]'}`}>
+                            <div key={t} className={`flex items-center justify-between rounded-md text-sm ${tool === t ? 'bg-theme-accent-primary text-white' : 'hover:bg-theme-bg-tertiary'}`}>
                                 <button onClick={() => { handleToolClick(t); setIsDrawingToolsMenuOpen(false); }} className="flex items-center gap-3 p-2 flex-grow text-left">
                                     <Icon className="w-5 h-5" />
                                     <span>{name}</span>
@@ -1063,7 +1063,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 openSettings && settingsPanelPosition && (
                     <div
                         ref={settingsPanelRef}
-                        className="fixed z-50 bg-[--bg-secondary] border border-[--bg-tertiary] rounded-lg shadow-xl w-64 overflow-hidden"
+                        className="fixed z-50 bg-theme-bg-secondary border border-theme-bg-tertiary rounded-lg shadow-xl w-64 overflow-hidden"
                         style={{
                             top: settingsPanelPosition.top,
                             left: settingsPanelPosition.left,

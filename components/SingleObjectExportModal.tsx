@@ -134,10 +134,10 @@ export const SingleObjectExportModal: React.FC<SingleObjectExportModalProps> = (
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-      <div className="bg-[--bg-secondary] text-[--text-primary] rounded-lg shadow-xl p-6 w-full max-w-2xl flex flex-col space-y-4">
+      <div className="bg-theme-bg-secondary text-theme-text-primary rounded-lg shadow-xl p-6 w-full max-w-2xl flex flex-col space-y-4">
         <h2 className="text-xl font-bold">Exportar Objeto: "{item?.name}"</h2>
         
-        <div className="flex-grow p-2 rounded-md flex justify-center items-center min-h-0 bg-[--bg-primary]"
+        <div className="flex-grow p-2 rounded-md flex justify-center items-center min-h-0 bg-theme-bg-primary"
           style={{
             minHeight: '20rem',
             backgroundImage: 'linear-gradient(45deg, #808080 25%, transparent 25%), linear-gradient(-45deg, #808080 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #808080 75%), linear-gradient(-45deg, transparent 75%, #808080 75%)',
@@ -154,24 +154,24 @@ export const SingleObjectExportModal: React.FC<SingleObjectExportModalProps> = (
 
         <div className="space-y-4">
           <div>
-            <label htmlFor="filename" className="block text-sm text-[--text-secondary] mb-1">Nombre del Archivo</label>
+            <label htmlFor="filename" className="block text-sm text-theme-text-secondary mb-1">Nombre del Archivo</label>
             <input
               type="text"
               id="filename"
               value={filename}
               onChange={(e) => setFilename(e.target.value)}
-              className="w-full bg-[--bg-tertiary] text-[--text-primary] text-sm rounded-md p-2"
+              className="w-full bg-theme-bg-tertiary text-theme-text-primary text-sm rounded-md p-2"
             />
           </div>
            <div>
-            <label className="block text-sm text-[--text-secondary] mb-2">Tamaño de Exportación</label>
+            <label className="block text-sm text-theme-text-secondary mb-2">Tamaño de Exportación</label>
             <div className="flex space-x-4">
               <label className="flex items-center">
-                <input type="radio" name="exportMode" value="full" checked={exportMode === 'full'} onChange={() => setExportMode('full')} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] focus:ring-[--accent-primary]"/>
+                <input type="radio" name="exportMode" value="full" checked={exportMode === 'full'} onChange={() => setExportMode('full')} className="w-4 h-4 text-theme-accent-primary bg-theme-bg-tertiary border-theme-bg-hover focus:ring-theme-accent-primary"/>
                 <span className="ml-2 text-sm">Tamaño completo del lienzo</span>
               </label>
               <label className="flex items-center">
-                <input type="radio" name="exportMode" value="bbox" checked={exportMode === 'bbox'} onChange={() => setExportMode('bbox')} className="w-4 h-4 text-[--accent-primary] bg-[--bg-tertiary] border-[--bg-hover] focus:ring-[--accent-primary]"/>
+                <input type="radio" name="exportMode" value="bbox" checked={exportMode === 'bbox'} onChange={() => setExportMode('bbox')} className="w-4 h-4 text-theme-accent-primary bg-theme-bg-tertiary border-theme-bg-hover focus:ring-theme-accent-primary"/>
                 <span className="ml-2 text-sm">Ajustar a contenido</span>
               </label>
             </div>
@@ -179,14 +179,14 @@ export const SingleObjectExportModal: React.FC<SingleObjectExportModalProps> = (
         </div>
 
         <div className="flex justify-end space-x-4 pt-2">
-          <button onClick={onClose} className="px-4 py-2 rounded-md bg-[--bg-tertiary] hover:bg-[--bg-hover]" disabled={isGenerating}>
+          <button onClick={onClose} className="px-4 py-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover" disabled={isGenerating}>
             Cancelar
           </button>
           <button onClick={handleSaveToLibrary} className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-500 text-white disabled:bg-gray-500 disabled:cursor-wait flex items-center gap-2" disabled={isGenerating}>
             <UploadIcon className="w-4 h-4" />
             {isGenerating ? 'Guardando...' : 'Guardar en Librería'}
           </button>
-          <button onClick={handleExport} className="px-4 py-2 rounded-md bg-[--accent-primary] hover:bg-[--accent-hover] text-white disabled:bg-gray-500 disabled:cursor-wait" disabled={isGenerating}>
+          <button onClick={handleExport} className="px-4 py-2 rounded-md bg-theme-accent-primary hover:bg-theme-accent-hover text-white disabled:bg-gray-500 disabled:cursor-wait" disabled={isGenerating}>
             {isGenerating ? 'Exportando...' : 'Exportar como PNG'}
           </button>
         </div>

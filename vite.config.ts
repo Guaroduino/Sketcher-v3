@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
       react(),
       // PWA plugin will generate a service worker and manifest at build time.
       VitePWA({
-        // registerType: 'autoUpdate', // Disabled to prevent annoying auto-reloads
+        // registerType: 'autoUpdate',
         registerType: 'prompt',
         manifest: {
           name: 'Sketcher',
@@ -35,8 +35,8 @@ export default defineConfig(({ mode }) => {
       })
     ],
     define: {
-      'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY),
+      'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY)
     },
     build: {
       outDir: 'dist',

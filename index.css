@@ -1,0 +1,78 @@
+@import "tailwindcss";
+@source "./components";
+@source "./hooks";
+@source "./src";
+@source "./*.tsx";
+
+@theme {
+  --color-theme-bg-primary: rgb(var(--bg-primary));
+  --color-theme-bg-secondary: rgb(var(--bg-secondary));
+  --color-theme-bg-tertiary: rgb(var(--bg-tertiary));
+  --color-theme-bg-hover: rgb(var(--bg-hover));
+  --color-theme-text-primary: rgb(var(--text-primary));
+  --color-theme-text-secondary: rgb(var(--text-secondary));
+  --color-theme-text-tertiary: rgb(var(--text-tertiary));
+  --color-theme-accent-primary: rgb(var(--accent-primary));
+  --color-theme-accent-hover: rgb(var(--accent-hover));
+}
+
+
+:root {
+  --bg-primary: 243 244 246;
+  --bg-secondary: 255 255 255;
+  --bg-tertiary: 229 231 235;
+  --bg-hover: 209 213 219;
+  --text-primary: 17 24 39;
+  --text-secondary: 107 114 128;
+  --text-tertiary: 156 163 175;
+  --accent-primary: 239 68 68;
+  --accent-hover: 220 38 38;
+}
+
+.dark {
+  --bg-primary: 24 24 27;
+  --bg-secondary: 39 39 42;
+  --bg-tertiary: 63 63 70;
+  --bg-hover: 82 82 91;
+  --text-primary: 229 231 235;
+  --text-secondary: 156 163 175;
+  --text-tertiary: 75 85 99;
+  --accent-primary: 239 68 68;
+  --accent-hover: 220 38 38;
+}
+
+html {
+  background-color: #000000;
+}
+
+html,
+body,
+#root {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+body,
+#root {
+  background-color: rgb(var(--bg-secondary));
+}
+
+body {
+  color: rgb(var(--text-primary));
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

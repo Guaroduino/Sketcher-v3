@@ -1402,11 +1402,11 @@ export function App() {
 
     if (ui.showSplash) {
         return (
-            <div className="w-screen h-screen bg-[--bg-primary] text-[--text-primary] flex items-center justify-center font-sans">
+            <div className="w-screen h-screen bg-theme-bg-primary text-theme-text-primary flex items-center justify-center font-sans">
                 <div className="text-center p-8">
                     <h1 className="text-5xl font-bold mb-4">Sketcher</h1>
-                    <p className="text-lg text-[--text-secondary] mb-10">Tu lienzo creativo te espera.</p>
-                    <button onClick={ui.handleStart} className="px-10 py-4 bg-[--accent-primary] text-white font-bold text-lg rounded-lg shadow-lg hover:bg-[--accent-hover] transform hover:scale-105 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-offset-2 focus:ring-offset-[--bg-primary] focus:ring-[--accent-primary]">
+                    <p className="text-lg text-theme-text-secondary mb-10">Tu lienzo creativo te espera.</p>
+                    <button onClick={ui.handleStart} className="px-10 py-4 bg-theme-accent-primary text-white font-bold text-lg rounded-lg shadow-lg hover:bg-theme-accent-hover transform hover:scale-105 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-offset-2 focus:ring-offset-theme-bg-primary focus:ring-theme-accent-primary">
                         Comenzar a Dibujar
                     </button>
                 </div>
@@ -1415,8 +1415,8 @@ export function App() {
     }
 
     return (
-        <div className="w-screen h-screen bg-[--bg-primary] text-[--text-primary] flex flex-col font-sans overflow-hidden">
-            <div className="absolute bottom-4 right-4 z-50 pointer-events-none opacity-50 text-[10px] text-[--text-secondary]">
+        <div className="w-screen h-screen bg-theme-bg-primary text-theme-text-primary flex flex-col font-sans overflow-hidden">
+            <div className="absolute bottom-4 right-4 z-50 pointer-events-none opacity-50 text-[10px] text-theme-text-secondary">
                 v0.5.3-debug-render-fix
             </div>
             {/* Modals & Overlays */}
@@ -1445,14 +1445,14 @@ export function App() {
 
             {/* Main Header */}
             {ui.isHeaderVisible && (
-                <header className="flex-shrink-0 flex items-center justify-between p-2 bg-[--bg-primary] border-b border-[--bg-tertiary] z-20">
+                <header className="flex-shrink-0 flex items-center justify-between p-2 bg-theme-bg-primary border-b border-theme-bg-tertiary z-20">
                     <div className="flex items-center gap-4">
                         <h1 className="text-xl font-bold">Sketcher</h1>
-                        <button onClick={() => ui.setProjectGalleryOpen(true)} className="flex items-center gap-2 p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] border border-[--bg-tertiary] transition-colors text-sm">
+                        <button onClick={() => ui.setProjectGalleryOpen(true)} className="flex items-center gap-2 p-2 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary border border-theme-bg-tertiary transition-colors text-sm">
                             <GalleryIcon className="w-5 h-5" />
                             <span>Galería</span>
                         </button>
-                        <button ref={workspaceButtonRef} onClick={() => setWorkspacePopoverOpen(p => !p)} className="flex items-center gap-2 p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] border border-[--bg-tertiary] transition-colors text-sm relative">
+                        <button ref={workspaceButtonRef} onClick={() => setWorkspacePopoverOpen(p => !p)} className="flex items-center gap-2 p-2 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary border border-theme-bg-tertiary transition-colors text-sm relative">
                             <BookmarkIcon className="w-5 h-5" />
                             <span>Plantillas</span>
                             <WorkspaceTemplatesPopover isOpen={isWorkspacePopoverOpen} onClose={() => setWorkspacePopoverOpen(false)} templates={templates.templates} onSave={handleSaveWorkspace} onLoad={handleLoadWorkspace} onDelete={templates.deleteTemplate} onResetPreferences={() => ui.setIsResetConfirmOpen(true)} />
@@ -1460,12 +1460,12 @@ export function App() {
                     </div>
 
                     {/* Center Tabs */}
-                    <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center bg-[--bg-secondary] rounded-lg p-1 border border-[--bg-tertiary]">
+                    <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center bg-theme-bg-secondary rounded-lg p-1 border border-theme-bg-tertiary">
                         <button
                             onClick={() => setActiveView('sketch')}
                             className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeView === 'sketch'
-                                ? 'bg-[--bg-primary] text-[--text-primary] shadow-sm'
-                                : 'text-[--text-secondary] hover:text-[--text-primary] hover:bg-[--bg-tertiary]'
+                                ? 'bg-theme-bg-primary text-theme-text-primary shadow-sm'
+                                : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'
                                 }`}
                         >
                             Sketch
@@ -1473,42 +1473,42 @@ export function App() {
                         <button
                             onClick={() => setActiveView('render')}
                             className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeView === 'render'
-                                ? 'bg-[--bg-primary] text-[--text-primary] shadow-sm'
-                                : 'text-[--text-secondary] hover:text-[--text-primary] hover:bg-[--bg-tertiary]'
+                                ? 'bg-theme-bg-primary text-theme-text-primary shadow-sm'
+                                : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'
                                 }`}
                         >
                             Render arquitectónico
                         </button>
                     </div>
                     <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1 mr-2 px-2 py-1 bg-[--bg-secondary] rounded-md border border-[--bg-tertiary]">
+                        <div className="flex items-center gap-1 mr-2 px-2 py-1 bg-theme-bg-secondary rounded-md border border-theme-bg-tertiary">
                             {ui.deferredPrompt && (
                                 <>
-                                    <button onClick={ui.handleInstallClick} className="flex items-center gap-1 p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Instalar Aplicación">
+                                    <button onClick={ui.handleInstallClick} className="flex items-center gap-1 p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title="Instalar Aplicación">
                                         <DownloadIcon className="w-4 h-4" />
                                         <span className="text-xs font-bold hidden sm:inline">Instalar</span>
                                     </button>
-                                    <div className="w-px h-4 bg-[--bg-tertiary] mx-1"></div>
+                                    <div className="w-px h-4 bg-theme-bg-tertiary mx-1"></div>
                                 </>
                             )}
-                            <button onClick={() => ui.setUiScale(ui.uiScale - 0.1)} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Reducir Interfaz">
+                            <button onClick={() => ui.setUiScale(ui.uiScale - 0.1)} className="p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title="Reducir Interfaz">
                                 <span className="text-xs font-bold">A-</span>
                             </button>
                             <span className="text-xs font-mono w-8 text-center">{Math.round(ui.uiScale * 100)}%</span>
-                            <button onClick={() => ui.setUiScale(ui.uiScale + 0.1)} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Aumentar Interfaz">
+                            <button onClick={() => ui.setUiScale(ui.uiScale + 0.1)} className="p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title="Aumentar Interfaz">
                                 <span className="text-xs font-bold">A+</span>
                             </button>
-                            <div className="w-px h-4 bg-[--bg-tertiary] mx-1"></div>
-                            <button onClick={ui.handleSaveUiScale} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Guardar configuración de tamaño">
+                            <div className="w-px h-4 bg-theme-bg-tertiary mx-1"></div>
+                            <button onClick={ui.handleSaveUiScale} className="p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title="Guardar configuración de tamaño">
                                 <SaveIcon className="w-4 h-4" />
                             </button>
-                            <div className="w-px h-4 bg-[--bg-tertiary] mx-1"></div>
-                            <button onClick={ui.handleToggleFullscreen} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title={ui.isFullscreen ? "Salir de Pantalla Completa" : "Pantalla Completa"}>
+                            <div className="w-px h-4 bg-theme-bg-tertiary mx-1"></div>
+                            <button onClick={ui.handleToggleFullscreen} className="p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title={ui.isFullscreen ? "Salir de Pantalla Completa" : "Pantalla Completa"}>
                                 {ui.isFullscreen ? <MinimizeIcon className="w-4 h-4" /> : <ExpandIcon className="w-4 h-4" />}
                             </button>
                         </div>
 
-                        <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] text-[--text-secondary]">
+                        <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary text-theme-text-secondary">
                             {theme === 'dark' ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
                         </button>
                         <Auth user={user} />
@@ -1532,7 +1532,7 @@ export function App() {
                 )}
                 <button
                     onClick={() => ui.setIsLeftSidebarVisible(!ui.isLeftSidebarVisible)}
-                    className="absolute top-1/2 -translate-y-1/2 bg-[--bg-secondary] p-2 rounded-full shadow-xl z-40 border border-[--bg-tertiary] hover:bg-[--bg-tertiary] transition-all"
+                    className="absolute top-1/2 -translate-y-1/2 bg-theme-bg-secondary p-2 rounded-full shadow-xl z-40 border border-theme-bg-tertiary hover:bg-theme-bg-tertiary transition-all"
                     style={{ left: ui.isLeftSidebarVisible ? '4.25rem' : '0.25rem' }}
                     title={ui.isLeftSidebarVisible ? "Ocultar Herramientas" : "Mostrar Herramientas"}
                 >
@@ -1593,10 +1593,10 @@ export function App() {
                                 scaleUnit={scaleUnit}
                             />
                             <div className="absolute top-36 left-4 md:top-2 md:left-2 flex items-center gap-2 z-10">
-                                {dimensionDisplay && <button ref={scaleButtonRef} onClick={() => setIsScalePopoverOpen(p => !p)} className="bg-[--bg-primary]/80 backdrop-blur-sm text-[--text-secondary] text-xs rounded-md px-2 py-1 pointer-events-auto hover:bg-[--bg-secondary] transition-colors" title="Ajustar escala del lienzo">{dimensionDisplay}</button>}
+                                {dimensionDisplay && <button ref={scaleButtonRef} onClick={() => setIsScalePopoverOpen(p => !p)} className="bg-theme-bg-primary/80 backdrop-blur-sm text-theme-text-secondary text-xs rounded-md px-2 py-1 pointer-events-auto hover:bg-theme-bg-secondary transition-colors" title="Ajustar escala del lienzo">{dimensionDisplay}</button>}
                                 <button
                                     onClick={() => setIsPalmRejectionEnabled(prev => !prev)}
-                                    className={`bg-[--bg-primary]/80 backdrop-blur-sm text-xs rounded-md px-2 py-1 pointer-events-auto hover:bg-[--bg-secondary] transition-colors flex items-center gap-1 ${isPalmRejectionEnabled ? 'text-[--accent-primary] font-bold' : 'text-[--text-secondary]'}`}
+                                    className={`bg-theme-bg-primary/80 backdrop-blur-sm text-xs rounded-md px-2 py-1 pointer-events-auto hover:bg-theme-bg-secondary transition-colors flex items-center gap-1 ${isPalmRejectionEnabled ? 'text-theme-accent-primary font-bold' : 'text-theme-text-secondary'}`}
                                     title={isPalmRejectionEnabled ? "Rechazo de Palma: ACTIVADO (Solo Lápiz)" : "Rechazo de Palma: DESACTIVADO (Lápiz y Dedo)"}
                                 >
                                     <HandRaisedIcon className="w-4 h-4" />
@@ -1649,7 +1649,7 @@ export function App() {
                     )}
                 </main>
                 {activeView === 'sketch' && ui.isRightSidebarVisible && (
-                    <aside ref={ui.rightSidebarRef} className={`flex-shrink-0 w-80 border-l border-[--bg-tertiary] flex flex-col ${aiPanelState.isOpen ? 'z-50' : ''}`}>
+                    <aside ref={ui.rightSidebarRef} className={`flex-shrink-0 w-80 border-l border-theme-bg-tertiary flex flex-col ${aiPanelState.isOpen ? 'z-50' : ''}`}>
                         <div style={{ height: ui.rightSidebarTopHeight }} className="flex-shrink-0">
                             <Outliner
                                 items={objects} activeItemId={activeItemId} onAddItem={addItem} onCopyItem={copyItem} onDeleteItem={deleteItem} onSelectItem={handleSelectItem}
@@ -1660,13 +1660,13 @@ export function App() {
                                 onAddObjectAbove={handleAddObjectAbove} onAddObjectBelow={handleAddObjectBelow}
                             />
                         </div>
-                        <div onPointerDown={ui.handlePointerDownResize} className="flex-shrink-0 h-1.5 bg-[--bg-secondary] hover:bg-[--accent-primary] transition-colors cursor-ns-resize" />
+                        <div onPointerDown={ui.handlePointerDownResize} className="flex-shrink-0 h-1.5 bg-theme-bg-secondary hover:bg-theme-accent-primary transition-colors cursor-ns-resize" />
                         <div className="flex-grow min-h-0">
                             <Library user={user} items={library.libraryItems} onImportImage={library.onImportToLibrary} onCreateFolder={library.onCreateFolder} onEditItem={library.onEditTransparency} onDeleteItem={library.onDeleteLibraryItem} onAddItemToScene={(id) => onDropOnCanvas({ type: 'library-item', id }, activeItemId, setSelectedItemIds)} onMoveItems={library.onMoveItems} />
                         </div>
                     </aside>
                 )}
-                <button onClick={() => ui.setIsRightSidebarVisible(!ui.isRightSidebarVisible)} className="absolute top-1/2 -translate-y-1/2 bg-[--bg-secondary] p-2 rounded-full shadow-xl z-40 border border-[--bg-tertiary] hover:bg-[--bg-tertiary] transition-all" style={{ right: ui.isRightSidebarVisible ? '20.25rem' : '0.25rem' }} title={ui.isRightSidebarVisible ? 'Ocultar paneles' : 'Mostrar paneles'}>
+                <button onClick={() => ui.setIsRightSidebarVisible(!ui.isRightSidebarVisible)} className="absolute top-1/2 -translate-y-1/2 bg-theme-bg-secondary p-2 rounded-full shadow-xl z-40 border border-theme-bg-tertiary hover:bg-theme-bg-tertiary transition-all" style={{ right: ui.isRightSidebarVisible ? '20.25rem' : '0.25rem' }} title={ui.isRightSidebarVisible ? 'Ocultar paneles' : 'Mostrar paneles'}>
 
                     {ui.isRightSidebarVisible ? <ChevronRightIcon className="w-5 h-5" /> : <ChevronLeftIcon className="w-5 h-5" />}
                 </button>
@@ -1707,39 +1707,39 @@ const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({ isOpen, onClo
     if (!isOpen) return null;
     return (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-            <div className="bg-[--bg-secondary] text-[--text-primary] rounded-lg shadow-xl p-6 w-full max-w-4xl h-full max-h-[90vh] flex flex-col">
+            <div className="bg-theme-bg-secondary text-theme-text-primary rounded-lg shadow-xl p-6 w-full max-w-4xl h-full max-h-[90vh] flex flex-col">
                 <div className="flex justify-between items-center mb-4 flex-shrink-0">
                     <h2 className="text-2xl font-bold">Galería de Proyectos</h2>
                     {isSavingLocal ? (
                         <div className="flex items-center gap-2">
-                            <input ref={localSaveInputRef} type="text" value={localFileName} onChange={(e) => setLocalFileName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmSaveLocal(); if (e.key === 'Escape') handleCancelSaveLocal(); }} placeholder="Nombre del archivo..." className="bg-[--bg-secondary] text-[--text-primary] text-sm rounded-md p-2 border border-[--bg-tertiary] focus:ring-1 focus:ring-[--accent-primary] focus:outline-none" />
-                            <button onClick={handleConfirmSaveLocal} className="px-4 py-2 rounded-md bg-[--accent-primary] hover:bg-[--accent-hover] text-white font-semibold">Guardar</button>
-                            <button onClick={handleCancelSaveLocal} className="px-4 py-2 rounded-md bg-[--bg-tertiary] hover:bg-[--bg-hover]">Cancelar</button>
+                            <input ref={localSaveInputRef} type="text" value={localFileName} onChange={(e) => setLocalFileName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmSaveLocal(); if (e.key === 'Escape') handleCancelSaveLocal(); }} placeholder="Nombre del archivo..." className="bg-theme-bg-secondary text-theme-text-primary text-sm rounded-md p-2 border border-theme-bg-tertiary focus:ring-1 focus:ring-theme-accent-primary focus:outline-none" />
+                            <button onClick={handleConfirmSaveLocal} className="px-4 py-2 rounded-md bg-theme-accent-primary hover:bg-theme-accent-hover text-white font-semibold">Guardar</button>
+                            <button onClick={handleCancelSaveLocal} className="px-4 py-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover">Cancelar</button>
                         </div>
                     ) : (
                         <div className="flex items-center gap-2">
                             <input type="file" ref={fileInputRef} className="hidden" accept=".sketcher,application/json" onChange={handleFileSelected} />
-                            <button onClick={handleFileLoadClick} className="flex items-center gap-2 px-4 py-2 rounded-md bg-[--bg-tertiary] hover:bg-[--bg-hover] font-semibold"> <FolderOpenIcon className="w-5 h-5" /> <span>Cargar desde Archivo</span> </button>
-                            <button onClick={handleHeaderSaveLocalClick} className="flex items-center gap-2 px-4 py-2 rounded-md bg-[--bg-tertiary] hover:bg-[--bg-hover] font-semibold"> <SaveIcon className="w-5 h-5" /> <span>Guardar Local</span> </button>
-                            <button onClick={onClose} className="p-2 rounded-full hover:bg-[--bg-tertiary]"> <XIcon className="w-6 h-6" /> </button>
+                            <button onClick={handleFileLoadClick} className="flex items-center gap-2 px-4 py-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover font-semibold"> <FolderOpenIcon className="w-5 h-5" /> <span>Cargar desde Archivo</span> </button>
+                            <button onClick={handleHeaderSaveLocalClick} className="flex items-center gap-2 px-4 py-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover font-semibold"> <SaveIcon className="w-5 h-5" /> <span>Guardar Local</span> </button>
+                            <button onClick={onClose} className="p-2 rounded-full hover:bg-theme-bg-tertiary"> <XIcon className="w-6 h-6" /> </button>
                         </div>
                     )}
                 </div>
-                {!user ? (<div className="flex-grow flex flex-col items-center justify-center text-center text-[--text-secondary]"> <UserIcon className="w-16 h-16 mb-4" /> <h3 className="text-xl font-bold">Por favor, inicie sesión</h3> <p>Inicie sesión para guardar y cargar sus proyectos en la nube.</p> </div>
+                {!user ? (<div className="flex-grow flex flex-col items-center justify-center text-center text-theme-text-secondary"> <UserIcon className="w-16 h-16 mb-4" /> <h3 className="text-xl font-bold">Por favor, inicie sesión</h3> <p>Inicie sesión para guardar y cargar sus proyectos en la nube.</p> </div>
                 ) : (<>
-                    <div className="bg-[--bg-primary] p-4 rounded-lg mb-4 flex-shrink-0">
+                    <div className="bg-theme-bg-primary p-4 rounded-lg mb-4 flex-shrink-0">
                         <h3 className="text-lg font-semibold mb-2">Guardar Lienzo Actual</h3>
                         <div className="flex items-center gap-2">
-                            <input type="text" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="Nombre del nuevo proyecto..." className="flex-grow bg-[--bg-secondary] text-[--text-primary] text-sm rounded-md p-2 border border-[--bg-tertiary] focus:ring-1 focus:ring-[--accent-primary] focus:outline-none" disabled={isSaving} />
-                            <button onClick={handleSave} disabled={!newProjectName.trim() || isSaving || !user} className="px-4 py-2 rounded-md bg-[--accent-primary] hover:bg-[--accent-hover] text-white font-semibold disabled:bg-gray-500 disabled:cursor-not-allowed" title={!user ? "Inicie sesión para guardar en la nube" : ""}> {isSaving ? 'Guardando...' : 'Guardar en la Nube'} </button>
+                            <input type="text" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="Nombre del nuevo proyecto..." className="flex-grow bg-theme-bg-secondary text-theme-text-primary text-sm rounded-md p-2 border border-theme-bg-tertiary focus:ring-1 focus:ring-theme-accent-primary focus:outline-none" disabled={isSaving} />
+                            <button onClick={handleSave} disabled={!newProjectName.trim() || isSaving || !user} className="px-4 py-2 rounded-md bg-theme-accent-primary hover:bg-theme-accent-hover text-white font-semibold disabled:bg-gray-500 disabled:cursor-not-allowed" title={!user ? "Inicie sesión para guardar en la nube" : ""}> {isSaving ? 'Guardando...' : 'Guardar en la Nube'} </button>
                         </div>
                     </div>
                     <div className="flex-grow overflow-y-auto pr-2">
-                        {isLoading ? <div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-4 border-[--accent-primary] border-t-transparent rounded-full animate-spin"></div></div>
-                            : projects.length === 0 ? <div className="text-center text-[--text-secondary] py-16"> <p>No se encontraron proyectos guardados.</p> <p className="text-sm">¡Guarda tu lienzo actual para empezar!</p> </div>
+                        {isLoading ? <div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-4 border-theme-accent-primary border-t-transparent rounded-full animate-spin"></div></div>
+                            : projects.length === 0 ? <div className="text-center text-theme-text-secondary py-16"> <p>No se encontraron proyectos guardados.</p> <p className="text-sm">¡Guarda tu lienzo actual para empezar!</p> </div>
                                 : <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                                     {projects.map(p => (
-                                        <div key={p.id} className="group relative bg-[--bg-tertiary] rounded-lg overflow-hidden shadow-md">
+                                        <div key={p.id} className="group relative bg-theme-bg-tertiary rounded-lg overflow-hidden shadow-md">
                                             <div className="aspect-video bg-white/10 flex items-center justify-center"><img src={p.thumbnailUrl} alt={p.name} className="w-full h-full object-cover" /></div>
                                             <div className="p-2"><p className="font-semibold text-sm truncate">{p.name}</p></div>
                                             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
@@ -1754,7 +1754,7 @@ const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({ isOpen, onClo
                 </>
                 )}
             </div>
-            {deletingProject && <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"> <div className="bg-[--bg-secondary] rounded-lg p-6 shadow-xl"> <h3 className="text-lg font-bold">Confirmar Eliminación</h3> <p className="my-2 text-[--text-secondary]">¿Estás seguro de que quieres eliminar "{deletingProject.name}"? Esta acción no se puede deshacer.</p> <div className="flex justify-end gap-4 mt-4"> <button onClick={() => setDeletingProject(null)} className="px-4 py-2 rounded-md bg-[--bg-tertiary] hover:bg-[--bg-hover]">Cancelar</button> <button onClick={handleDeleteConfirm} className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-500 text-white">Eliminar</button> </div> </div> </div>}
+            {deletingProject && <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"> <div className="bg-theme-bg-secondary rounded-lg p-6 shadow-xl"> <h3 className="text-lg font-bold">Confirmar Eliminación</h3> <p className="my-2 text-theme-text-secondary">¿Estás seguro de que quieres eliminar "{deletingProject.name}"? Esta acción no se puede deshacer.</p> <div className="flex justify-end gap-4 mt-4"> <button onClick={() => setDeletingProject(null)} className="px-4 py-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover">Cancelar</button> <button onClick={handleDeleteConfirm} className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-500 text-white">Eliminar</button> </div> </div> </div>}
         </div>
     );
 };
@@ -1775,13 +1775,13 @@ const ScalePopover: React.FC<{ isOpen: boolean; onClose: () => void; anchorEl: H
     if (!isOpen || !anchorEl) return null;
     const rect = anchorEl.getBoundingClientRect();
     return (
-        <div ref={popoverRef} className="absolute z-20 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg p-3 space-y-3" style={{ top: rect.bottom + 8, left: rect.left }} >
-            <p className="text-xs font-bold text-[--text-secondary]">Ajustes de Escala</p>
+        <div ref={popoverRef} className="absolute z-20 bg-theme-bg-primary border border-theme-bg-tertiary rounded-lg shadow-lg p-3 space-y-3" style={{ top: rect.bottom + 8, left: rect.left }} >
+            <p className="text-xs font-bold text-theme-text-secondary">Ajustes de Escala</p>
             <div className="flex items-center gap-2">
                 <span className="text-sm">1</span>
-                <select value={scaleUnit} onChange={(e) => handleUnitChange(e.target.value as ScaleUnit)} className="bg-[--bg-tertiary] text-sm rounded-md p-1 border border-[--bg-hover]"> <option value="mm">mm</option> <option value="cm">cm</option> <option value="m">m</option> </select>
+                <select value={scaleUnit} onChange={(e) => handleUnitChange(e.target.value as ScaleUnit)} className="bg-theme-bg-tertiary text-sm rounded-md p-1 border border-theme-bg-hover"> <option value="mm">mm</option> <option value="cm">cm</option> <option value="m">m</option> </select>
                 <span className="text-sm">=</span>
-                <input type="number" value={inputValue} onChange={handleInputChange} className="w-24 bg-[--bg-secondary] text-sm rounded-md p-1 border border-[--bg-tertiary]" />
+                <input type="number" value={inputValue} onChange={handleInputChange} className="w-24 bg-theme-bg-secondary text-sm rounded-md p-1 border border-theme-bg-tertiary" />
                 <span className="text-sm">px</span>
             </div>
         </div>

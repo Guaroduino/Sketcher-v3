@@ -148,8 +148,8 @@ export const Outliner: React.FC<OutlinerProps> = ({
 
     const getBgColor = () => {
         if (isDragOver && dragOverPosition === 'middle' && isObject) return 'bg-red-700';
-        if (isActive) return 'bg-[--accent-hover]';
-        return 'bg-[--bg-secondary] hover:bg-[--bg-tertiary]';
+        if (isActive) return 'bg-theme-accent-hover';
+        return 'bg-theme-bg-secondary hover:bg-theme-bg-tertiary';
     }
 
     return (
@@ -164,12 +164,12 @@ export const Outliner: React.FC<OutlinerProps> = ({
         className={`group relative p-2 rounded-lg transition-colors duration-100 ${getBgColor()}`}
         style={{ marginLeft: `${depth * 16}px` }}
       >
-        {isDragOver && dragOverPosition === 'top' && <div className="absolute top-0 left-0 right-0 h-0.5 bg-[--accent-primary] z-10" />}
-        {isDragOver && dragOverPosition === 'bottom' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[--accent-primary] z-10" />}
+        {isDragOver && dragOverPosition === 'top' && <div className="absolute top-0 left-0 right-0 h-0.5 bg-theme-accent-primary z-10" />}
+        {isDragOver && dragOverPosition === 'bottom' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-theme-accent-primary z-10" />}
         
         <div className="flex items-center justify-between">
           <div className="flex items-center flex-grow min-w-0">
-             <span className="flex-shrink-0 cursor-grab text-[--text-secondary] hover:text-[--text-primary] mr-2">
+             <span className="flex-shrink-0 cursor-grab text-theme-text-secondary hover:text-theme-text-primary mr-2">
                 <MoreVerticalIcon className="w-5 h-5"/>
             </span>
             {isGroup && <FolderIcon className="w-4 h-4 mr-2 text-red-400 flex-shrink-0" />}
@@ -203,7 +203,7 @@ export const Outliner: React.FC<OutlinerProps> = ({
                     e.stopPropagation();
                     onDeleteItem(item.id);
                 }}
-                className="p-1 text-[--text-secondary] hover:text-red-500"
+                className="p-1 text-theme-text-secondary hover:text-red-500"
                 >
                 <TrashIcon className="w-4 h-4" />
                 </button>
@@ -213,7 +213,7 @@ export const Outliner: React.FC<OutlinerProps> = ({
         {isActive && (item.type === 'object') && (
             <div className="mt-2 space-y-2">
                 <div>
-                    <label htmlFor={`opacity-${item.id}`} className="text-xs text-[--text-secondary]">Opacidad</label>
+                    <label htmlFor={`opacity-${item.id}`} className="text-xs text-theme-text-secondary">Opacidad</label>
                     <input
                         id={`opacity-${item.id}`}
                         type="range"
@@ -222,49 +222,49 @@ export const Outliner: React.FC<OutlinerProps> = ({
                         value={item.opacity * 100}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => onUpdateItem(item.id, { opacity: parseInt(e.target.value, 10) / 100 })}
-                        className="w-full h-1 bg-[--bg-tertiary] rounded-lg appearance-none cursor-pointer"
+                        className="w-full h-1 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer"
                     />
                 </div>
-                 <div className="flex items-center flex-wrap gap-1 border-t border-[--bg-tertiary] pt-2">
+                 <div className="flex items-center flex-wrap gap-1 border-t border-theme-bg-tertiary pt-2">
                     <button
                         onClick={(e) => { e.stopPropagation(); onMoveItemUpDown(item.id, 'up'); }}
                         disabled={!activeItemState.canMoveUp}
-                        className="p-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Mover arriba">
+                        className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed" title="Mover arriba">
                         <ArrowUpIcon className="w-3.5 h-3.5" />
                     </button>
                     <button
                         onClick={(e) => { e.stopPropagation(); onMoveItemUpDown(item.id, 'down'); }}
                         disabled={!activeItemState.canMoveDown}
-                        className="p-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Mover abajo">
+                        className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed" title="Mover abajo">
                         <ArrowDownIcon className="w-3.5 h-3.5" />
                     </button>
                     {isObject && (
                         <>
-                            <div className="w-px h-3.5 bg-[--bg-tertiary] mx-0.5" />
+                            <div className="w-px h-3.5 bg-theme-bg-tertiary mx-0.5" />
 
                             <button
                                 onClick={(e) => { e.stopPropagation(); onAddObjectAbove(item.id); }}
-                                className="p-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover]" title="Añadir objeto arriba">
+                                className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover" title="Añadir objeto arriba">
                                 <AddAboveIcon className="w-3.5 h-3.5" />
                             </button>
                             <button
                                 onClick={(e) => { e.stopPropagation(); onAddObjectBelow(item.id); }}
-                                className="p-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover]" title="Añadir objeto abajo">
+                                className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover" title="Añadir objeto abajo">
                                 <AddBelowIcon className="w-3.5 h-3.5" />
                             </button>
 
-                            <div className="w-px h-3.5 bg-[--bg-tertiary] mx-0.5" />
+                            <div className="w-px h-3.5 bg-theme-bg-tertiary mx-0.5" />
 
                             <button
                                 onClick={(e) => { e.stopPropagation(); onMergeItemUp(item.id); }}
                                 disabled={!activeItemState.canMergeUp}
-                                className="p-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Combinar arriba">
+                                className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed" title="Combinar arriba">
                                 <MergeUpIcon className="w-3.5 h-3.5" />
                             </button>
                             <button
                                 onClick={(e) => { e.stopPropagation(); onMergeItemDown(item.id); }}
                                 disabled={!activeItemState.canMergeDown}
-                                className="p-1 rounded bg-[--bg-tertiary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Combinar abajo">
+                                className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed" title="Combinar abajo">
                                 <MergeIcon className="w-3.5 h-3.5" />
                             </button>
                         </>
@@ -287,17 +287,17 @@ export const Outliner: React.FC<OutlinerProps> = ({
   };
 
   return (
-    <div className="bg-[--bg-primary] text-[--text-primary] p-4 flex flex-col h-full">
+    <div className="bg-theme-bg-primary text-theme-text-primary p-4 flex flex-col h-full">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center">
-          <LayersIcon className="w-5 h-5 mr-2 text-[--text-secondary]" />
-          <h3 className="text-sm font-bold uppercase text-[--text-secondary]">Outliner</h3>
+          <LayersIcon className="w-5 h-5 mr-2 text-theme-text-secondary" />
+          <h3 className="text-sm font-bold uppercase text-theme-text-secondary">Outliner</h3>
         </div>
         <div className="flex items-center space-x-1">
            <button
             onClick={onExportItem}
             disabled={!activeItemId || !!items.find(i => i.id === activeItemId && i.type === 'object' && i.isBackground)}
-            className="p-2 rounded-md hover:bg-[--bg-tertiary] disabled:text-gray-600 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            className="p-2 rounded-md hover:bg-theme-bg-tertiary disabled:text-gray-600 disabled:cursor-not-allowed disabled:hover:bg-transparent"
             title="Exportar objeto seleccionado"
           >
             <ExportIcon className="w-5 h-5" />
@@ -305,19 +305,19 @@ export const Outliner: React.FC<OutlinerProps> = ({
            <button
             onClick={() => activeItemId && onCopyItem(activeItemId)}
             disabled={!activeItemId || !!items.find(i => i.id === activeItemId && i.type === 'object' && i.isBackground)}
-            className="p-2 rounded-md hover:bg-[--bg-tertiary] disabled:text-gray-600 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            className="p-2 rounded-md hover:bg-theme-bg-tertiary disabled:text-gray-600 disabled:cursor-not-allowed disabled:hover:bg-transparent"
             title="Duplicar objeto seleccionado"
           >
             <CopyIcon className="w-5 h-5" />
           </button>
           <div className="relative" ref={addMenuRef}>
-            <button onClick={() => setAddMenuOpen(!isAddMenuOpen)} className="p-2 rounded-md hover:bg-[--bg-tertiary]">
+            <button onClick={() => setAddMenuOpen(!isAddMenuOpen)} className="p-2 rounded-md hover:bg-theme-bg-tertiary">
               <PlusIcon className="w-5 h-5" />
             </button>
             {isAddMenuOpen && (
-              <div className="absolute right-0 mt-2 w-40 bg-[--bg-tertiary] rounded-md shadow-lg z-10">
-                <button onClick={() => { onAddItem('group'); setAddMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-[--text-primary] hover:bg-[--bg-hover]">Nueva Carpeta</button>
-                <button onClick={() => { onAddItem('object'); setAddMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-[--text-primary] hover:bg-[--bg-hover]">Nuevo Objeto</button>
+              <div className="absolute right-0 mt-2 w-40 bg-theme-bg-tertiary rounded-md shadow-lg z-10">
+                <button onClick={() => { onAddItem('group'); setAddMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-theme-text-primary hover:bg-theme-bg-hover">Nueva Carpeta</button>
+                <button onClick={() => { onAddItem('object'); setAddMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-theme-text-primary hover:bg-theme-bg-hover">Nuevo Objeto</button>
               </div>
             )}
           </div>
@@ -328,8 +328,8 @@ export const Outliner: React.FC<OutlinerProps> = ({
       </div>
 
       {/* Canvas Controls */}
-      <div className="flex-shrink-0 border-t border-[--bg-tertiary] mt-4 pt-4">
-        <h3 className="text-sm font-bold uppercase text-[--text-secondary] mb-3">Canvas</h3>
+      <div className="flex-shrink-0 border-t border-theme-bg-tertiary mt-4 pt-4">
+        <h3 className="text-sm font-bold uppercase text-theme-text-secondary mb-3">Canvas</h3>
         <div className="space-y-2">
             <div className="flex items-center space-x-2">
                  <input
@@ -337,12 +337,12 @@ export const Outliner: React.FC<OutlinerProps> = ({
                     id="canvas-color"
                     value={(backgroundObject?.type === 'object' && backgroundObject.color) || '#FFFFFF'}
                     onChange={(e) => onUpdateBackground({ color: e.target.value })}
-                    className="w-10 h-10 p-0.5 bg-[--bg-tertiary] border border-[--bg-hover] rounded-md cursor-pointer flex-shrink-0"
+                    className="w-10 h-10 p-0.5 bg-theme-bg-tertiary border border-theme-bg-hover rounded-md cursor-pointer flex-shrink-0"
                     title="Color de fondo"
                 />
                 <button
                     onDoubleClick={onOpenCanvasSizeModal}
-                    className="h-10 px-3 rounded-lg bg-[--bg-tertiary] hover:bg-[--bg-hover] cursor-pointer text-[--text-secondary] text-sm flex-grow"
+                    className="h-10 px-3 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover cursor-pointer text-theme-text-secondary text-sm flex-grow"
                     title="Tamaño del lienzo (doble clic)"
                 >
                     Personalizado
@@ -350,13 +350,13 @@ export const Outliner: React.FC<OutlinerProps> = ({
                 {backgroundObject && (
                   <button
                       onClick={() => onUpdateItem(backgroundObject.id, { isVisible: !backgroundObject.isVisible })}
-                      className="h-10 w-10 flex-shrink-0 p-2 rounded-lg bg-[--bg-tertiary] hover:bg-[--bg-hover] cursor-pointer text-[--text-secondary]"
+                      className="h-10 w-10 flex-shrink-0 p-2 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover cursor-pointer text-theme-text-secondary"
                       title={backgroundObject.isVisible ? "Ocultar fondo" : "Mostrar fondo"}
                   >
                       {backgroundObject.isVisible ? <EyeOpenIcon className="w-5 h-5" /> : <EyeClosedIcon className="w-5 h-5" />}
                   </button>
                 )}
-                <label htmlFor="canvas-image-upload" className="h-10 w-10 flex items-center justify-center p-2 rounded-lg bg-[--bg-tertiary] hover:bg-[--bg-hover] cursor-pointer text-[--text-secondary] flex-shrink-0" title="Importar imagen de fondo">
+                <label htmlFor="canvas-image-upload" className="h-10 w-10 flex items-center justify-center p-2 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover cursor-pointer text-theme-text-secondary flex-shrink-0" title="Importar imagen de fondo">
                     <UploadIcon className="w-5 h-5" />
                 </label>
                 <input

@@ -181,7 +181,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
   }, [activeGuide, isOrthogonalVisible, gridGuide]);
 
   const toolButtonClasses = (t: Tool) =>
-    `p-2 rounded-md transition-colors ${tool === t ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'
+    `p-2 rounded-md transition-colors ${tool === t ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'
     }`;
 
   return (
@@ -191,17 +191,17 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
 
       {/* Grid Settings Menu - Rendered OUTSIDE the overflow container */}
       {isGridSettingsOpen && gridGuide && (
-        <div ref={gridSettingsRef} onClick={(e) => e.stopPropagation()} className="mb-2 w-72 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg p-3 space-y-3 z-50">
+        <div ref={gridSettingsRef} onClick={(e) => e.stopPropagation()} className="mb-2 w-72 bg-theme-bg-primary border border-theme-bg-tertiary rounded-lg shadow-lg p-3 space-y-3 z-50">
           <div className="grid grid-cols-3 gap-2">
-            <button onClick={() => onSetGridType('none')} className={`text-xs p-2 rounded ${gridGuide.type === 'none' ? 'bg-red-500 text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Apagado</button>
-            <button onClick={() => onSetGridType('cartesian')} className={`flex items-center justify-center gap-1 text-xs p-2 rounded ${gridGuide.type === 'cartesian' ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}><GridIcon className="w-4 h-4" /> Cartesiana</button>
-            <button onClick={() => onSetGridType('isometric')} className={`flex items-center justify-center gap-1 text-xs p-2 rounded ${gridGuide.type === 'isometric' ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}><IsometricIcon className="w-4 h-4" /> Isométrica</button>
+            <button onClick={() => onSetGridType('none')} className={`text-xs p-2 rounded ${gridGuide.type === 'none' ? 'bg-red-500 text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>Apagado</button>
+            <button onClick={() => onSetGridType('cartesian')} className={`flex items-center justify-center gap-1 text-xs p-2 rounded ${gridGuide.type === 'cartesian' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}><GridIcon className="w-4 h-4" /> Cartesiana</button>
+            <button onClick={() => onSetGridType('isometric')} className={`flex items-center justify-center gap-1 text-xs p-2 rounded ${gridGuide.type === 'isometric' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}><IsometricIcon className="w-4 h-4" /> Isométrica</button>
           </div>
 
           {gridGuide.type !== 'none' && (
             <>
               <div>
-                <label className="text-xs text-[--text-secondary]">Color de Línea Principal</label>
+                <label className="text-xs text-theme-text-secondary">Color de Línea Principal</label>
                 <div className="flex items-center gap-2 mt-1">
                   {majorLineColors.map(color => (
                     <button
@@ -209,7 +209,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                       title={color.name}
                       onClick={() => onSetGridMajorLineColor(color.value)}
                       className={`w-6 h-6 rounded-full border-2 transition-all ${gridGuide.majorLineColor === color.value
-                        ? 'border-[--accent-primary] ring-2 ring-offset-2 ring-offset-[--bg-primary] ring-[--accent-primary]'
+                        ? 'border-theme-accent-primary ring-2 ring-offset-2 ring-offset-theme-bg-primary ring-theme-accent-primary'
                         : 'border-transparent hover:border-gray-400'
                         }`}
                       style={{ backgroundColor: color.value.replace(/, 0.6\)$/, ', 1)') }}
@@ -218,7 +218,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                 </div>
               </div>
               <div>
-                <label className="text-xs text-[--text-secondary]">Color de Línea Fina</label>
+                <label className="text-xs text-theme-text-secondary">Color de Línea Fina</label>
                 <div className="flex items-center gap-2 mt-1">
                   {minorLineColors.map(color => (
                     <button
@@ -226,7 +226,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                       title={color.name}
                       onClick={() => onSetGridMinorLineColor(color.value)}
                       className={`w-6 h-6 rounded-full border-2 transition-all ${gridGuide.minorLineColor === color.value
-                        ? 'border-[--accent-primary] ring-2 ring-offset-2 ring-offset-[--bg-primary] ring-[--accent-primary]'
+                        ? 'border-theme-accent-primary ring-2 ring-offset-2 ring-offset-theme-bg-primary ring-theme-accent-primary'
                         : 'border-transparent hover:border-gray-400'
                         }`}
                       style={{ backgroundColor: color.value.replace(/, 0.3\)$/, ', 1)') }}
@@ -234,9 +234,9 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                   ))}
                 </div>
               </div>
-              <div className="border-t border-[--bg-tertiary] my-2" />
+              <div className="border-t border-theme-bg-tertiary my-2" />
               <div>
-                <label htmlFor="grid-spacing" className="text-xs text-[--text-secondary]">
+                <label htmlFor="grid-spacing" className="text-xs text-theme-text-secondary">
                   Espaciado: {gridSpacingDisplay}
                 </label>
                 <input
@@ -252,7 +252,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                 />
               </div>
               <div>
-                <label htmlFor="major-line-freq" className="text-xs text-[--text-secondary]">Línea principal cada: {majorLineFrequency}</label>
+                <label htmlFor="major-line-freq" className="text-xs text-theme-text-secondary">Línea principal cada: {majorLineFrequency}</label>
                 <input
                   type="range"
                   id="major-line-freq"
@@ -267,7 +267,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
               </div>
               {gridGuide.type === 'isometric' && (
                 <div>
-                  <label className="text-xs text-[--text-secondary]">Ángulo: 60°</label>
+                  <label className="text-xs text-theme-text-secondary">Ángulo: 60°</label>
                   {/* The angle is now fixed to 60 degrees as requested */}
                 </div>
               )}
@@ -277,7 +277,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
       )}
 
       {/* Toolbar Scroll Container */}
-      <div className="bg-[--bg-primary]/80 backdrop-blur-sm rounded-lg p-1 flex items-center gap-1 shadow-lg overflow-x-auto scrollbar-hide max-w-full">
+      <div className="bg-theme-bg-primary/80 backdrop-blur-sm rounded-lg p-1 flex items-center gap-1 shadow-lg overflow-x-auto scrollbar-hide max-w-full">
         {/* Main action buttons for crop/transform */}
         {(isCropping || isTransforming) && (
           <>
@@ -287,27 +287,27 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             <button onClick={isCropping ? onApplyCrop : onApplyTransform} className="p-2 rounded-md bg-green-600 text-white hover:bg-green-500 transition-colors" title="Aplicar">
               <CheckIcon className="w-5 h-5" />
             </button>
-            <div className="w-px h-6 bg-[--bg-hover] mx-1" />
+            <div className="w-px h-6 bg-theme-bg-hover mx-1" />
           </>
         )}
 
         {/* Transform specific controls */}
         {isTransforming && transformState?.type === 'affine' && (
           <>
-            <button onClick={() => onSetAspectRatioLocked(p => !p)} className={`p-2 rounded-md transition-colors ${isAspectRatioLocked ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'}`} title={isAspectRatioLocked ? "Desbloquear relación de aspecto" : "Bloquear relación de aspecto"}>
+            <button onClick={() => onSetAspectRatioLocked(p => !p)} className={`p-2 rounded-md transition-colors ${isAspectRatioLocked ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'}`} title={isAspectRatioLocked ? "Desbloquear relación de aspecto" : "Bloquear relación de aspecto"}>
               {isAspectRatioLocked ? <LockIcon className="w-5 h-5" /> : <LockOpenIcon className="w-5 h-5" />}
             </button>
-            <button onClick={onToggleAngleSnap} className={`p-2 rounded-md transition-colors ${isAngleSnapEnabled ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'}`} title="Activar anclaje de ángulo">
+            <button onClick={onToggleAngleSnap} className={`p-2 rounded-md transition-colors ${isAngleSnapEnabled ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'}`} title="Activar anclaje de ángulo">
               <SnapIcon className="w-5 h-5" />
             </button>
             {isAngleSnapEnabled && (
               <>
-                <div className="w-px h-6 bg-[--bg-hover] mx-1" />
+                <div className="w-px h-6 bg-theme-bg-hover mx-1" />
                 {[1, 5, 10, 15].map(val => (
                   <button
                     key={val}
                     onClick={() => onSetAngleSnapValue(val as 1 | 5 | 10 | 15)}
-                    className={`px-2 py-1 rounded-md text-xs font-semibold transition-colors ${angleSnapValue === val ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'}`}
+                    className={`px-2 py-1 rounded-md text-xs font-semibold transition-colors ${angleSnapValue === val ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'}`}
                     title={`Anclar a ${val}°`}
                   >
                     {val}°
@@ -326,33 +326,33 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
               <HandIcon className="w-5 h-5" />
             </button>
 
-            <div className="w-px h-6 bg-[--bg-hover] mx-1" />
+            <div className="w-px h-6 bg-theme-bg-hover mx-1" />
 
             {/* Zoom buttons */}
-            <button onClick={onZoomOut} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Alejar">
+            <button onClick={onZoomOut} className="p-2 rounded-md bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover" title="Alejar">
               <ZoomOutIcon className="w-5 h-5" />
             </button>
-            <button onClick={onZoomIn} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Acercar">
+            <button onClick={onZoomIn} className="p-2 rounded-md bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover" title="Acercar">
               <ZoomInIcon className="w-5 h-5" />
             </button>
-            <button onClick={onZoomExtents} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Ajustar a la vista">
+            <button onClick={onZoomExtents} className="p-2 rounded-md bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover" title="Ajustar a la vista">
               <CrosshairIcon className="w-5 h-5" />
             </button>
 
-            <div className="w-px h-6 bg-[--bg-hover] mx-1" />
+            <div className="w-px h-6 bg-theme-bg-hover mx-1" />
 
             {/* History buttons */}
-            <button onClick={onUndo} disabled={!canUndo} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Deshacer">
+            <button onClick={onUndo} disabled={!canUndo} className="p-2 rounded-md bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed" title="Deshacer">
               <UndoIcon className="w-5 h-5" />
             </button>
-            <button onClick={onRedo} disabled={!canRedo} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Rehacer">
+            <button onClick={onRedo} disabled={!canRedo} className="p-2 rounded-md bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed" title="Rehacer">
               <RedoIcon className="w-5 h-5" />
             </button>
-            <button onClick={onPaste} disabled={!hasClipboardContent} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Pegar">
+            <button onClick={onPaste} disabled={!hasClipboardContent} className="p-2 rounded-md bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed" title="Pegar">
               <PasteIcon className="w-5 h-5" />
             </button>
 
-            <div className="w-px h-6 bg-[--bg-hover] mx-1" />
+            <div className="w-px h-6 bg-theme-bg-hover mx-1" />
 
             {/* Stroke Smoothing Slider */}
             <div className="flex items-center gap-2 group" title={`Suavizado: ${Math.round(strokeSmoothing * 100)}%`}>
@@ -367,11 +367,11 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
               />
             </div>
 
-            <div className="w-px h-6 bg-[--bg-hover] mx-1" />
+            <div className="w-px h-6 bg-theme-bg-hover mx-1" />
 
             {/* Guide Lock */}
             {areAnyGuidesActive && (
-              <button onClick={() => onSetAreGuidesLocked(p => !p)} className={`p-2 rounded-md transition-colors ${areGuidesLocked ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'}`} title={areGuidesLocked ? "Desbloquear Guías" : "Bloquear Guías"}>
+              <button onClick={() => onSetAreGuidesLocked(p => !p)} className={`p-2 rounded-md transition-colors ${areGuidesLocked ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'}`} title={areGuidesLocked ? "Desbloquear Guías" : "Bloquear Guías"}>
                 {areGuidesLocked ? <LockIcon className="w-5 h-5" /> : <LockOpenIcon className="w-5 h-5" />}
               </button>
             )}
@@ -381,7 +381,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
               <button
                 ref={gridButtonRef}
                 onClick={() => setIsGridSettingsOpen(p => !p)}
-                className={`p-2 rounded-md transition-colors ${gridGuide && gridGuide.type !== 'none' ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'}`}
+                className={`p-2 rounded-md transition-colors ${gridGuide && gridGuide.type !== 'none' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'}`}
                 title="Ajustes de la Retícula"
               >
                 <GridIcon className="w-5 h-5" />
@@ -391,7 +391,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             <button
               onClick={onToggleSnapToGrid}
               disabled={!gridGuide || gridGuide.type === 'none'}
-              className={`p-2 rounded-md transition-colors ${isSnapToGridEnabled ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'} disabled:opacity-50 disabled:cursor-not-allowed`}
+              className={`p-2 rounded-md transition-colors ${isSnapToGridEnabled ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'} disabled:opacity-50 disabled:cursor-not-allowed`}
               title="Ajustar a la Retícula"
             >
               <SnapIcon className="w-5 h-5" />
@@ -399,18 +399,18 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
 
             {activeGuide === 'perspective' && (
               <>
-                <div className="w-px h-6 bg-[--bg-hover] mx-1" />
+                <div className="w-px h-6 bg-theme-bg-hover mx-1" />
                 <button
                   onClick={() => onSetIsPerspectiveStrokeLockEnabled(p => !p)}
-                  className={`p-2 rounded-md transition-colors ${isPerspectiveStrokeLockEnabled ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'}`}
+                  className={`p-2 rounded-md transition-colors ${isPerspectiveStrokeLockEnabled ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'}`}
                   title={isPerspectiveStrokeLockEnabled ? "Desactivar bloqueo de trazo a perspectiva" : "Activar bloqueo de trazo a perspectiva"}
                 >
                   <SnapIcon className="w-5 h-5" />
                 </button>
-                <div className="w-px h-6 bg-[--bg-hover] mx-1" />
+                <div className="w-px h-6 bg-theme-bg-hover mx-1" />
                 <button
                   onClick={onResetPerspective}
-                  className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover] transition-colors"
+                  className="p-2 rounded-md bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
                   title="Reiniciar Guías de Perspectiva"
                 >
                   <RefreshCwIcon className="w-5 h-5" />
@@ -420,10 +420,10 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
 
             {strokeMode === 'parallelepiped' && (
               <>
-                <div className="w-px h-6 bg-[--bg-hover] mx-1" />
+                <div className="w-px h-6 bg-theme-bg-hover mx-1" />
                 <button
                   onClick={() => setIsSolidBox(!isSolidBox)}
-                  className={`p-2 rounded-md transition-colors ${isSolidBox ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'}`}
+                  className={`p-2 rounded-md transition-colors ${isSolidBox ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'}`}
                   title={isSolidBox ? "Mostrar todos los lados" : "Ocultar lados traseros"}
                 >
                   <CubeIcon className="w-5 h-5" />
@@ -432,7 +432,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             )}
 
             {/* Other buttons */}
-            <button onClick={onClearAll} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Limpiar Lienzo">
+            <button onClick={onClearAll} className="p-2 rounded-md bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover" title="Limpiar Lienzo">
               <TrashIcon className="w-5 h-5" />
             </button>
           </>

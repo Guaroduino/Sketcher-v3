@@ -64,62 +64,62 @@ export const CanvasSizeModal: React.FC<CanvasSizeModalProps> = ({
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-            <div className="bg-[--bg-secondary] text-[--text-primary] rounded-lg shadow-xl p-6 w-full max-w-md flex flex-col space-y-6">
+            <div className="bg-theme-bg-secondary text-theme-text-primary rounded-lg shadow-xl p-6 w-full max-w-md flex flex-col space-y-6">
                 <div className="flex justify-between items-center">
                     <h2 className="text-xl font-bold">Tamaño del Lienzo</h2>
-                    <button onClick={onClose} className="p-1 rounded-full hover:bg-[--bg-tertiary]">
+                    <button onClick={onClose} className="p-1 rounded-full hover:bg-theme-bg-tertiary">
                         <XIcon className="w-6 h-6" />
                     </button>
                 </div>
 
                 <div>
-                    <h3 className="text-sm font-bold uppercase text-[--text-secondary] mb-2">Presets</h3>
+                    <h3 className="text-sm font-bold uppercase text-theme-text-secondary mb-2">Presets</h3>
                     <div className="grid grid-cols-3 gap-2">
-                        <button onClick={() => handlePreset('720p')} className="p-2 rounded-md bg-[--bg-tertiary] hover:bg-[--bg-hover] text-sm">720p</button>
-                        <button onClick={() => handlePreset('1080p')} className="p-2 rounded-md bg-[--bg-tertiary] hover:bg-[--bg-hover] text-sm">1080p</button>
-                        <button onClick={() => handlePreset('4K')} className="p-2 rounded-md bg-[--bg-tertiary] hover:bg-[--bg-hover] text-sm">2160p (4K)</button>
+                        <button onClick={() => handlePreset('720p')} className="p-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover text-sm">720p</button>
+                        <button onClick={() => handlePreset('1080p')} className="p-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover text-sm">1080p</button>
+                        <button onClick={() => handlePreset('4K')} className="p-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover text-sm">2160p (4K)</button>
                     </div>
                 </div>
 
                 <div>
-                    <h3 className="text-sm font-bold uppercase text-[--text-secondary] mb-2">Orientación</h3>
+                    <h3 className="text-sm font-bold uppercase text-theme-text-secondary mb-2">Orientación</h3>
                     <div className="grid grid-cols-2 gap-2">
-                        <button onClick={() => handleOrientation('horizontal')} className={`p-2 rounded-md text-sm transition-colors ${orientation === 'horizontal' ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Horizontal</button>
-                        <button onClick={() => handleOrientation('vertical')} className={`p-2 rounded-md text-sm transition-colors ${orientation === 'vertical' ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'}`}>Vertical</button>
+                        <button onClick={() => handleOrientation('horizontal')} className={`p-2 rounded-md text-sm transition-colors ${orientation === 'horizontal' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>Horizontal</button>
+                        <button onClick={() => handleOrientation('vertical')} className={`p-2 rounded-md text-sm transition-colors ${orientation === 'vertical' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>Vertical</button>
                     </div>
                 </div>
 
                 <div>
-                    <h3 className="text-sm font-bold uppercase text-[--text-secondary] mb-2">Personalizado</h3>
+                    <h3 className="text-sm font-bold uppercase text-theme-text-secondary mb-2">Personalizado</h3>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label htmlFor="canvas-width" className="block text-xs text-[--text-secondary] mb-1">Ancho</label>
+                            <label htmlFor="canvas-width" className="block text-xs text-theme-text-secondary mb-1">Ancho</label>
                             <input
                                 type="number"
                                 id="canvas-width"
                                 value={width}
                                 onChange={(e) => setWidth(Number(e.target.value))}
-                                className="w-full bg-[--bg-tertiary] text-[--text-primary] text-sm rounded-md p-2"
+                                className="w-full bg-theme-bg-tertiary text-theme-text-primary text-sm rounded-md p-2"
                             />
                         </div>
                         <div>
-                            <label htmlFor="canvas-height" className="block text-xs text-[--text-secondary] mb-1">Alto</label>
+                            <label htmlFor="canvas-height" className="block text-xs text-theme-text-secondary mb-1">Alto</label>
                             <input
                                 type="number"
                                 id="canvas-height"
                                 value={height}
                                 onChange={(e) => setHeight(Number(e.target.value))}
-                                className="w-full bg-[--bg-tertiary] text-[--text-primary] text-sm rounded-md p-2"
+                                className="w-full bg-theme-bg-tertiary text-theme-text-primary text-sm rounded-md p-2"
                             />
                         </div>
                     </div>
                 </div>
 
                 <div className="flex justify-end space-x-4 pt-2">
-                    <button onClick={onClose} className="px-6 py-2 rounded-md bg-[--bg-tertiary] hover:bg-[--bg-hover]">
+                    <button onClick={onClose} className="px-6 py-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover">
                         Cancelar
                     </button>
-                    <button onClick={handleApply} className="px-6 py-2 rounded-md bg-[--accent-primary] hover:bg-[--accent-hover] text-white">
+                    <button onClick={handleApply} className="px-6 py-2 rounded-md bg-theme-accent-primary hover:bg-theme-accent-hover text-white">
                         Aplicar
                     </button>
                 </div>

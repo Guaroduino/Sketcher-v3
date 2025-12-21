@@ -44,7 +44,7 @@ export const Auth: React.FC<AuthProps> = ({ user }) => {
         return (
             <button
                 onClick={handleSignIn}
-                className="p-2 flex items-center gap-2 rounded-md bg-[--bg-secondary] text-[--text-primary] hover:bg-[--bg-tertiary] border border-[--bg-tertiary] transition-colors text-sm"
+                className="p-2 flex items-center gap-2 rounded-md bg-theme-bg-secondary text-theme-text-primary hover:bg-theme-bg-tertiary border border-theme-bg-tertiary transition-colors text-sm"
                 title="Login with Google"
             >
                 <GoogleIcon className="w-5 h-5" />
@@ -55,18 +55,18 @@ export const Auth: React.FC<AuthProps> = ({ user }) => {
 
     return (
         <div className="relative" ref={menuRef}>
-            <button onClick={() => setIsMenuOpen(prev => !prev)} className="w-10 h-10 rounded-full border-2 border-[--accent-primary] overflow-hidden focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[--accent-primary] focus:ring-offset-[--bg-primary]">
+            <button onClick={() => setIsMenuOpen(prev => !prev)} className="w-10 h-10 rounded-full border-2 border-theme-accent-primary overflow-hidden focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-accent-primary focus:ring-offset-theme-bg-primary">
                 <img src={user.photoURL || undefined} alt={user.displayName || 'User Avatar'} className="w-full h-full object-cover" />
             </button>
             {isMenuOpen && (
-                <div className="absolute top-full right-0 mt-2 w-56 bg-[--bg-primary] border border-[--bg-tertiary] rounded-lg shadow-lg z-30 py-1">
-                    <div className="px-3 py-2 border-b border-[--bg-tertiary]">
+                <div className="absolute top-full right-0 mt-2 w-56 bg-theme-bg-primary border border-theme-bg-tertiary rounded-lg shadow-lg z-30 py-1">
+                    <div className="px-3 py-2 border-b border-theme-bg-tertiary">
                         <p className="text-sm font-semibold truncate">{user.displayName}</p>
-                        <p className="text-xs text-[--text-secondary] truncate">{user.email}</p>
+                        <p className="text-xs text-theme-text-secondary truncate">{user.email}</p>
                     </div>
                     <button
                         onClick={handleSignOut}
-                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-left text-[--text-primary] hover:bg-[--bg-hover]"
+                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-left text-theme-text-primary hover:bg-theme-bg-hover"
                     >
                         <LogOutIcon className="w-4 h-4" />
                         <span>Logout</span>

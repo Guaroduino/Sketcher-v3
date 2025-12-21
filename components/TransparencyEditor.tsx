@@ -394,37 +394,37 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
 
     if (!item) return null;
 
-    const toolButtonClasses = (tool: Tool) => `p-2 rounded-md transition-colors ${activeTool === tool ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]'}`;
+    const toolButtonClasses = (tool: Tool) => `p-2 rounded-md transition-colors ${activeTool === tool ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'}`;
 
     return (
         <div className="fixed inset-0 bg-black/75 z-40 flex items-center justify-center p-4">
-            <div className="bg-[--bg-secondary] rounded-lg shadow-xl w-full h-full max-w-6xl max-h-[90vh] flex flex-col">
-                <div className="flex-shrink-0 flex items-center justify-between p-2 border-b border-[--bg-tertiary]">
+            <div className="bg-theme-bg-secondary rounded-lg shadow-xl w-full h-full max-w-6xl max-h-[90vh] flex flex-col">
+                <div className="flex-shrink-0 flex items-center justify-between p-2 border-b border-theme-bg-tertiary">
                     <h2 className="text-lg font-bold">Editar Transparencia: {item.name}</h2>
                     <div className="flex items-center gap-4">
                         <button onClick={handleApply} className="px-4 py-2 rounded-md bg-green-600 hover:bg-green-500 text-white font-semibold">Aplicar</button>
-                        <button onClick={onCancel} className="p-2 rounded-full hover:bg-[--bg-tertiary]"><XIcon className="w-6 h-6" /></button>
+                        <button onClick={onCancel} className="p-2 rounded-full hover:bg-theme-bg-tertiary"><XIcon className="w-6 h-6" /></button>
                     </div>
                 </div>
                 <div className="flex-grow flex min-h-0">
-                    <div className="w-64 flex-shrink-0 bg-[--bg-primary] p-4 flex flex-col gap-4 border-r border-[--bg-tertiary] overflow-y-auto">
+                    <div className="w-64 flex-shrink-0 bg-theme-bg-primary p-4 flex flex-col gap-4 border-r border-theme-bg-tertiary overflow-y-auto">
                         <div>
-                            <h3 className="text-sm font-bold uppercase text-[--text-secondary] mb-2">Herramientas</h3>
+                            <h3 className="text-sm font-bold uppercase text-theme-text-secondary mb-2">Herramientas</h3>
                             <div className="flex items-center gap-2 flex-wrap">
                                 <button onClick={() => setActiveTool('picker')} className={toolButtonClasses('picker')} title="Cuentagotas"><CrosshairIcon className="w-5 h-5" /></button>
                                 <button onClick={() => setActiveTool('eraser')} className={toolButtonClasses('eraser')} title="Borrador"><EraserIcon className="w-5 h-5" /></button>
                                 <button onClick={() => setActiveTool('pan')} className={toolButtonClasses('pan')} title="Mover"><HandIcon className="w-5 h-5" /></button>
-                                <button onClick={() => setViewTransform(v => ({ ...v, zoom: v.zoom * 1.2 }))} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Acercar"><ZoomInIcon className="w-5 h-5" /></button>
-                                <button onClick={() => setViewTransform(v => ({ ...v, zoom: v.zoom / 1.2 }))} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Alejar"><ZoomOutIcon className="w-5 h-5" /></button>
+                                <button onClick={() => setViewTransform(v => ({ ...v, zoom: v.zoom * 1.2 }))} className="p-2 rounded-md bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover" title="Acercar"><ZoomInIcon className="w-5 h-5" /></button>
+                                <button onClick={() => setViewTransform(v => ({ ...v, zoom: v.zoom / 1.2 }))} className="p-2 rounded-md bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover" title="Alejar"><ZoomOutIcon className="w-5 h-5" /></button>
                             </div>
                         </div>
 
                         <div>
-                            <h3 className="text-sm font-bold uppercase text-[--text-secondary] mb-2">Historial</h3>
+                            <h3 className="text-sm font-bold uppercase text-theme-text-secondary mb-2">Historial</h3>
                             <div className="flex items-center gap-2">
-                                <button onClick={handleUndo} disabled={!canUndo} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Deshacer"><UndoIcon className="w-5 h-5" /></button>
-                                <button onClick={handleRedo} disabled={!canRedo} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover] disabled:opacity-50 disabled:cursor-not-allowed" title="Rehacer"><RedoIcon className="w-5 h-5" /></button>
-                                <button onClick={handleReset} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Volver al inicio de sesión"><HistoryIcon className="w-5 h-5" /></button>
+                                <button onClick={handleUndo} disabled={!canUndo} className="p-2 rounded-md bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed" title="Deshacer"><UndoIcon className="w-5 h-5" /></button>
+                                <button onClick={handleRedo} disabled={!canRedo} className="p-2 rounded-md bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed" title="Rehacer"><RedoIcon className="w-5 h-5" /></button>
+                                <button onClick={handleReset} className="p-2 rounded-md bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover" title="Volver al inicio de sesión"><HistoryIcon className="w-5 h-5" /></button>
                             </div>
                             <button onClick={handleFullReset} className="w-full mt-2 flex items-center justify-center gap-2 px-3 py-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-md transition-colors text-xs font-bold uppercase" title="Eliminar toda transparencia y cambios">
                                 <RefreshCwIcon className="w-4 h-4" />
@@ -434,9 +434,9 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
 
                         {activeTool === 'eraser' && (
                             <div>
-                                <h3 className="text-sm font-bold uppercase text-[--text-secondary] mb-2">Ajustes del Borrador</h3>
+                                <h3 className="text-sm font-bold uppercase text-theme-text-secondary mb-2">Ajustes del Borrador</h3>
                                 <div>
-                                    <label htmlFor="eraser-size" className="text-xs text-[--text-secondary]">Tamaño: {eraserSettings.size}</label>
+                                    <label htmlFor="eraser-size" className="text-xs text-theme-text-secondary">Tamaño: {eraserSettings.size}</label>
                                     <input
                                         type="range" id="eraser-size" min="1" max="200" step="1"
                                         value={eraserSettings.size}
@@ -448,9 +448,9 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
                         )}
 
                         <div>
-                            <h3 className="text-sm font-bold uppercase text-[--text-secondary] mb-2">Selección de Color</h3>
+                            <h3 className="text-sm font-bold uppercase text-theme-text-secondary mb-2">Selección de Color</h3>
                             <div>
-                                <label htmlFor="tolerance" className="text-xs text-[--text-secondary]">Tolerancia: {tolerance}</label>
+                                <label htmlFor="tolerance" className="text-xs text-theme-text-secondary">Tolerancia: {tolerance}</label>
                                 <input
                                     type="range" id="tolerance" min="0" max="100" step="1"
                                     value={tolerance}
@@ -462,11 +462,11 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
 
                         <div>
                             <div className="flex justify-between items-center mb-2">
-                                <h3 className="text-sm font-bold uppercase text-[--text-secondary]">Colores Transparentes</h3>
+                                <h3 className="text-sm font-bold uppercase text-theme-text-secondary">Colores Transparentes</h3>
                             </div>
                             <div className="max-h-60 overflow-y-auto space-y-1 pr-2">
                                 {currentColors.map((color, index) => (
-                                    <div key={index} className="flex items-center justify-between p-1 rounded bg-[--bg-tertiary]">
+                                    <div key={index} className="flex items-center justify-between p-1 rounded bg-theme-bg-tertiary">
                                         <div className="flex items-center gap-2">
                                             <div className="w-6 h-6 rounded border border-white/20" style={{ backgroundColor: rgbToHex(color.r, color.g, color.b) }} />
                                             <span className="text-xs font-mono">{rgbToHex(color.r, color.g, color.b)}</span>
@@ -481,20 +481,20 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
                                         }} className="p-1 rounded-full text-xs text-gray-400 hover:bg-red-500 hover:text-white">✕</button>
                                     </div>
                                 ))}
-                                {currentColors.length === 0 && <p className="text-xs text-center text-[--text-secondary] py-2">Usa el cuentagotas para añadir colores.</p>}
+                                {currentColors.length === 0 && <p className="text-xs text-center text-theme-text-secondary py-2">Usa el cuentagotas para añadir colores.</p>}
                             </div>
                         </div>
 
-                        <div className="mt-auto pt-4 border-t border-[--bg-tertiary]">
-                            <h3 className="text-sm font-bold uppercase text-[--text-secondary] mb-2">Propiedades</h3>
+                        <div className="mt-auto pt-4 border-t border-theme-bg-tertiary">
+                            <h3 className="text-sm font-bold uppercase text-theme-text-secondary mb-2">Propiedades</h3>
                             <div>
-                                <label className="text-xs text-[--text-secondary]">Factor de Escala</label>
+                                <label className="text-xs text-theme-text-secondary">Factor de Escala</label>
                                 <div className="flex items-center gap-2 mt-1">
                                     <span className="text-sm">1</span>
                                     <select
                                         value={scaleUnit}
                                         onChange={handleUnitChange}
-                                        className="bg-[--bg-tertiary] text-sm rounded-md p-1 border border-[--bg-hover]"
+                                        className="bg-theme-bg-tertiary text-sm rounded-md p-1 border border-theme-bg-hover"
                                     >
                                         <option value="mm">mm</option>
                                         <option value="cm">cm</option>
@@ -505,7 +505,7 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
                                         type="number"
                                         value={scaleInputValue}
                                         onChange={handleScaleInputChange}
-                                        className="w-20 bg-[--bg-secondary] text-sm rounded-md p-1 border border-[--bg-tertiary]"
+                                        className="w-20 bg-theme-bg-secondary text-sm rounded-md p-1 border border-theme-bg-tertiary"
                                     />
                                     <span className="text-sm">px</span>
                                 </div>

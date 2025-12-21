@@ -40,20 +40,20 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
     return (
         <div 
             style={style} 
-            className="bg-[--bg-primary]/80 backdrop-blur-sm rounded-lg p-1 flex items-center gap-1 shadow-lg"
+            className="bg-theme-bg-primary/80 backdrop-blur-sm rounded-lg p-1 flex items-center gap-1 shadow-lg"
             onPointerDown={(e) => e.stopPropagation()}
         >
-            <button onClick={onCopy} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Copiar">
+            <button onClick={onCopy} className="p-2 rounded-md bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover" title="Copiar">
                 <CopyIcon className="w-5 h-5" />
             </button>
-            <button onClick={onCut} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Cortar">
+            <button onClick={onCut} className="p-2 rounded-md bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover" title="Cortar">
                 <CutIcon className="w-5 h-5" />
             </button>
-            <button onClick={onDelete} className="p-2 rounded-md bg-[--bg-tertiary] text-[--text-primary] hover:bg-[--bg-hover]" title="Eliminar">
+            <button onClick={onDelete} className="p-2 rounded-md bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover" title="Eliminar">
                 <TrashIcon className="w-5 h-5" />
             </button>
-            <div className="h-6 w-px bg-[--bg-hover] mx-1" />
-            <button onClick={onDeselect} className="p-2 rounded-md bg-[--bg-tertiary] text-red-500 hover:bg-red-500 hover:text-white" title="Deseleccionar">
+            <div className="h-6 w-px bg-theme-bg-hover mx-1" />
+            <button onClick={onDeselect} className="p-2 rounded-md bg-theme-bg-tertiary text-red-500 hover:bg-red-500 hover:text-white" title="Deseleccionar">
                 <XIcon className="w-5 h-5" />
             </button>
         </div>
