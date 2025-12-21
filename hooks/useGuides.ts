@@ -150,24 +150,6 @@ export function useGuides(canvasSize: { width: number, height: number }) {
         });
     }, [canvasSize]);
 
-    const setPerspectiveVanishingPoint = useCallback((axis: 'green' | 'red' | 'blue', point: Point) => {
-        setPerspectiveGuide(current => {
-            if (!current) return null;
-            const newLines = { ...current.lines };
-
-            // Update all lines of the given axis to end at the new point
-            newLines[axis] = newLines[axis].map(line => ({
-                ...line,
-                end: point
-            }));
-
-            return {
-                ...current,
-                lines: newLines
-            };
-        });
-    }, []);
-
     return {
         activeGuide,
         isOrthogonalVisible,
@@ -191,6 +173,5 @@ export function useGuides(canvasSize: { width: number, height: number }) {
         onSetGridMinorLineColor: handleSetGridMinorLineColor,
         loadGuideState,
         resetPerspective,
-        setPerspectiveVanishingPoint,
     };
 }

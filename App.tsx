@@ -1100,18 +1100,6 @@ export function App() {
         };
     }, []);
 
-    const [perspectiveWizardStep, setPerspectiveWizardStep] = useState<'none' | 'set-green' | 'set-red'>('none');
-
-    const handleWizardClick = useCallback((point: Point) => {
-        if (perspectiveWizardStep === 'set-green') {
-            guides.setPerspectiveVanishingPoint('green', point);
-            setPerspectiveWizardStep('set-red');
-        } else if (perspectiveWizardStep === 'set-red') {
-            guides.setPerspectiveVanishingPoint('red', point);
-            setPerspectiveWizardStep('none');
-        }
-    }, [perspectiveWizardStep, guides]);
-
     useEffect(() => { setStrokeState(null); }, [tool, strokeMode]);
 
     // Callbacks
@@ -1414,7 +1402,6 @@ export function App() {
         );
     }
 
-
     return (
         <div className="w-screen h-screen bg-[--bg-primary] text-[--text-primary] flex flex-col font-sans overflow-hidden">
             <div className="absolute bottom-4 right-4 z-50 pointer-events-none opacity-50 text-[10px] text-[--text-secondary]">
@@ -1445,54 +1432,53 @@ export function App() {
             />
 
             {/* Main Header */}
-            <header className={`
-                flex-shrink-0 flex items-center justify-between px-4 z-20 bg-[--bg-primary]
-                transition-all duration-300 ease-in-out overflow-hidden
-                ${ui.isHeaderVisible ? 'h-14 opacity-100 border-b border-[--bg-tertiary] py-2' : 'h-0 opacity-0 border-none py-0'}
-            `}>
-                <div className="flex items-center gap-4">
-                    <h1 className="text-xl font-bold">Sketcher</h1>
-                    <button onClick={() => ui.setProjectGalleryOpen(true)} className="flex items-center gap-2 p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] border border-[--bg-tertiary] transition-colors text-sm">
-                        <GalleryIcon className="w-5 h-5" />
-                        <span>Galería</span>
-                    </button>
-                    <button ref={workspaceButtonRef} onClick={() => setWorkspacePopoverOpen(p => !p)} className="flex items-center gap-2 p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] border border-[--bg-tertiary] transition-colors text-sm relative">
-                        <BookmarkIcon className="w-5 h-5" />
-                        <span>Plantillas</span>
-                        <WorkspaceTemplatesPopover isOpen={isWorkspacePopoverOpen} onClose={() => setWorkspacePopoverOpen(false)} templates={templates.templates} onSave={handleSaveWorkspace} onLoad={handleLoadWorkspace} onDelete={templates.deleteTemplate} onResetPreferences={() => ui.setIsResetConfirmOpen(true)} />
-                    </button>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 mr-2 px-2 py-1 bg-[--bg-secondary] rounded-md border border-[--bg-tertiary]">
-                        {ui.deferredPrompt && (
-                            <>
-                                <button onClick={ui.handleInstallClick} className="flex items-center gap-1 p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Instalar Aplicación">
-                                    <DownloadIcon className="w-4 h-4" />
-                                    <span className="text-xs font-bold hidden sm:inline">Instalar</span>
-                                </button>
-                                <div className="w-px h-4 bg-[--bg-tertiary] mx-1"></div>
-                            </>
-                        )}
-                        <button onClick={() => ui.setUiScale(ui.uiScale - 0.1)} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Reducir Interfaz">
-                            <span className="text-xs font-bold">A-</span>
+            {ui.isHeaderVisible && (
+                <header className="flex-shrink-0 flex items-center justify-between p-2 bg-[--bg-primary] border-b border-[--bg-tertiary] z-20">
+                    <div className="flex items-center gap-4">
+                        <h1 className="text-xl font-bold">Sketcher</h1>
+                        <button onClick={() => ui.setProjectGalleryOpen(true)} className="flex items-center gap-2 p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] border border-[--bg-tertiary] transition-colors text-sm">
+                            <GalleryIcon className="w-5 h-5" />
+                            <span>Galería</span>
                         </button>
-                        <span className="text-xs font-mono w-8 text-center">{Math.round(ui.uiScale * 100)}%</span>
-                        <button onClick={() => ui.setUiScale(ui.uiScale + 0.1)} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Aumentar Interfaz">
-                            <span className="text-xs font-bold">A+</span>
-                        </button>
-                        <div className="w-px h-4 bg-[--bg-tertiary] mx-1"></div>
-                        <button onClick={ui.handleSaveUiScale} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Guardar configuración de tamaño">
-                            <SaveIcon className="w-4 h-4" />
+                        <button ref={workspaceButtonRef} onClick={() => setWorkspacePopoverOpen(p => !p)} className="flex items-center gap-2 p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] border border-[--bg-tertiary] transition-colors text-sm relative">
+                            <BookmarkIcon className="w-5 h-5" />
+                            <span>Plantillas</span>
+                            <WorkspaceTemplatesPopover isOpen={isWorkspacePopoverOpen} onClose={() => setWorkspacePopoverOpen(false)} templates={templates.templates} onSave={handleSaveWorkspace} onLoad={handleLoadWorkspace} onDelete={templates.deleteTemplate} onResetPreferences={() => ui.setIsResetConfirmOpen(true)} />
                         </button>
                     </div>
+                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 mr-2 px-2 py-1 bg-[--bg-secondary] rounded-md border border-[--bg-tertiary]">
+                            {ui.deferredPrompt && (
+                                <>
+                                    <button onClick={ui.handleInstallClick} className="flex items-center gap-1 p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Instalar Aplicación">
+                                        <DownloadIcon className="w-4 h-4" />
+                                        <span className="text-xs font-bold hidden sm:inline">Instalar</span>
+                                    </button>
+                                    <div className="w-px h-4 bg-[--bg-tertiary] mx-1"></div>
+                                </>
+                            )}
+                            <button onClick={() => ui.setUiScale(ui.uiScale - 0.1)} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Reducir Interfaz">
+                                <span className="text-xs font-bold">A-</span>
+                            </button>
+                            <span className="text-xs font-mono w-8 text-center">{Math.round(ui.uiScale * 100)}%</span>
+                            <button onClick={() => ui.setUiScale(ui.uiScale + 0.1)} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Aumentar Interfaz">
+                                <span className="text-xs font-bold">A+</span>
+                            </button>
+                            <div className="w-px h-4 bg-[--bg-tertiary] mx-1"></div>
+                            <button onClick={ui.handleSaveUiScale} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Guardar configuración de tamaño">
+                                <SaveIcon className="w-4 h-4" />
+                            </button>
+                        </div>
 
-                    <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] text-[--text-secondary]">
-                        {theme === 'dark' ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
-                    </button>
-                    <Auth user={user} />
-                </div>
-            </header>
+                        <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] text-[--text-secondary]">
+                            {theme === 'dark' ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
+                        </button>
+                        <Auth user={user} />
+                    </div>
+                </header>
+            )}
 
+<<<<<<< HEAD
             {/* Header, sidebars... */}
             <div className="flex h-full max-h-[100dvh] pt-0 md:pt-1">
                 {/* Left Sidebar */}
@@ -1501,6 +1487,12 @@ export function App() {
                      transition-all duration-300 ease-in-out flex flex-col ${ui.isLeftSidebarVisible ? 'overflow-visible' : 'overflow-hidden'}
                      ${ui.isLeftSidebarVisible ? 'w-20 translate-x-0 border-r border-[--bg-tertiary] z-40' : 'w-0 -translate-x-full md:w-0 md:translate-x-0 border-none z-30'}
                 `}>
+=======
+
+            {/* Main Content Area */}
+            <div className="flex flex-grow min-h-0 relative">
+                {ui.isLeftSidebarVisible && (
+>>>>>>> parent of ac736d6 (funcionando 2)
                     <Toolbar
                         tool={tool} setTool={setTool} {...toolSettings} brushPresets={toolSettings.brushPresets} onSavePreset={toolSettings.onSavePreset}
                         onUpdatePreset={toolSettings.onUpdatePreset} onLoadPreset={toolSettings.onLoadPreset} onDeletePreset={toolSettings.onDeletePreset}
@@ -1510,8 +1502,7 @@ export function App() {
                         strokeMode={strokeMode} setStrokeMode={setStrokeMode} strokeModifier={strokeModifier} setStrokeModifier={setStrokeModifier}
                         isSolidBox={isSolidBox} setIsSolidBox={setIsSolidBox}
                     />
-                </aside>
-                {/* Mobile sidebar toggle */}
+                )}
                 <button
                     onClick={() => ui.setIsLeftSidebarVisible(!ui.isLeftSidebarVisible)}
                     className="absolute top-1/2 -translate-y-1/2 bg-[--bg-secondary] p-2 rounded-full shadow-xl z-40 border border-[--bg-tertiary] hover:bg-[--bg-tertiary] transition-all"
@@ -1566,8 +1557,6 @@ export function App() {
                         scaleFactor={scaleFactor}
                         isSolidBox={isSolidBox}
                         scaleUnit={scaleUnit}
-                        perspectiveWizardStep={perspectiveWizardStep}
-                        onWizardClick={handleWizardClick}
                     />
                     <div className="absolute top-36 left-4 md:top-2 md:left-2 flex items-center gap-2 z-10">
                         {dimensionDisplay && <button ref={scaleButtonRef} onClick={() => setIsScalePopoverOpen(p => !p)} className="bg-[--bg-primary]/80 backdrop-blur-sm text-[--text-secondary] text-xs rounded-md px-2 py-1 pointer-events-auto hover:bg-[--bg-secondary] transition-colors" title="Ajustar escala del lienzo">{dimensionDisplay}</button>}
@@ -1604,8 +1593,6 @@ export function App() {
                         scaleUnit={currentState.scaleUnit} onPaste={handlePaste} hasClipboardContent={!!clipboard}
                         strokeSmoothing={strokeSmoothing} setStrokeSmoothing={setStrokeSmoothing}
                         strokeMode={strokeMode} isSolidBox={isSolidBox} setIsSolidBox={setIsSolidBox}
-                        perspectiveWizardStep={perspectiveWizardStep}
-                        setPerspectiveWizardStep={setPerspectiveWizardStep}
                     />
                     <QuickAccessBar
                         settings={quickAccess.quickAccessSettings} onUpdateColor={quickAccess.updateColor} onAddColor={quickAccess.addColor}
@@ -1618,6 +1605,7 @@ export function App() {
                         isHeaderVisible={ui.isHeaderVisible}
                     />
                 </main>
+<<<<<<< HEAD
                 <aside ref={ui.rightSidebarRef} className={`
                     flex-shrink-0 bg-[--bg-secondary] flex flex-col z-30
                      transition-all duration-300 ease-in-out ${ui.isRightSidebarVisible ? 'overflow-visible' : 'overflow-hidden'}
@@ -1639,6 +1627,26 @@ export function App() {
                         <Library user={user} items={library.libraryItems} onImportImage={library.onImportToLibrary} onCreateFolder={library.onCreateFolder} onEditItem={library.onEditTransparency} onDeleteItem={library.onDeleteLibraryItem} onAddItemToScene={(id) => onDropOnCanvas({ type: 'library-item', id }, activeItemId, setSelectedItemIds)} onMoveItems={library.onMoveItems} />
                     </div>
                 </aside>
+=======
+                {ui.isRightSidebarVisible && (
+                    <aside ref={ui.rightSidebarRef} className={`flex-shrink-0 w-80 border-l border-[--bg-tertiary] flex flex-col ${isAiModalOpen ? 'z-50' : ''}`}>
+                        <div style={{ height: ui.rightSidebarTopHeight }} className="flex-shrink-0">
+                            <Outliner
+                                items={objects} activeItemId={activeItemId} onAddItem={addItem} onCopyItem={copyItem} onDeleteItem={deleteItem} onSelectItem={handleSelectItem}
+                                onUpdateItem={updateItem} onMoveItem={handleMoveItem} onMergeItems={handleMergeItems} onUpdateBackground={handleUpdateBackground}
+                                onRemoveBackgroundImage={handleRemoveBackgroundImage} onExportItem={() => { if (activeItem) ui.setSingleExportModalOpen(true); }}
+                                onOpenCanvasSizeModal={() => ui.setCanvasSizeModalOpen(true)} activeItemState={activeItemState}
+                                onMoveItemUpDown={handleMoveItemUpDown} onMergeItemDown={handleMergeItemDown} onMergeItemUp={handleMergeItemUp}
+                                onAddObjectAbove={handleAddObjectAbove} onAddObjectBelow={handleAddObjectBelow}
+                            />
+                        </div>
+                        <div onPointerDown={ui.handlePointerDownResize} className="flex-shrink-0 h-1.5 bg-[--bg-secondary] hover:bg-[--accent-primary] transition-colors cursor-ns-resize" />
+                        <div className="flex-grow min-h-0">
+                            <Library user={user} items={library.libraryItems} onImportImage={library.onImportToLibrary} onCreateFolder={library.onCreateFolder} onEditItem={library.onEditTransparency} onDeleteItem={library.onDeleteLibraryItem} onAddItemToScene={(id) => onDropOnCanvas({ type: 'library-item', id }, activeItemId, setSelectedItemIds)} onMoveItems={library.onMoveItems} />
+                        </div>
+                    </aside>
+                )}
+>>>>>>> parent of ac736d6 (funcionando 2)
                 <button onClick={() => ui.setIsRightSidebarVisible(!ui.isRightSidebarVisible)} className="absolute top-1/2 -translate-y-1/2 bg-[--bg-secondary] p-2 rounded-full shadow-xl z-40 border border-[--bg-tertiary] hover:bg-[--bg-tertiary] transition-all" style={{ right: ui.isRightSidebarVisible ? '20.25rem' : '0.25rem' }} title={ui.isRightSidebarVisible ? 'Ocultar paneles' : 'Mostrar paneles'}>
                     {ui.isRightSidebarVisible ? <ChevronRightIcon className="w-5 h-5" /> : <ChevronLeftIcon className="w-5 h-5" />}
                 </button>

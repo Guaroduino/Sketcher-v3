@@ -110,8 +110,6 @@ interface CanvasContainerProps {
 
     scaleUnit: ScaleUnit;
     isSolidBox: boolean;
-    perspectiveWizardStep: 'none' | 'set-green' | 'set-red';
-    onWizardClick: (point: Point) => void;
 }
 
 type GuideDragState =
@@ -155,8 +153,6 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         scaleUnit,
 
         isSolidBox,
-        perspectiveWizardStep,
-        onWizardClick,
     } = props;
 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -250,8 +246,6 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
                         tool === 'airbrush' ? props.airbrushSettings.fillColor :
                             tool === 'watercolor' ? props.watercolorSettings.fillColor :
                                 tool === 'fx-brush' ? props.fxBrushSettings.fillColor : 'transparent',
-        perspectiveWizardStep,
-        onWizardClick,
     });
 
     const pointerHandlers = {
