@@ -570,5 +570,38 @@ export const getVisibleBoxEdges = (corners: Point[]): Point[][] => {
         }
     });
 
+
     return edges;
+};
+
+export const generateMipmaps = (canvas: HTMLCanvasElement): { small?: HTMLCanvasElement, medium?: HTMLCanvasElement } => {
+    const mipmaps: { small?: HTMLCanvasElement, medium?: HTMLCanvasElement } = {};
+    const { width, height } = canvas;
+
+    // Only generate mipmaps for somewhat large images to save memory
+    if (width > 1024 || height > 1024) {
+        // Medium: 50% scale
+        const mediumCanvas = document.createElement('canvas');
+        mediumCanvas.width = Math.floor(width * 0.5);
+        mediumCanvas.height = Math.floor(height * 0.5);
+        const mediumCtx = mediumCanvas.getContext('2d');
+        if (mediumCtx) {
+            mediumCtx.drawImage(canvas, 0, 0, mediumCanvas.width, mediumCanvas.height);
+            mipmaps.medium = mediumCanvas;
+        }
+
+        // Small: 25% scale (if very large)
+        if (width > 2048 || height > 2048) {
+            const smallCanvas = document.createElement('canvas');
+            smallCanvas.width = Math.floor(width * 0.25);
+            smallCanvas.height = Math.floor(height * 0.25);
+            const smallCtx = smallCanvas.getContext('2d');
+            if (smallCtx) {
+                smallCtx.drawImage(canvas, 0, 0, smallCanvas.width, smallCanvas.height);
+                mipmaps.small = smallCanvas;
+            }
+        }
+    }
+
+    return mipmaps;
 };

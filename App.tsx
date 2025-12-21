@@ -37,7 +37,7 @@ import { ConfirmDeleteLibraryItemModal } from './components/modals/ConfirmDelete
 import { ConfirmResetModal } from './components/modals/ConfirmResetModal';
 import { CropIcon, CheckIcon, XIcon, RulerIcon, PerspectiveIcon, ImageSquareIcon, OrthogonalIcon, MirrorIcon, GridIcon, IsometricIcon, LockIcon, LockOpenIcon, TransformIcon, FreeTransformIcon, SunIcon, MoonIcon, CopyIcon, CutIcon, PasteIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, GoogleIcon, LogOutIcon, ArrowUpIcon, ArrowDownIcon, SnapIcon, BookmarkIcon, SaveIcon, FolderOpenIcon, GalleryIcon, StrokeModeIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, ExpandIcon, MinimizeIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, HistoryIcon, MoreVerticalIcon, AddAboveIcon, AddBelowIcon, HandRaisedIcon, DownloadIcon, SparklesIcon } from './components/icons';
 import type { SketchObject, ItemType, Tool, CropRect, TransformState, WorkspaceTemplate, QuickAccessTool, ProjectFile, Project, StrokeMode, StrokeState, CanvasItem, StrokeModifier, ScaleUnit, Selection, ClipboardData, AppState, Point } from './types';
-import { getContentBoundingBox, createNewCanvas, createThumbnail, cloneCanvas } from './utils/canvasUtils';
+import { getContentBoundingBox, createNewCanvas, createThumbnail, cloneCanvas, generateMipmaps } from './utils/canvasUtils';
 import { prepareAIRequest } from './utils/aiUtils';
 
 type Theme = 'light' | 'dark';
@@ -339,7 +339,8 @@ function useProjectManager(
                         img.onload = () => {
                             const { canvas, context } = createNewCanvas(projectFile.canvasSize.width, projectFile.canvasSize.height);
                             context.drawImage(img, 0, 0);
-                            const loadedItem: SketchObject = { ...(rest as SketchObject), canvas, context };
+                            const mipmaps = generateMipmaps(canvas);
+                            const loadedItem: SketchObject = { ...(rest as SketchObject), canvas, context, mipmaps };
                             resolve(loadedItem);
                         };
                         img.onerror = reject;

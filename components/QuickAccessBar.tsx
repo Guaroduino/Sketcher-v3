@@ -238,8 +238,7 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
     return "";
   };
 
-
-  // Long press hook implementation inline
+  // Long press hook implementation
   const useLongPress = (
     onLongPress: (e: React.MouseEvent | React.TouchEvent) => void,
     onClick: () => void,
@@ -278,6 +277,58 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
       onTouchEnd: (e: React.TouchEvent) => clear(e),
     };
   };
+
+  interface QuickAccessToolButtonProps {
+    tool: QuickAccessTool | null;
+    index: number;
+    activeTool?: Tool;
+    strokeMode?: StrokeMode;
+    onOpenToolSelector: (index: number) => void;
+    onSelectTool: (tool: QuickAccessTool) => void;
+  }
+
+  const QuickAccessToolButton: React.FC<QuickAccessToolButtonProps> = ({
+    tool,
+    index,
+    activeTool,
+    strokeMode,
+    onOpenToolSelector,
+    onSelectTool
+  }) => {
+    // FIX: Correctly check active state for union type.
+    const isActive = tool !== null && activeTool !== undefined && (
+      (tool.type === 'tool' && tool.tool === activeTool) ||
+      (tool.type === 'fx-preset' && activeTool === 'fx-brush') ||
+      (tool.type === 'mode-preset' && activeTool === tool.tool && strokeMode === tool.mode)
+    );
+
+    // Construct handlers for this specific tool button using the hook
+    const longPressHandlers = useLongPress(
+      () => { if (tool) onOpenToolSelector(index); }, // On Long Press
+      () => { if (tool) onSelectTool(tool); },       // On Click
+      { shouldPreventDefault: true, delay: 500 }
+    );
+
+    return (
+      <button
+        {...longPressHandlers}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          // Fallback: Right click STILL opens it, for desktop users who prefer it.
+          onOpenToolSelector(index);
+        }}
+        className={`p-2 rounded-lg text-[--text-primary] transition-colors ${isActive ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'
+          } select-none touch-manipulation`} // Add touch-manipulation to improve mobile response
+        title={`${getToolTitle(tool)} (mantén presionado para cambiar)`}
+      >
+        {renderToolIcon(tool)}
+      </button>
+    );
+  };
+
+
+  // Long press hook implementation inline
+
 
   return (
     <>
@@ -364,38 +415,17 @@ export const QuickAccessBar: React.FC<QuickAccessBarProps> = ({
 
         {/* Tool Shortcuts */}
         <div className="flex items-center gap-2">
-          {settings.tools.map((tool, index) => {
-            // FIX: Correctly check active state for union type.
-            const isActive = tool !== null && activeTool !== undefined && (
-              (tool.type === 'tool' && tool.tool === activeTool) ||
-              (tool.type === 'fx-preset' && activeTool === 'fx-brush') ||
-              (tool.type === 'mode-preset' && activeTool === tool.tool && strokeMode === tool.mode)
-            );
-
-            // Construct handlers for this specific tool button using the hook
-            const longPressHandlers = useLongPress(
-              () => { if (tool) onOpenToolSelector(index); }, // On Long Press
-              () => { if (tool) onSelectTool(tool); },       // On Click
-              { shouldPreventDefault: true, delay: 500 }
-            );
-
-            return (
-              <button
-                key={index}
-                {...longPressHandlers}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  // Fallback: Right click STILL opens it, for desktop users who prefer it.
-                  onOpenToolSelector(index);
-                }}
-                className={`p-2 rounded-lg text-[--text-primary] transition-colors ${isActive ? 'bg-[--accent-primary] text-white' : 'bg-[--bg-tertiary] hover:bg-[--bg-hover]'
-                  } select-none touch-manipulation`} // Add touch-manipulation to improve mobile response
-                title={`${getToolTitle(tool)} (mantén presionado para cambiar)`}
-              >
-                {renderToolIcon(tool)}
-              </button>
-            );
-          })}
+          {(settings && settings.tools ? settings.tools : []).map((tool, index) => (
+            <QuickAccessToolButton
+              key={index}
+              tool={tool}
+              index={index}
+              activeTool={activeTool}
+              strokeMode={strokeMode}
+              onOpenToolSelector={onOpenToolSelector}
+              onSelectTool={onSelectTool}
+            />
+          ))}
           <button
             onClick={onAddToolSlot}
             className="w-9 h-9 rounded-lg border-2 border-dashed border-[--bg-hover] flex items-center justify-center text-[--text-secondary] hover:bg-[--bg-tertiary] hover:border-[--accent-primary] transition-colors"

@@ -1,5 +1,5 @@
 import type { AppState, SketchObject, ItemType, CropRect, TransformState, Point, WorkspaceTemplate, QuickAccessSettings, CanvasItem, ScaleUnit, ClipboardData } from '../types';
-import { getHomographyMatrix, createNewCanvas, cloneCanvasWithContext } from '../utils/canvasUtils';
+import { getHomographyMatrix, createNewCanvas, cloneCanvasWithContext, generateMipmaps } from '../utils/canvasUtils';
 
 const MAX_HISTORY_SIZE = 50;
 
@@ -79,7 +79,7 @@ function drawWarpedImage(
                     const c_top = c_tl + (c_tr - c_tl) * x_frac;
                     const c_bottom = c_bl + (c_br - c_bl) * x_frac;
                     const final_c = c_top + (c_bottom - c_top) * y_frac;
-                    
+
                     destData[destIndex + i] = final_c;
                 }
             }
@@ -116,29 +116,29 @@ export const initialState: AppState = {
 };
 
 export type Action =
-  | { type: 'UNDO' }
-  | { type: 'REDO' }
-  | { type: 'SNAPSHOT' }
-  | { type: 'INITIALIZE_CANVASES'; payload: { width: number, height: number } }
-  | { type: 'ADD_ITEM'; payload: { type: 'group' | 'object', activeItemId: string | null, canvasSize: { width: number, height: number }, newItemId?: string, imageElement?: HTMLImageElement, name?: string, initialDimensions?: { width: number, height: number } } }
-  | { type: 'ADD_ITEM_BELOW'; payload: { targetId: string, canvasSize: { width: number, height: number }, newItemId: string } }
-  | { type: 'PASTE_FROM_CLIPBOARD'; payload: { newItemId: string, clipboard: ClipboardData, canvasSize: { width: number, height: number }, activeItemId: string | null } }
-  | { type: 'DELETE_ITEM'; payload: { id: string } }
-  | { type: 'UPDATE_ITEM'; payload: { id: string, updates: Partial<CanvasItem> } }
-  | { type: 'MOVE_ITEM'; payload: { draggedId: string; targetId: string; position: 'top' | 'bottom' | 'middle' } }
-  | { type: 'MERGE_ITEMS'; payload: { sourceId: string, targetId: string } }
-  | { type: 'UPDATE_BACKGROUND'; payload: { color?: string, image?: HTMLImageElement } }
-  | { type: 'SET_CANVAS_FROM_IMAGE'; payload: { image: HTMLImageElement } }
-  | { type: 'REMOVE_BACKGROUND_IMAGE' }
-  | { type: 'CLEAR_CANVAS' }
-  | { type: 'CROP_CANVAS'; payload: { cropRect: CropRect } }
-  | { type: 'COPY_ITEM'; payload: { id: string } }
-  | { type: 'APPLY_TRANSFORM'; payload: { id: string, transform: TransformState, sourceBbox: CropRect } }
-  | { type: 'RESIZE_CANVAS'; payload: { width: number, height: number } }
-  | { type: 'SET_SCALE_FACTOR'; payload: number }
-  | { type: 'SET_SCALE_UNIT'; payload: ScaleUnit }
-  | { type: 'LOAD_PROJECT_STATE'; payload: { newState: AppState } }
-  | { type: 'COMMIT_DRAWING'; payload: { activeItemId: string; beforeCanvas: HTMLCanvasElement } };
+    | { type: 'UNDO' }
+    | { type: 'REDO' }
+    | { type: 'SNAPSHOT' }
+    | { type: 'INITIALIZE_CANVASES'; payload: { width: number, height: number } }
+    | { type: 'ADD_ITEM'; payload: { type: 'group' | 'object', activeItemId: string | null, canvasSize: { width: number, height: number }, newItemId?: string, imageElement?: HTMLImageElement, name?: string, initialDimensions?: { width: number, height: number } } }
+    | { type: 'ADD_ITEM_BELOW'; payload: { targetId: string, canvasSize: { width: number, height: number }, newItemId: string } }
+    | { type: 'PASTE_FROM_CLIPBOARD'; payload: { newItemId: string, clipboard: ClipboardData, canvasSize: { width: number, height: number }, activeItemId: string | null } }
+    | { type: 'DELETE_ITEM'; payload: { id: string } }
+    | { type: 'UPDATE_ITEM'; payload: { id: string, updates: Partial<CanvasItem> } }
+    | { type: 'MOVE_ITEM'; payload: { draggedId: string; targetId: string; position: 'top' | 'bottom' | 'middle' } }
+    | { type: 'MERGE_ITEMS'; payload: { sourceId: string, targetId: string } }
+    | { type: 'UPDATE_BACKGROUND'; payload: { color?: string, image?: HTMLImageElement } }
+    | { type: 'SET_CANVAS_FROM_IMAGE'; payload: { image: HTMLImageElement } }
+    | { type: 'REMOVE_BACKGROUND_IMAGE' }
+    | { type: 'CLEAR_CANVAS' }
+    | { type: 'CROP_CANVAS'; payload: { cropRect: CropRect } }
+    | { type: 'COPY_ITEM'; payload: { id: string } }
+    | { type: 'APPLY_TRANSFORM'; payload: { id: string, transform: TransformState, sourceBbox: CropRect } }
+    | { type: 'RESIZE_CANVAS'; payload: { width: number, height: number } }
+    | { type: 'SET_SCALE_FACTOR'; payload: number }
+    | { type: 'SET_SCALE_UNIT'; payload: ScaleUnit }
+    | { type: 'LOAD_PROJECT_STATE'; payload: { newState: AppState } }
+    | { type: 'COMMIT_DRAWING'; payload: { activeItemId: string; beforeCanvas: HTMLCanvasElement } };
 
 
 function appReducer(state: AppState, action: Action): AppState {
@@ -187,7 +187,7 @@ function appReducer(state: AppState, action: Action): AppState {
                     opacity: 1,
                     parentId: parentId,
                 };
-    
+
                 const { canvas, context } = createNewCanvas(canvasSize.width, canvasSize.height);
                 sketchObject.canvas = canvas;
                 sketchObject.context = context;
@@ -200,10 +200,11 @@ function appReducer(state: AppState, action: Action): AppState {
                     } else {
                         context.drawImage(imageElement, 0, 0);
                     }
+                    sketchObject.mipmaps = generateMipmaps(canvas);
                 }
                 newObject = sketchObject;
             }
-            
+
             const newItems = [...state.objects];
             if (activeItem && activeItem.type !== 'group') {
                 const activeIndex = newItems.findIndex(i => i.id === activeItemId);
@@ -246,7 +247,7 @@ function appReducer(state: AppState, action: Action): AppState {
             } else {
                 newItems.push(sketchObject);
             }
-            
+
             return { ...state, objects: newItems };
         }
         case 'PASTE_FROM_CLIPBOARD': {
@@ -256,6 +257,7 @@ function appReducer(state: AppState, action: Action): AppState {
 
             const { canvas, context } = createNewCanvas(canvasSize.width, canvasSize.height);
             context.putImageData(clipboard.imageData, clipboard.sourceRect.x, clipboard.sourceRect.y);
+            const mipmaps = generateMipmaps(canvas);
 
             const newObject: SketchObject = {
                 id: newItemId,
@@ -266,6 +268,7 @@ function appReducer(state: AppState, action: Action): AppState {
                 parentId: parentId,
                 canvas,
                 context,
+                mipmaps,
             };
 
             return { ...state, objects: [...state.objects, newObject] };
@@ -275,16 +278,16 @@ function appReducer(state: AppState, action: Action): AppState {
             const itemsToDelete = new Set<string>([id]);
             const findChildren = (parentId: string) => {
                 state.objects.forEach(item => {
-                    if(item.parentId === parentId) {
+                    if (item.parentId === parentId) {
                         itemsToDelete.add(item.id);
-                        if(item.type === 'group') {
+                        if (item.type === 'group') {
                             findChildren(item.id);
                         }
                     }
                 });
             };
             const itemToDelete = state.objects.find(i => i.id === id);
-            if(itemToDelete && itemToDelete.type === 'group') {
+            if (itemToDelete && itemToDelete.type === 'group') {
                 findChildren(id);
             }
             const newItems = state.objects.filter(i => !itemsToDelete.has(i.id));
@@ -307,13 +310,13 @@ function appReducer(state: AppState, action: Action): AppState {
             };
 
             if (isDescendant(draggedId, targetId)) return state;
-            
+
             const draggedItem = state.objects.find(item => item.id === draggedId);
             const targetItem = state.objects.find(item => item.id === targetId);
             if (!draggedItem || !targetItem) return state;
 
             const itemsWithoutDragged = state.objects.filter(item => item.id !== draggedId);
-            
+
             let newParentId: string | null;
             let targetIndex: number;
 
@@ -333,7 +336,7 @@ function appReducer(state: AppState, action: Action): AppState {
             }
 
             const updatedDraggedItem = { ...draggedItem, parentId: newParentId };
-            
+
             const newItems = [...itemsWithoutDragged];
             newItems.splice(targetIndex, 0, updatedDraggedItem);
 
@@ -375,13 +378,13 @@ function appReducer(state: AppState, action: Action): AppState {
             if (!sourceItem || !targetItem || !sourceItem.canvas || !targetItem.canvas) {
                 return state;
             }
-            
+
             const sourceIndex = state.objects.findIndex(i => i.id === sourceId);
             const targetIndex = state.objects.findIndex(i => i.id === targetId);
 
             const topItem = sourceIndex > targetIndex ? sourceItem : targetItem;
             const bottomItem = sourceIndex > targetIndex ? targetItem : sourceItem;
-            
+
             const { canvas: newCanvas, context: newCtx } = createNewCanvas(bottomItem.canvas.width, bottomItem.canvas.height);
 
             const bakeOpacity = (item: SketchObject): HTMLCanvasElement => {
@@ -390,13 +393,13 @@ function appReducer(state: AppState, action: Action): AppState {
                 try {
                     const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
                     const data = imageData.data;
-                    for (let i = 3; i < data.length; i+=4) {
+                    for (let i = 3; i < data.length; i += 4) {
                         data[i] = data[i] * item.opacity;
                     }
                     tempCtx.putImageData(imageData, 0, 0);
-                } catch(e) {
+                } catch (e) {
                     console.error("Could not bake opacity, falling back to simple draw.", e);
-                    tempCtx.clearRect(0,0, tempCanvas.width, tempCanvas.height);
+                    tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
                     tempCtx.globalAlpha = item.opacity;
                     tempCtx.drawImage(item.canvas!, 0, 0);
                     tempCtx.globalAlpha = 1.0;
@@ -419,7 +422,7 @@ function appReducer(state: AppState, action: Action): AppState {
 
             const newObjects = state.objects
                 .map(i => (i.id === bottomItem.id ? updatedBottomItem : i))
-                .filter(i => i.id !== topItem.id); 
+                .filter(i => i.id !== topItem.id);
 
             return { ...state, objects: newObjects };
         }
@@ -444,6 +447,7 @@ function appReducer(state: AppState, action: Action): AppState {
                             updatedObject.context.fillRect(0, 0, o.context.canvas.width, o.context.canvas.height);
                         }
                         updatedObject.context.drawImage(image, 0, 0, o.context.canvas.width, o.context.canvas.height);
+                        updatedObject.mipmaps = generateMipmaps(o.context.canvas);
                     }
                     return updatedObject;
                 }
@@ -461,9 +465,9 @@ function appReducer(state: AppState, action: Action): AppState {
 
                 if (item.isBackground) {
                     newCtx.drawImage(image, 0, 0);
-                    return { ...item, canvas: newCanvas, context: newCtx, color: '#FFFFFF', backgroundImage: image };
+                    return { ...item, canvas: newCanvas, context: newCtx, color: '#FFFFFF', backgroundImage: image, mipmaps: generateMipmaps(newCanvas) };
                 }
-                
+
                 if (oldCanvas) {
                     newCtx.drawImage(oldCanvas, 0, 0);
                 }
@@ -486,22 +490,22 @@ function appReducer(state: AppState, action: Action): AppState {
             return { ...state, objects: newObjects };
         }
         case 'CLEAR_CANVAS': {
-             const newInitialState = { ...initialState };
-             if (state.canvasSize.width > 0) {
-                 newInitialState.objects.forEach(obj => {
-                     const { canvas, context } = createNewCanvas(state.canvasSize.width, state.canvasSize.height);
-                     if (obj.type === 'object') {
-                         obj.canvas = canvas;
-                         obj.context = context;
-                         if (obj.isBackground) {
-                             context.fillStyle = obj.color!;
-                             context.fillRect(0,0, canvas.width, canvas.height);
-                         }
-                     }
-                 });
-                 newInitialState.canvasSize = state.canvasSize;
-             }
-             return newInitialState;
+            const newInitialState = { ...initialState };
+            if (state.canvasSize.width > 0) {
+                newInitialState.objects.forEach(obj => {
+                    const { canvas, context } = createNewCanvas(state.canvasSize.width, state.canvasSize.height);
+                    if (obj.type === 'object') {
+                        obj.canvas = canvas;
+                        obj.context = context;
+                        if (obj.isBackground) {
+                            context.fillStyle = obj.color!;
+                            context.fillRect(0, 0, canvas.width, canvas.height);
+                        }
+                    }
+                });
+                newInitialState.canvasSize = state.canvasSize;
+            }
+            return newInitialState;
         }
         case 'CROP_CANVAS': {
             const { cropRect } = action.payload;
@@ -519,7 +523,7 @@ function appReducer(state: AppState, action: Action): AppState {
                 }
                 return item;
             });
-            
+
             return { ...state, objects: newObjects, canvasSize: newCanvasSize };
         }
         case 'RESIZE_CANVAS': {
@@ -529,9 +533,9 @@ function appReducer(state: AppState, action: Action): AppState {
             const newObjects = state.objects.map((item): CanvasItem => {
                 if (item.canvas) {
                     const { canvas: newCanvas, context: newCtx } = createNewCanvas(newCanvasSize.width, newCanvasSize.height);
-                    
+
                     if (item.isBackground) {
-                         if (item.backgroundImage) {
+                        if (item.backgroundImage) {
                             newCtx.fillStyle = item.color || '#FFFFFF';
                             newCtx.fillRect(0, 0, newCanvasSize.width, newCanvasSize.height);
                             // Simple stretch for now
@@ -546,7 +550,7 @@ function appReducer(state: AppState, action: Action): AppState {
                         const dy = (newCanvasSize.height - item.canvas.height) / 2;
                         newCtx.drawImage(item.canvas, dx, dy);
                     }
-                    return { ...item, canvas: newCanvas, context: newCtx };
+                    return { ...item, canvas: newCanvas, context: newCtx, mipmaps: generateMipmaps(newCanvas) };
                 }
                 return item;
             });
@@ -597,10 +601,10 @@ function appReducer(state: AppState, action: Action): AppState {
             }
 
             const updatedItem = { ...item, canvas: newCanvas, context: newCtx };
-            
+
             const newObjects = [...state.objects];
             newObjects[itemIndex] = updatedItem;
-            
+
             return { ...state, objects: newObjects };
         }
         case 'SET_SCALE_FACTOR': {
@@ -635,7 +639,7 @@ export const initialHistoryState: HistoryState = {
 
 export function historyReducer(state: HistoryState, action: Action): HistoryState {
     const { past, present, future } = state;
-    
+
     if (action.type === 'UNDO') {
         if (past.length === 0) return state;
         const previous = past[past.length - 1];
@@ -665,7 +669,7 @@ export function historyReducer(state: HistoryState, action: Action): HistoryStat
             future: [],
         };
     }
-    
+
     if (action.type === 'COMMIT_DRAWING') {
         const { activeItemId, beforeCanvas } = action.payload;
 
@@ -691,12 +695,12 @@ export function historyReducer(state: HistoryState, action: Action): HistoryStat
                 return obj;
             })
         };
-        
+
         const newPast = [...past, previousState].slice(-MAX_HISTORY_SIZE);
 
         const newPresent = {
             ...present,
-            objects: [...present.objects] 
+            objects: [...present.objects]
         };
 
         return {
@@ -713,7 +717,7 @@ export function historyReducer(state: HistoryState, action: Action): HistoryStat
     if (present === newPresent) {
         return state;
     }
-    
+
     // Create a snapshot of the state BEFORE the change.
     const presentSnapshot = {
         ...present,
@@ -727,7 +731,7 @@ export function historyReducer(state: HistoryState, action: Action): HistoryStat
     };
 
     const newPast = [...past, presentSnapshot].slice(-MAX_HISTORY_SIZE);
-    
+
     return {
         past: newPast,
         present: newPresent,

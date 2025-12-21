@@ -23,6 +23,10 @@ export interface SketchObject extends BaseItem {
   fillColor?: string;
   backgroundImage?: HTMLImageElement;
   dataUrl?: string; // For serialization
+  mipmaps?: {
+    small?: HTMLCanvasElement; // ~ 1/4 resolution (or fixed small size)
+    medium?: HTMLCanvasElement; // ~ 1/2 resolution
+  };
 }
 
 export interface BrushSettings {

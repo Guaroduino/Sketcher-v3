@@ -142,28 +142,18 @@ export const prepareAIRequest = (
         }
 
         case 'upscale': {
-            // Upscale Mode: Same input as Composition (Background + Layers)
-            // But prompt is specifically for high-res remastering
+            // Upscale Mode: Send ONLY the full composition as a single image.
 
-            // Step 1: Background Image
-            if (backgroundObject?.canvas && backgroundObject.isVisible) {
-                const bgDataUrl = backgroundObject.canvas.toDataURL('image/jpeg');
-                debugImages.push({ name: 'Fondo Original', url: bgDataUrl });
-                // We don't necessarily need to send background separately if we send the full comp, 
-                // but giving Gemini context helps. Let's send just the Full Composition to minimize token usage/confusion for "Upscaling".
-                // Actually, sending just the composite is better for "Upscale this image".
-            }
-
-            // Step 2: Full Composition
+            // 1. Generate Full Composition (Background + Layers)
             const compositionCanvas = getCompositeCanvas(true, canvasSize, getDrawableObjects, backgroundObject);
+
             if (compositionCanvas) {
                 const compDataUrl = compositionCanvas.toDataURL('image/jpeg', 1.0); // High quality
                 debugImages.push({ name: 'Imagen a Escalar', url: compDataUrl });
                 parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(compDataUrl) } });
             }
 
-            // High-Res Prompt Engineering
-            // High-Res Prompt Engineering
+            // 2. High-Res Prompt Engineering
             let baseScalerPrompt = `Genera una versión de súper alta resolución (4K) y altamente detallada de esta imagen. 
             Mejora la nitidez, las texturas y la iluminación manteniendo fielmente la composición y los colores originales.`;
 
@@ -192,7 +182,6 @@ export const prepareAIRequest = (
             }
 
             finalPrompt = baseScalerPrompt;
-
             break;
         }
     }

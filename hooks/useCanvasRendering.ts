@@ -82,7 +82,7 @@ export function useCanvasRendering({
 
         const { spacing, majorLineFrequency, type, isoAngle, majorLineColor: majorLineColorFromProp, minorLineColor: minorLineColorFromProp } = gridGuide;
 
-        ctx.lineWidth = 0.5 / viewTransform.zoom;
+        const lineWidth = 0.5 / viewTransform.zoom;
         const minorLineColor = minorLineColorFromProp;
         const majorLineColor = majorLineColorFromProp;
 
@@ -92,25 +92,54 @@ export function useCanvasRendering({
             const startY = Math.floor(worldView.y / spacing) * spacing;
             const endY = worldView.y + worldView.height;
 
+            // Batch Minor Lines
+            ctx.beginPath();
+            ctx.lineWidth = lineWidth;
+            ctx.strokeStyle = minorLineColor;
+
             let i_x = Math.round(startX / spacing);
             for (let x = startX; x <= endX; x += spacing) {
-                ctx.strokeStyle = (i_x % majorLineFrequency === 0) ? majorLineColor : minorLineColor;
-                ctx.beginPath();
-                ctx.moveTo(x, worldView.y);
-                ctx.lineTo(x, endY);
-                ctx.stroke();
+                if (i_x % majorLineFrequency !== 0) {
+                    ctx.moveTo(x, worldView.y);
+                    ctx.lineTo(x, endY);
+                }
                 i_x++;
             }
 
             let i_y = Math.round(startY / spacing);
             for (let y = startY; y <= endY; y += spacing) {
-                ctx.strokeStyle = (i_y % majorLineFrequency === 0) ? majorLineColor : minorLineColor;
-                ctx.beginPath();
-                ctx.moveTo(worldView.x, y);
-                ctx.lineTo(endX, y);
-                ctx.stroke();
+                if (i_y % majorLineFrequency !== 0) {
+                    ctx.moveTo(worldView.x, y);
+                    ctx.lineTo(endX, y);
+                }
                 i_y++;
             }
+            ctx.stroke();
+
+            // Batch Major Lines
+            ctx.beginPath();
+            ctx.lineWidth = lineWidth;
+            ctx.strokeStyle = majorLineColor;
+
+            i_x = Math.round(startX / spacing);
+            for (let x = startX; x <= endX; x += spacing) {
+                if (i_x % majorLineFrequency === 0) {
+                    ctx.moveTo(x, worldView.y);
+                    ctx.lineTo(x, endY);
+                }
+                i_x++;
+            }
+
+            i_y = Math.round(startY / spacing);
+            for (let y = startY; y <= endY; y += spacing) {
+                if (i_y % majorLineFrequency === 0) {
+                    ctx.moveTo(worldView.x, y);
+                    ctx.lineTo(endX, y);
+                }
+                i_y++;
+            }
+            ctx.stroke();
+
         } else if (type === 'isometric') {
             const canvasDiagonal = Math.hypot(worldView.width, worldView.height) * 1.2;
             const center = { x: worldView.x + worldView.width / 2, y: worldView.y + worldView.height / 2 };
@@ -120,6 +149,15 @@ export function useCanvasRendering({
                 (90 - isoAngle) * (Math.PI / 180),
                 (90 + isoAngle) * (Math.PI / 180),
             ];
+
+            // Limit grid lines to visible area for performance
+            // Simple optimization: only draw lines that intersect the view
+            // For now, we keep the existing logic but batch it.
+
+            // Minor Lines Batch
+            ctx.beginPath();
+            ctx.lineWidth = lineWidth;
+            ctx.strokeStyle = minorLineColor;
 
             angles.forEach(angle => {
                 const cos = Math.cos(angle);
@@ -132,22 +170,51 @@ export function useCanvasRendering({
                 const endI = Math.ceil((centerProj + canvasDiagonal / 2) / spacing);
 
                 for (let i = startI; i <= endI; i++) {
-                    const offset = i * spacing;
-                    const lineCenter = {
-                        x: offset * perpCos,
-                        y: offset * perpSin
-                    };
-
-                    const start = { x: lineCenter.x - canvasDiagonal * cos, y: lineCenter.y - canvasDiagonal * sin };
-                    const end = { x: lineCenter.x + canvasDiagonal * cos, y: lineCenter.y + canvasDiagonal * sin };
-
-                    ctx.strokeStyle = (i % majorLineFrequency === 0) ? majorLineColor : minorLineColor;
-                    ctx.beginPath();
-                    ctx.moveTo(start.x, start.y);
-                    ctx.lineTo(end.x, end.y);
-                    ctx.stroke();
+                    if (i % majorLineFrequency !== 0) {
+                        const offset = i * spacing;
+                        const lineCenter = {
+                            x: offset * perpCos,
+                            y: offset * perpSin
+                        };
+                        const start = { x: lineCenter.x - canvasDiagonal * cos, y: lineCenter.y - canvasDiagonal * sin };
+                        const end = { x: lineCenter.x + canvasDiagonal * cos, y: lineCenter.y + canvasDiagonal * sin };
+                        ctx.moveTo(start.x, start.y);
+                        ctx.lineTo(end.x, end.y);
+                    }
                 }
             });
+            ctx.stroke();
+
+            // Major Lines Batch
+            ctx.beginPath();
+            ctx.lineWidth = lineWidth;
+            ctx.strokeStyle = majorLineColor;
+
+            angles.forEach(angle => {
+                const cos = Math.cos(angle);
+                const sin = Math.sin(angle);
+                const perpCos = Math.cos(angle + Math.PI / 2);
+                const perpSin = Math.sin(angle + Math.PI / 2);
+
+                const centerProj = center.x * perpCos + center.y * perpSin;
+                const startI = Math.floor((centerProj - canvasDiagonal / 2) / spacing);
+                const endI = Math.ceil((centerProj + canvasDiagonal / 2) / spacing);
+
+                for (let i = startI; i <= endI; i++) {
+                    if (i % majorLineFrequency === 0) {
+                        const offset = i * spacing;
+                        const lineCenter = {
+                            x: offset * perpCos,
+                            y: offset * perpSin
+                        };
+                        const start = { x: lineCenter.x - canvasDiagonal * cos, y: lineCenter.y - canvasDiagonal * sin };
+                        const end = { x: lineCenter.x + canvasDiagonal * cos, y: lineCenter.y + canvasDiagonal * sin };
+                        ctx.moveTo(start.x, start.y);
+                        ctx.lineTo(end.x, end.y);
+                    }
+                }
+            });
+            ctx.stroke();
         }
     }, [gridGuide, viewTransform]);
 
@@ -163,13 +230,41 @@ export function useCanvasRendering({
         mainCtx.save();
         mainCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
 
+
         const backgroundObject = items.find(item => item.type === 'object' && item.isBackground);
         const foregroundObjects = items.filter(item => item.type === 'object' && !item.isBackground);
 
+        const drawItem = (item: SketchObject) => {
+            if (item.mipmaps && item.canvas) {
+                // Mipmap Logic
+                let sourceCanvas = item.canvas;
+                let scale = 1;
+
+                if (viewTransform.zoom < 0.25 && item.mipmaps.small) {
+                    sourceCanvas = item.mipmaps.small;
+                    scale = item.canvas.width / item.mipmaps.small.width;
+                } else if (viewTransform.zoom < 0.5 && item.mipmaps.medium) {
+                    sourceCanvas = item.mipmaps.medium;
+                    scale = item.canvas.width / item.mipmaps.medium.width;
+                }
+
+                mainCtx.globalAlpha = item.opacity;
+                mainCtx.drawImage(
+                    sourceCanvas,
+                    item.offsetX || 0,
+                    item.offsetY || 0,
+                    item.canvas.width,
+                    item.canvas.height
+                );
+            } else if (item.canvas) {
+                mainCtx.globalAlpha = item.opacity;
+                mainCtx.drawImage(item.canvas, item.offsetX || 0, item.offsetY || 0);
+            }
+        };
+
         // 1. Draw background
         if (backgroundObject && backgroundObject.canvas && backgroundObject.isVisible) {
-            mainCtx.globalAlpha = backgroundObject.opacity;
-            mainCtx.drawImage(backgroundObject.canvas, backgroundObject.offsetX || 0, backgroundObject.offsetY || 0);
+            drawItem(backgroundObject);
         }
 
         // 2. Draw Grid on top of background
@@ -183,9 +278,8 @@ export function useCanvasRendering({
 
             if ((isTransforming && item.id === activeItemId) || isBeingErased) {
                 // This item is being transformed or erased. Skip it here.
-            } else if (item.canvas) {
-                mainCtx.globalAlpha = item.opacity;
-                mainCtx.drawImage(item.canvas, item.offsetX || 0, item.offsetY || 0);
+            } else {
+                drawItem(item);
             }
         });
 
@@ -218,45 +312,54 @@ export function useCanvasRendering({
 
         // Ruler
         if (activeGuide === 'ruler' && rulerGuides) {
+            // Batch lines
+            guideCtx.strokeStyle = 'cyan';
+            guideCtx.lineWidth = 1 / viewTransform.zoom;
+            guideCtx.beginPath();
             rulerGuides.forEach(guide => {
-                guideCtx.strokeStyle = 'cyan';
-                guideCtx.lineWidth = 1 / viewTransform.zoom;
-                guideCtx.beginPath();
                 guideCtx.moveTo(guide.start.x, guide.start.y);
                 guideCtx.lineTo(guide.end.x, guide.end.y);
-                guideCtx.stroke();
-                guideCtx.fillStyle = 'cyan';
-                // Handles
+            });
+            guideCtx.stroke();
+
+            // Batch handles
+            guideCtx.fillStyle = 'cyan';
+            guideCtx.beginPath();
+            rulerGuides.forEach(guide => {
                 const midPoint = { x: (guide.start.x + guide.end.x) / 2, y: (guide.start.y + guide.end.y) / 2 };
                 [guide.start, guide.end, midPoint].forEach(p => {
-                    guideCtx.beginPath();
+                    guideCtx.moveTo(p.x + handleSize, p.y);
                     guideCtx.arc(p.x, p.y, handleSize, 0, 2 * Math.PI);
-                    guideCtx.fill();
                 });
             });
+            guideCtx.fill();
         }
 
         // Mirror
         if (activeGuide === 'mirror' && mirrorGuides) {
+            // Batch lines
+            guideCtx.strokeStyle = 'rgba(139, 0, 255, 0.8)'; // A violet color
+            guideCtx.lineWidth = 1 / viewTransform.zoom;
+            guideCtx.setLineDash([5 / viewTransform.zoom, 5 / viewTransform.zoom]);
+            guideCtx.beginPath();
             mirrorGuides.forEach(guide => {
-                guideCtx.strokeStyle = 'rgba(139, 0, 255, 0.8)'; // A violet color
-                guideCtx.lineWidth = 1 / viewTransform.zoom;
-                guideCtx.setLineDash([5 / viewTransform.zoom, 5 / viewTransform.zoom]);
-                guideCtx.beginPath();
                 guideCtx.moveTo(guide.start.x, guide.start.y);
                 guideCtx.lineTo(guide.end.x, guide.end.y);
-                guideCtx.stroke();
-                guideCtx.setLineDash([]);
+            });
+            guideCtx.stroke();
+            guideCtx.setLineDash([]);
 
-                guideCtx.fillStyle = 'rgba(139, 0, 255, 0.8)';
-                // Handles
+            // Batch handles
+            guideCtx.fillStyle = 'rgba(139, 0, 255, 0.8)';
+            guideCtx.beginPath();
+            mirrorGuides.forEach(guide => {
                 const midPoint = { x: (guide.start.x + guide.end.x) / 2, y: (guide.start.y + guide.end.y) / 2 };
                 [guide.start, guide.end, midPoint].forEach(p => {
-                    guideCtx.beginPath();
+                    guideCtx.moveTo(p.x + handleSize, p.y);
                     guideCtx.arc(p.x, p.y, handleSize, 0, 2 * Math.PI);
-                    guideCtx.fill();
                 });
             });
+            guideCtx.fill();
         }
 
         // Orthogonal
@@ -323,33 +426,34 @@ export function useCanvasRendering({
                     guideCtx.lineWidth = 0.8 / viewTransform.zoom;
                     guideCtx.setLineDash([4 / viewTransform.zoom, 4 / viewTransform.zoom]);
                     const allHandles = [...mainLines.flatMap(l => [l.start, l.end]), ...extraHandles, guidePoint];
+                    guideCtx.beginPath();
                     allHandles.forEach(handle => {
-                        guideCtx.beginPath();
                         guideCtx.moveTo(vp.x, vp.y);
                         guideCtx.lineTo(handle.x, handle.y);
-                        guideCtx.stroke();
                     });
+                    guideCtx.stroke();
                     guideCtx.setLineDash([]);
                 }
 
                 // Draw CONTROL lines (between main handles)
                 guideCtx.strokeStyle = controlColor;
                 guideCtx.lineWidth = 1 / viewTransform.zoom;
+                guideCtx.beginPath();
                 mainLines.forEach(line => {
-                    guideCtx.beginPath();
                     guideCtx.moveTo(line.start.x, line.start.y);
                     guideCtx.lineTo(line.end.x, line.end.y);
-                    guideCtx.stroke();
                 });
+                guideCtx.stroke();
 
                 // Draw HANDLES
                 guideCtx.fillStyle = handleColor;
+                guideCtx.beginPath();
                 const handlesToDraw = [...mainLines.flatMap(l => [l.start, l.end]), ...extraHandles];
                 handlesToDraw.forEach(p => {
-                    guideCtx.beginPath();
+                    guideCtx.moveTo(p.x + handleSize, p.y);
                     guideCtx.arc(p.x, p.y, handleSize, 0, 2 * Math.PI);
-                    guideCtx.fill();
                 });
+                guideCtx.fill();
             };
 
             // --- 3. Draw each color set ---
@@ -383,20 +487,21 @@ export function useCanvasRendering({
 
                 guideCtx.strokeStyle = blueColor;
                 guideCtx.lineWidth = 1 / viewTransform.zoom;
+                guideCtx.beginPath();
                 lines.blue.forEach(line => {
-                    guideCtx.beginPath();
                     guideCtx.moveTo(line.start.x, line.start.y);
                     guideCtx.lineTo(line.end.x, line.end.y);
-                    guideCtx.stroke();
                 });
+                guideCtx.stroke();
 
                 guideCtx.fillStyle = blueColor;
                 const allBlueHandles = [...lines.blue.flatMap(l => [l.start, l.end]), ...extraGuideLines.blue.map(g => g.handle)];
+                guideCtx.beginPath();
                 allBlueHandles.forEach(p => {
-                    guideCtx.beginPath();
+                    guideCtx.moveTo(p.x + handleSize, p.y);
                     guideCtx.arc(p.x, p.y, handleSize, 0, 2 * Math.PI);
-                    guideCtx.fill();
                 });
+                guideCtx.fill();
             }
 
             // --- 4. Draw main guide point handle on top ---
