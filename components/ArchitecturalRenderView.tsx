@@ -1,7 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { PhotoIcon, SparklesIcon, UploadIcon, UndoIcon, RedoIcon, SaveIcon, XIcon as CloseIcon, ZoomInIcon, ZoomOutIcon, MaximizeIcon, HandIcon, TrashIcon, DownloadIcon } from './icons';
+import { PhotoIcon, SparklesIcon, UploadIcon, UndoIcon, RedoIcon, SaveIcon, XIcon as CloseIcon, ZoomInIcon, ZoomOutIcon, MaximizeIcon, DownloadIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
 import { GoogleGenAI } from "@google/genai";
 import { buildArchitecturalPrompt, ArchitecturalRenderOptions } from '../utils/architecturalPromptBuilder';
+import { prepareVisualPromptingRequest, Region } from '../services/visualPromptingService';
+import { LayeredCanvas, LayeredCanvasRef } from './visual-prompting/LayeredCanvas';
+import { VisualPromptingControls } from './visual-prompting/VisualPromptingControls';
+import { GEMINI_MODEL_ID } from '../utils/constants';
+
 
 interface ArchitecturalRenderViewProps {
     onImportFromSketch: () => string | null; // Returns dataURL or null
@@ -24,14 +29,22 @@ const XIcon: React.FC<{ className?: string }> = ({ className }) => (
 export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = ({
     onImportFromSketch,
     isSidebarOpen,
-    onUndo,
-    onRedo,
-    canUndo,
-    canRedo
 }) => {
     const [sceneType, setSceneType] = useState<SceneType>('exterior');
     const [inputImage, setInputImage] = useState<string | null>(null);
     const [styleReferenceImage, setStyleReferenceImage] = useState<string | null>(null);
+
+    // -- Visual Prompting State --
+    const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
+    const [lastGuideImage, setLastGuideImage] = useState<string | null>(null); // To debug what we sent
+    const [lastSentPrompt, setLastSentPrompt] = useState<string | null>(null); // To debug exact text sent
+    const [activeTool, setActiveTool] = useState<'pen' | 'eraser' | 'region' | 'polygon' | 'pan'>('pan');
+    const [regions, setRegions] = useState<Region[]>([]);
+    const [brushSize, setBrushSize] = useState(5);
+    const [brushColor, setBrushColor] = useState('#FF0000');
+
+    // Canvas Refs
+    const canvasRef = useRef<LayeredCanvasRef>(null);
 
     // -- Form State --
     const [timeOfDay, setTimeOfDay] = useState('noon');
@@ -48,6 +61,14 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
     const [manualPrompt, setManualPrompt] = useState('');
     const [savedPrompts, setSavedPrompts] = useState<string[]>([]);
 
+    // -- Refs for Handler Access (Closure Fix) --
+    const resultImageRef = useRef<string | null>(null);
+    const inputImageRef = useRef<string | null>(null);
+
+    // -- Visual Prompting State --
+    const [vpGeneralInstructions, setVpGeneralInstructions] = useState('');
+    const [vpReferenceImage, setVpReferenceImage] = useState<string | null>(null);
+
     const [isGenerating, setIsGenerating] = useState(false);
     const [resultImage, setResultImage] = useState<string | null>(null);
     const [showOriginal, setShowOriginal] = useState(false);
@@ -57,8 +78,6 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
 
     // Navigation State
     const [transform, setTransform] = useState({ zoom: 1, x: 0, y: 0 });
-    const [isDragging, setIsDragging] = useState(false);
-    const lastMousePos = useRef({ x: 0, y: 0 });
 
     // Load saved prompts on mount
     useEffect(() => {
@@ -85,6 +104,15 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
         setManualPrompt(generatedPrompt);
     }, [sceneType, creativeFreedom, additionalPrompt, archStyle, timeOfDay, weather, roomType, lighting, styleReferenceImage]);
 
+    // Sync Refs
+    useEffect(() => {
+        resultImageRef.current = resultImage;
+    }, [resultImage]);
+
+    useEffect(() => {
+        inputImageRef.current = inputImage;
+    }, [inputImage]);
+
 
     const handleSavePrompt = () => {
         if (!manualPrompt.trim()) return;
@@ -103,43 +131,6 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
             setSavedPrompts([]);
             localStorage.removeItem('archrender_saved_prompts');
         }
-    };
-
-
-    const handleWheel = (e: React.WheelEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-
-        const zoomSensitivity = 0.001;
-        const delta = -e.deltaY * zoomSensitivity;
-        const newZoom = Math.max(0.1, Math.min(10, transform.zoom * (1 + delta)));
-
-        setTransform(prev => ({ ...prev, zoom: newZoom }));
-    };
-
-    const handlePointerDown = (e: React.PointerEvent) => {
-        e.preventDefault();
-        setIsDragging(true);
-        lastMousePos.current = { x: e.clientX, y: e.clientY };
-    };
-
-    const handlePointerMove = (e: React.PointerEvent) => {
-        if (!isDragging) return;
-        e.preventDefault();
-        const deltaX = e.clientX - lastMousePos.current.x;
-        const deltaY = e.clientY - lastMousePos.current.y;
-
-        setTransform(prev => ({
-            ...prev,
-            x: prev.x + deltaX,
-            y: prev.y + deltaY
-        }));
-
-        lastMousePos.current = { x: e.clientX, y: e.clientY };
-    };
-
-    const handlePointerUp = () => {
-        setIsDragging(false);
     };
 
     const resetView = () => setTransform({ zoom: 1, x: 0, y: 0 });
@@ -196,8 +187,126 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
             setArchStyle('modern');
             setRoomType('living_room');
             setLighting('natural');
+            setRegions([]); // Clear Regions
+            canvasRef.current?.clearDrawing(); // Clear drawings
         }
     };
+
+    // --- Visual Prompting Handlers ---
+    // --- Visual Prompting Handlers ---
+    const handleAddRegion = (data: { type: 'rectangle' | 'polygon', points?: { x: number, y: number }[], x: number, y: number, width: number, height: number }) => {
+        const newRegion: Region = {
+            id: Date.now().toString(),
+            regionNumber: regions.length + 1,
+            type: data.type,
+            points: data.points,
+            x: data.x,
+            y: data.y,
+            width: data.width,
+            height: data.height,
+            prompt: ''
+        };
+        setRegions([...regions, newRegion]);
+        // Keep active to add more?
+        if (!isLeftPanelOpen) setIsLeftPanelOpen(true);
+    };
+
+    const handleDeleteRegion = (id: string) => {
+        const newRegions = regions.filter(r => r.id !== id).map((r, i) => ({
+            ...r,
+            regionNumber: i + 1 // Re-number regions
+        }));
+        setRegions(newRegions);
+    };
+
+    const handleUpdateRegionPrompt = (id: string, text: string) => {
+        setRegions(regions.map(r => r.id === id ? { ...r, prompt: text } : r));
+    };
+
+    const handleUpdateRegionImage = (id: string, image: string | null) => {
+        setRegions(regions.map(r => r.id === id ? { ...r, referenceImage: image || undefined } : r));
+    };
+
+    const handleProcessChanges = async () => {
+        const currentInput = inputImageRef.current;
+        const currentResult = resultImageRef.current;
+
+        if (!currentInput && !currentResult) {
+            alert("Por favor importa una imagen base primero.");
+            return;
+        }
+
+        // Iterative Workflow: Use Ref to guarantee latest state
+        const activeBaseImage = currentResult || currentInput;
+
+        if (!activeBaseImage) return; // Should not happen
+
+        // Commit the current state as the new input to avoid UI jumping back to original
+        if (currentResult) {
+            setInputImage(currentResult);
+        }
+
+        setIsGenerating(true);
+        setResultImage(null);
+        setShowOriginal(false);
+
+        try {
+            // Use New Pipeline
+            const layersImage = canvasRef.current?.getDrawingDataUrl() || ''; // Should get transparent png
+
+            const img = new Image();
+            img.src = activeBaseImage;
+            await img.decode();
+
+            const payload = {
+                baseImage: activeBaseImage,
+                layersImage,
+                regions,
+                globalPrompt: manualPrompt,
+                globalInstructions: vpGeneralInstructions,
+                globalReferenceImage: vpReferenceImage || undefined,
+                width: img.width,
+                height: img.height
+            };
+
+            const { contents } = await prepareVisualPromptingRequest(payload, import.meta.env.VITE_GEMINI_API_KEY);
+
+            // Add global style reference if exists
+            if (styleReferenceImage) {
+                const styleBase64 = styleReferenceImage.split(',')[1];
+                // Insert after base image (index 1), before guide image? No, usually style ref is independent.
+                // Let's just append it or put it in a known position. 
+                // prepareVisualPromptingRequest returns [Base, Guide, ...RefImages, Text].
+                // Inserting Style Ref at index 2 (after Base and Guide) seems safe.
+                contents.parts.splice(2, 0, { inlineData: { mimeType: 'image/png', data: styleBase64 } });
+            }
+
+            // @ts-ignore
+            const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+            const model = GEMINI_MODEL_ID;
+            const config = { responseModalities: ["IMAGE"] };
+            const response = await ai.models.generateContent({ model, contents, config });
+
+            let newImageBase64: string | null = null;
+            for (const part of response.candidates?.[0]?.content.parts || []) {
+                if (part.inlineData) { newImageBase64 = part.inlineData.data; break; }
+            }
+
+            if (newImageBase64) {
+                setResultImage(`data:image/png;base64,${newImageBase64}`);
+            } else {
+                console.log("Full Response", response);
+                alert("La IA no generó una imagen.");
+            }
+
+        } catch (error) {
+            console.error("Error processing changes:", error);
+            alert(`Error: ${error instanceof Error ? error.message : String(error)}`);
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
 
     // --- AI GENERATION LOGIC ---
     const handleConvertToPhotorealistic = async () => {
@@ -212,43 +321,84 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
 
         try {
             const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
-            const model = 'gemini-3-pro-image-preview';
+            const model = GEMINI_MODEL_ID;
             console.log("Render View using model:", model);
-            console.log("[Prompt Maestro] Sending Prompt:\n", manualPrompt);
 
-            // Prepare Contents
-            const parts: any[] = [];
+            // Determine Pipeline: Simple vs Visual Prompting
+            // If we have regions or drawings, use Visual Prompting pipeline
+            const hasVisualEdits = regions.length > 0 || (canvasRef.current?.getDrawingDataUrl() !== '');
 
-            // 1. Input Image (Sketch)
-            const inputBase64 = inputImage.split(',')[1];
-            parts.push({ inlineData: { mimeType: 'image/png', data: inputBase64 } });
+            if (hasVisualEdits) {
+                // Use New Pipeline
+                const layersImage = canvasRef.current?.getDrawingDataUrl() || ''; // Should get transparent png
 
-            // 2. Style Reference (if any)
-            if (styleReferenceImage) {
-                const styleBase64 = styleReferenceImage.split(',')[1];
-                parts.push({ inlineData: { mimeType: 'image/png', data: styleBase64 } });
-            }
+                const img = new Image();
+                img.src = inputImage;
+                await img.decode();
 
-            // 3. Prompt
-            parts.push({ text: manualPrompt });
+                const payload = {
+                    baseImage: inputImage,
+                    layersImage,
+                    regions,
+                    globalPrompt: manualPrompt,
+                    width: img.width,
+                    height: img.height
+                };
 
-            const contents = { parts };
-            // @ts-ignore
-            const config = { responseModalities: ["IMAGE"] };
+                const { contents, guideImageBase64, textPrompt } = await prepareVisualPromptingRequest(payload, import.meta.env.VITE_GEMINI_API_KEY);
+                setLastGuideImage(`data:image/png;base64,${guideImageBase64}`);
+                setLastSentPrompt(textPrompt);
 
-            const response = await ai.models.generateContent({ model, contents, config });
+                if (styleReferenceImage) {
+                    const styleBase64 = styleReferenceImage.split(',')[1];
+                    contents.parts.splice(2, 0, { inlineData: { mimeType: 'image/png', data: styleBase64 } });
+                }
 
-            let newImageBase64: string | null = null;
-            // Check candidates
-            for (const part of response.candidates?.[0]?.content.parts || []) {
-                if (part.inlineData) { newImageBase64 = part.inlineData.data; break; }
-            }
+                // @ts-ignore
+                const config = { responseModalities: ["IMAGE"] };
+                const response = await ai.models.generateContent({ model, contents, config });
 
-            if (newImageBase64) {
-                setResultImage(`data:image/png;base64,${newImageBase64}`);
+                let newImageBase64: string | null = null;
+                for (const part of response.candidates?.[0]?.content.parts || []) {
+                    if (part.inlineData) { newImageBase64 = part.inlineData.data; break; }
+                }
+
+                if (newImageBase64) {
+                    setResultImage(`data:image/png;base64,${newImageBase64}`);
+                } else {
+                    console.log("Full Response", response);
+                    alert("La IA no generó una imagen.");
+                }
+
             } else {
-                console.log("Full Response", response);
-                alert("La IA no generó una imagen. Revisa la consola para más detalles.");
+                // Use Classic Pipeline
+                console.log("[Prompt Maestro] Sending Classic Prompt:\n", manualPrompt);
+
+                const parts: any[] = [];
+                const inputBase64 = inputImage.split(',')[1];
+                parts.push({ inlineData: { mimeType: 'image/png', data: inputBase64 } });
+
+                if (styleReferenceImage) {
+                    const styleBase64 = styleReferenceImage.split(',')[1];
+                    parts.push({ inlineData: { mimeType: 'image/png', data: styleBase64 } });
+                }
+                parts.push({ text: manualPrompt });
+
+                const contents = { parts };
+                // @ts-ignore
+                const config = { responseModalities: ["IMAGE"] };
+                const response = await ai.models.generateContent({ model, contents, config });
+
+                let newImageBase64: string | null = null;
+                for (const part of response.candidates?.[0]?.content.parts || []) {
+                    if (part.inlineData) { newImageBase64 = part.inlineData.data; break; }
+                }
+
+                if (newImageBase64) {
+                    setResultImage(`data:image/png;base64,${newImageBase64}`);
+                } else {
+                    alert("La IA no generó una imagen.");
+                }
             }
 
         } catch (error) {
@@ -265,7 +415,7 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
         setIsUpscaling(true);
         try {
             const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
-            const model = 'gemini-3-pro-image-preview';
+            const model = 'gemini-3-pro-image-preview'; // Keep high quality for upscale
 
             const prompt = "Upscale this architectural render to 4K resolution. Enhance fine details, sharpen textures, and improve overall clarity while maintaining the exact composition and style of the original image. Output as a high-fidelity photorealistic image.";
 
@@ -312,37 +462,78 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
     return (
         <div className="flex w-full h-full bg-[#1e1e1e] relative overflow-hidden">
 
+            {/* NEW: Collapsible Left Panel (Configuration) */}
+            <aside className={`${isLeftPanelOpen ? 'w-64' : 'w-0'} bg-[#1e1e1e] border-r border-[#333] transition-all duration-300 flex-shrink-0 overflow-hidden`}>
+                <VisualPromptingControls
+                    regions={regions}
+                    onDeleteRegion={handleDeleteRegion}
+                    onUpdateRegionPrompt={handleUpdateRegionPrompt}
+                    onUpdateRegionImage={handleUpdateRegionImage}
+                    brushSize={brushSize}
+                    onBrushSizeChange={setBrushSize}
+                    brushColor={brushColor}
+                    onBrushColorChange={setBrushColor}
+                    activeTool={activeTool}
+                    onToolChange={setActiveTool}
+                    onProcessChanges={handleProcessChanges}
+                    isGenerating={isGenerating}
+                    generalInstructions={vpGeneralInstructions}
+                    onGeneralInstructionsChange={setVpGeneralInstructions}
+                    referenceImage={vpReferenceImage}
+                    onReferenceImageChange={setVpReferenceImage}
+                />
+            </aside>
+
+            {/* Floating Left Panel Toggle */}
+            <button
+                onClick={() => setIsLeftPanelOpen(!isLeftPanelOpen)}
+                className="absolute top-1/2 -translate-y-1/2 bg-theme-bg-secondary p-2 rounded-full shadow-xl z-40 border border-theme-bg-tertiary hover:bg-theme-bg-tertiary transition-all"
+                style={{ left: isLeftPanelOpen ? '19.25rem' : '3.25rem' }}
+                title={isLeftPanelOpen ? "Cerrar Panel" : "Abrir Panel"}
+            >
+                {isLeftPanelOpen ? <ChevronLeftIcon className="w-5 h-5" /> : <ChevronRightIcon className="w-5 h-5" />}
+            </button>
+
             {/* 1. MAIN AREA (Flexible) */}
             <div className="flex-grow flex flex-col h-full relative min-w-0">
 
                 {/* 1.1 Viewport (Image Area) */}
                 <div className="flex-grow bg-black/20 relative overflow-hidden">
                     {/* Image Display Wrapper for Zoom/Pan */}
-                    <div
-                        className="w-full h-full flex items-center justify-center cursor-move"
-                        onWheel={handleWheel}
-                        onPointerDown={handlePointerDown}
-                        onPointerMove={handlePointerMove}
-                        onPointerUp={handlePointerUp}
-                        onPointerLeave={handlePointerUp}
-                    >
+                    <div className="w-full h-full">
                         {inputImage ? (
-                            <img
-                                src={showOriginal ? inputImage : (resultImage || inputImage)}
-                                alt="Render View"
-                                className="object-contain max-w-none origin-center transition-transform duration-75 ease-linear"
-                                draggable={false}
-                                style={{
-                                    transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.zoom})`,
-                                    maxHeight: '100%',
-                                    maxWidth: '100%'
-                                }}
+                            <LayeredCanvas
+                                ref={canvasRef}
+                                baseImage={showOriginal ? inputImage : (resultImage || inputImage)}
+                                width={1024} // Should be dynamic based on image? 
+                                height={1024} // This is a placeholder. 
+                                // Ideally we get width/height from the loaded image or we set the canvas size to match the image natural size.
+                                // For MVP, let's assume 1024 or force resize.
+                                // Better: Wrapper that measures image?
+                                // Let's simplify: pass zoom/pan and let canvas handle transform.
+                                activeTool={activeTool}
+                                regions={regions}
+                                brushSize={brushSize}
+                                brushColor={brushColor}
+                                zoom={transform.zoom}
+                                pan={{ x: transform.x, y: transform.y }}
+                                onPanChange={(p) => setTransform(prev => ({ ...prev, x: p.x, y: p.y }))}
+                                onZoomChange={(z) => setTransform(prev => ({ ...prev, zoom: z }))}
+                                onRegionCreated={handleAddRegion}
                             />
                         ) : (
-                            <div className="text-theme-text-secondary flex flex-col items-center select-none">
-                                <PhotoIcon className="w-16 h-16 opacity-30 mb-4" />
-                                <p className="opacity-50">Visualización Arquitectónica</p>
-                                <p className="text-xs opacity-30 mt-2">Usa el panel derecho para importar</p>
+                            <div className="w-full h-full flex items-center justify-center select-none text-theme-text-secondary flex-col">
+                                <PhotoIcon className="w-16 h-16 opacity-30 mb-6" />
+                                <h3 className="text-xl font-bold opacity-50 mb-4">Empezar Proyecto</h3>
+                                <div className="flex gap-4">
+                                    <button onClick={handleImport} className="px-6 py-3 bg-theme-accent-primary hover:bg-theme-accent-secondary rounded-lg text-white font-bold shadow-lg shadow-theme-accent-primary/20 transition-all hover:scale-105 flex items-center gap-2">
+                                        <UndoIcon className="w-5 h-5 rotate-180" /> Importar Sketch
+                                    </button>
+                                    <label className="px-6 py-3 bg-theme-bg-secondary hover:bg-theme-bg-tertiary border border-theme-bg-tertiary rounded-lg text-white font-bold shadow-lg transition-all hover:scale-105 flex items-center gap-2 cursor-pointer">
+                                        <UploadIcon className="w-5 h-5" /> Subir Imagen
+                                        <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+                                    </label>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -370,6 +561,23 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
                             {isUpscaling ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <SparklesIcon className="w-3 h-3" />}
                             4K
                         </button>
+
+                        <div className="h-4 w-px bg-theme-bg-tertiary"></div>
+
+                        {/* Download */}
+                        <a
+                            href={resultImage || '#'}
+                            download={resultImage ? `Render_${Date.now()}.png` : undefined}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${resultImage ? 'bg-theme-bg-tertiary hover:bg-theme-bg-hover text-white' : 'bg-transparent text-gray-500 cursor-not-allowed'}`}
+                            onClick={(e) => !resultImage && e.preventDefault()}
+                        >
+                            <SaveIcon className="w-3 h-3" /> Descargar
+                        </a>
+
+                        {/* Clear */}
+                        <button onClick={handleReset} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900/30 text-xs font-bold transition-all" title="Limpiar Todo">
+                            <CloseIcon className="w-3 h-3" /> Limpiar
+                        </button>
                     </div>
 
                     {/* Generation Loading Overlay */}
@@ -384,46 +592,83 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
                     )}
                 </div>
 
-                {/* 1.2 Footer (Prompt Editor) */}
-                <div className="h-40 bg-theme-bg-secondary border-t border-theme-bg-tertiary p-3 flex gap-4 z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.3)]">
+                {/* 1.2 Footer (Prompt Editor & Payload Preview) */}
+                <div className="h-64 bg-theme-bg-secondary border-t border-theme-bg-tertiary p-0 z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.3)] grid grid-cols-2 divide-x divide-theme-bg-tertiary">
 
-                    {/* Image Verification Thumbnails (New Feature) */}
-                    <div className="flex flex-col gap-2 w-32 flex-shrink-0">
-                        <div className="flex gap-2 h-full">
-                            {/* Input Thumb */}
-                            <div className="flex-1 border border-theme-bg-tertiary bg-black/40 rounded relative overflow-hidden flex items-center justify-center group select-none">
-                                {inputImage ? (
-                                    <img src={inputImage} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-                                ) : (
-                                    <span className="text-[8px] text-gray-600">Sin Input</span>
+                    {/* LEFT COLUMN: VISUAL PROMPTING FLOW (Make Changes) */}
+                    <div className="flex flex-col h-full overflow-hidden bg-[#1a1a1a]">
+                        <div className="p-2 border-b border-theme-bg-tertiary flex justify-between items-center bg-[#222]">
+                            <span className="text-[10px] font-bold text-theme-accent-primary uppercase tracking-wider flex items-center gap-2">
+                                <SparklesIcon className="w-3 h-3" />
+                                Flujo 1: Visual Prompting (Edición)
+                            </span>
+                            <span className="text-[9px] text-theme-text-tertiary">{regions.length} Regiones</span>
+                        </div>
+
+                        <div className="flex-grow p-3 flex flex-col gap-3 overflow-hidden">
+                            {/* Images Carousel */}
+                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-theme-bg-tertiary h-24 flex-shrink-0">
+                                {/* 1. VP Base Input */}
+                                <div className="min-w-[80px] w-[80px] border border-theme-bg-tertiary bg-black/40 rounded relative overflow-hidden flex items-center justify-center group flex-shrink-0">
+                                    {inputImage ? (
+                                        <img src={inputImage} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" />
+                                    ) : (
+                                        <span className="text-[8px] text-gray-600">N/A</span>
+                                    )}
+                                    <span className="absolute bottom-0 left-0 bg-black/60 text-[7px] text-white px-1 font-bold rounded-tr">INPUT</span>
+                                </div>
+
+                                {/* 2. VP Guide (Drawing Layer) */}
+                                {/* 2. VP Guide (Drawing Layer + Base + Regions) */}
+                                <div className="min-w-[80px] w-[80px] border border-theme-bg-tertiary bg-black/40 rounded relative overflow-hidden flex items-center justify-center group flex-shrink-0 border-dashed border-gray-600">
+                                    {lastGuideImage ? (
+                                        <img src={lastGuideImage} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="p-1 text-center opacity-50">
+                                            <span className="text-[7px] block">Guía</span>
+                                            <div className="w-4 h-4 bg-gray-500 rounded-full mx-auto my-1 opacity-50"></div>
+                                            <span className="text-[6px] block text-theme-text-tertiary">(Pendiente)</span>
+                                        </div>
+                                    )}
+                                    <span className="absolute bottom-0 left-0 bg-black/60 text-[7px] text-purple-400 px-1 font-bold rounded-tr">GUÍA</span>
+                                </div>
+
+                                {/* 3. Region Refs */}
+                                {regions.filter(r => r.referenceImage).map(r => (
+                                    <div key={r.id} className="min-w-[80px] w-[80px] border border-theme-bg-tertiary bg-black/40 rounded relative overflow-hidden flex items-center justify-center group flex-shrink-0">
+                                        <img src={r.referenceImage} className="w-full h-full object-cover" />
+                                        <span className="absolute top-0 right-0 bg-red-600 text-[8px] text-white px-1 font-bold rounded-bl shadow-sm">R{r.regionNumber}</span>
+                                        <span className="absolute bottom-0 left-0 bg-black/60 text-[7px] text-gray-300 px-1 font-bold rounded-tr">REF</span>
+                                    </div>
+                                ))}
+                                {regions.length === 0 && (
+                                    <div className="flex-shrink-0 text-[9px] text-gray-600 flex items-center px-2 italic">Sin regiones definidas</div>
                                 )}
-                                <span className="absolute bottom-0 left-0 bg-black/60 text-[8px] text-white px-1 font-bold">INPUT</span>
                             </div>
 
-                            {/* Style Ref Thumb */}
-                            <div className="flex-1 border border-theme-bg-tertiary bg-black/40 rounded relative overflow-hidden flex items-center justify-center group select-none">
-                                {styleReferenceImage ? (
-                                    <img src={styleReferenceImage} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-                                ) : (
-                                    <span className="text-[8px] text-gray-600 text-center px-1">Sin Ref</span>
-                                )}
-                                <span className="absolute bottom-0 left-0 bg-black/60 text-[8px] text-emerald-400 px-1 font-bold">REF</span>
+                            {/* Shared Prompt Read-Only */}
+                            <div className="flex-grow flex flex-col min-h-0">
+                                <label className="text-[9px] font-bold text-theme-text-tertiary uppercase mb-1">Prompt Enviado (Debug)</label>
+                                <div className="flex-grow bg-[#111] rounded p-2 text-[10px] text-gray-400 font-mono overflow-y-auto border border-theme-bg-tertiary whitespace-pre-wrap">
+                                    {lastSentPrompt || manualPrompt || <span className="italic opacity-30">Prompt vacío</span>}
+                                </div>
                             </div>
                         </div>
-                        <div className="text-[9px] text-center text-theme-text-secondary">Previsualización de Envío</div>
                     </div>
 
-                    <div className="flex-grow flex flex-col gap-2">
-                        <div className="flex justify-between items-center">
-                            <span className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider flex items-center gap-2">
-                                <SparklesIcon className="w-3 h-3 text-theme-accent-primary" />
-                                Prompt Generado (Previsualización)
+                    {/* RIGHT COLUMN: PHOTOREALISTIC FLOW (Generate) */}
+                    <div className="flex flex-col h-full overflow-hidden bg-theme-bg-secondary">
+                        <div className="p-2 border-b border-theme-bg-tertiary flex justify-between items-center bg-[#252525]">
+                            <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider flex items-center gap-2">
+                                <SparklesIcon className="w-3 h-3 text-blue-400" />
+                                Flujo 2: Fotorealista (Generación)
                             </span>
+
                             <div className="flex gap-2">
                                 {/* Saved Prompts */}
                                 <div className="relative group">
-                                    <button className="text-[10px] bg-theme-bg-tertiary hover:bg-theme-bg-hover px-2 py-1 rounded text-theme-text-primary flex items-center gap-1 transition-colors">
-                                        <DownloadIcon className="w-3 h-3" /> Cargar ({savedPrompts.length})
+                                    <button className="text-[10px] bg-theme-bg-tertiary hover:bg-theme-bg-hover px-2 py-0.5 rounded text-theme-text-primary flex items-center gap-1 transition-colors">
+                                        <DownloadIcon className="w-3 h-3" /> Cargar
                                     </button>
                                     <div className="absolute bottom-full right-0 mb-1 w-64 bg-theme-bg-secondary border border-theme-bg-tertiary rounded shadow-xl hidden group-hover:block max-h-48 overflow-y-auto z-50">
                                         {savedPrompts.map((p, i) => (
@@ -432,20 +677,56 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
                                             </div>
                                         ))}
                                         {savedPrompts.length > 0 && <div onClick={handleClearSavedPrompts} className="p-2 text-[10px] text-red-400 hover:bg-red-900/20 cursor-pointer text-center transition-colors">Borrar Todo</div>}
-                                        {savedPrompts.length === 0 && <div className="p-2 text-[10px] text-gray-500 text-center">Vacío</div>}
                                     </div>
                                 </div>
-                                <button onClick={handleSavePrompt} className="text-[10px] bg-theme-bg-tertiary hover:bg-theme-bg-hover px-2 py-1 rounded text-theme-text-primary flex items-center gap-1 transition-colors" title="Guardar Prompt">
-                                    <SaveIcon className="w-3 h-3" /> Guardar
+                                <button onClick={handleSavePrompt} className="text-[10px] bg-theme-bg-tertiary hover:bg-theme-bg-hover px-2 py-0.5 rounded text-theme-text-primary flex items-center gap-1 transition-colors" title="Guardar">
+                                    <SaveIcon className="w-3 h-3" />
                                 </button>
                             </div>
                         </div>
-                        <textarea
-                            value={manualPrompt}
-                            onChange={(e) => setManualPrompt(e.target.value)}
-                            className="w-full flex-grow bg-theme-bg-primary border border-theme-bg-tertiary rounded p-2 text-xs font-mono text-theme-text-tertiary focus:text-theme-text-primary focus:border-theme-accent-primary outline-none resize-none transition-colors"
-                            spellCheck={false}
-                        />
+
+                        <div className="flex-grow p-3 flex flex-col gap-3 overflow-hidden">
+                            {/* Images Carousel */}
+                            <div className="flex gap-2 pb-2 h-24 flex-shrink-0 items-center">
+                                {/* 1. PR Base Input */}
+                                <div className="min-w-[80px] w-[80px] h-full border border-theme-bg-tertiary bg-black/40 rounded relative overflow-hidden flex items-center justify-center group flex-shrink-0">
+                                    {inputImage ? (
+                                        <img src={inputImage} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <span className="text-[8px] text-gray-600">Sin Input</span>
+                                    )}
+                                    <span className="absolute bottom-0 left-0 bg-black/60 text-[7px] text-white px-1 font-bold rounded-tr">INPUT</span>
+                                </div>
+
+                                {/* 2. PR Style Ref */}
+                                <div className={`min-w-[80px] w-[80px] h-full border border-theme-bg-tertiary rounded relative overflow-hidden flex items-center justify-center group flex-shrink-0 ${styleReferenceImage ? 'bg-black/40' : 'bg-transparent border-dashed'}`}>
+                                    {styleReferenceImage ? (
+                                        <img src={styleReferenceImage} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <span className="text-[8px] text-gray-600 text-center leading-tight">Sin Ref<br />Estilo</span>
+                                    )}
+                                    <span className="absolute bottom-0 left-0 bg-black/60 text-[7px] text-emerald-400 px-1 font-bold rounded-tr">ESTILO</span>
+                                </div>
+
+                                <span className="text-2xl text-theme-text-tertiary px-1 font-thin">+</span>
+
+                                <div className="flex-1 h-full bg-[#111] border border-theme-bg-tertiary rounded flex items-center justify-center text-[10px] text-theme-text-tertiary italic">
+                                    Prompt Textual
+                                </div>
+                            </div>
+
+                            {/* Editable Prompt */}
+                            <div className="flex-grow flex flex-col min-h-0">
+                                <label className="text-[9px] font-bold text-theme-text-secondary uppercase mb-1">Editor de Prompt</label>
+                                <textarea
+                                    value={manualPrompt}
+                                    onChange={(e) => setManualPrompt(e.target.value)}
+                                    className="w-full flex-grow bg-theme-bg-primary border border-theme-bg-tertiary rounded p-2 text-xs font-mono text-theme-text-tertiary focus:text-theme-text-primary focus:border-theme-accent-primary outline-none resize-none transition-colors leading-relaxed"
+                                    spellCheck={false}
+                                    placeholder="Describe tu visión arquitectónica..."
+                                />
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -540,18 +821,7 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
 
                 {/* Footer Controls (Generate, Actions) */}
                 <div className="p-4 border-t border-theme-bg-tertiary space-y-3 bg-theme-bg-secondary">
-                    {/* Input Management */}
-                    {!inputImage && (
-                        <div className="flex gap-2 mb-2">
-                            <button onClick={handleImport} className="flex-1 py-2 bg-theme-bg-tertiary hover:bg-theme-bg-hover rounded-md text-xs font-bold text-theme-text-primary border border-theme-bg-tertiary transition-colors flex items-center justify-center gap-2">
-                                <UploadIcon className="w-3 h-3" /> Importar Sketch
-                            </button>
-                            <label className="flex-1 py-2 bg-theme-bg-tertiary hover:bg-theme-bg-hover rounded-md text-xs font-bold text-theme-text-primary border border-theme-bg-tertiary transition-colors flex items-center justify-center gap-2 cursor-pointer">
-                                <PhotoIcon className="w-3 h-3" /> Subir Imagen
-                                <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-                            </label>
-                        </div>
-                    )}
+                    {/* Input Management in Sidebar removed as it's now in Center Canvas */}
                     {inputImage && (
                         <div className="flex gap-2">
                             <div className="flex-1 relative group h-16 bg-black/40 rounded overflow-hidden border border-theme-bg-tertiary">
@@ -572,30 +842,6 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
                     >
                         {isGenerating ? "Generando..." : <><SparklesIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" /> Convertir a Fotorealista</>}
                     </button>
-
-                    <div className="flex gap-2">
-                        {/* Save Button */}
-                        {resultImage ? (
-                            <a
-                                href={resultImage}
-                                download={`Render_${Date.now()}.png`}
-                                className="flex-1 py-2 rounded-md bg-emerald-600/10 border border-emerald-600/30 text-emerald-500 font-bold text-xs hover:bg-emerald-600/20 transition-all flex items-center justify-center gap-1 cursor-pointer"
-                            >
-                                <SaveIcon className="w-4 h-4" /> Descargar
-                            </a>
-                        ) : (
-                            <button disabled className="flex-1 py-2 rounded-md bg-theme-bg-tertiary border border-theme-bg-tertiary text-theme-text-tertiary font-medium text-xs flex items-center justify-center gap-1 cursor-not-allowed">
-                                <SaveIcon className="w-4 h-4" /> Descargar
-                            </button>
-                        )}
-
-                        <button
-                            onClick={handleReset}
-                            className="flex-1 py-2 rounded-md bg-red-500/10 border border-red-500/30 text-red-500 font-bold text-xs hover:bg-red-500/20 transition-all flex items-center justify-center gap-1"
-                        >
-                            <CloseIcon className="w-4 h-4" /> Limpiar
-                        </button>
-                    </div>
                 </div>
             </aside>
         </div>

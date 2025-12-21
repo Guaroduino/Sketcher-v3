@@ -40,6 +40,7 @@ import { ArchitecturalRenderView } from './components/ArchitecturalRenderView';
 import type { SketchObject, ItemType, Tool, CropRect, TransformState, WorkspaceTemplate, QuickAccessTool, ProjectFile, Project, StrokeMode, StrokeState, CanvasItem, StrokeModifier, ScaleUnit, Selection, ClipboardData, AppState, Point } from './types';
 import { getContentBoundingBox, createNewCanvas, createThumbnail, cloneCanvas, generateMipmaps, getCompositeCanvas } from './utils/canvasUtils';
 import { prepareAIRequest } from './utils/aiUtils';
+import { GEMINI_MODEL_ID } from './utils/constants';
 
 type Theme = 'light' | 'dark';
 
@@ -660,10 +661,13 @@ function useAI(
         setDebugInfo({ prompt: finalPrompt, images: debugImages });
 
         try {
+            // @ts-ignore
             const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
             const textPart = { text: finalPrompt };
-            const model = 'gemini-3-pro-image-preview';
-            const config = { responseModalities: [Modality.IMAGE, Modality.TEXT] };
+            const model = GEMINI_MODEL_ID;
+            const config = {
+                responseModalities: ["IMAGE"],
+            };
             const contents = (parts.length > 0) ? { parts: [...parts, textPart] } : { parts: [textPart] };
 
             const response = await ai.models.generateContent({ model, contents, config });
@@ -1519,25 +1523,29 @@ export function App() {
             {/* Main Content Area */}
             <div className="flex flex-grow min-h-0 relative">
 
-                {ui.isLeftSidebarVisible && (
-                    <Toolbar
-                        tool={tool} setTool={setTool} {...toolSettings} brushPresets={toolSettings.brushPresets} onSavePreset={toolSettings.onSavePreset}
-                        onUpdatePreset={toolSettings.onUpdatePreset} onLoadPreset={toolSettings.onLoadPreset} onDeletePreset={toolSettings.onDeletePreset}
-                        activeGuide={guides.activeGuide} setActiveGuide={guides.onSetActiveGuide} isOrthogonalVisible={guides.isOrthogonalVisible}
-                        onToggleOrthogonal={guides.toggleOrthogonal} onExportClick={() => ui.setExportModalOpen(true)}
-                        objects={objects} libraryItems={library.libraryItems} backgroundDataUrl={ai.backgroundDataUrl} debugInfo={ai.debugInfo}
-                        strokeMode={strokeMode} setStrokeMode={setStrokeMode} strokeModifier={strokeModifier} setStrokeModifier={setStrokeModifier}
-                        isSolidBox={isSolidBox} setIsSolidBox={setIsSolidBox}
-                    />
+                {activeView === 'sketch' && (
+                    <>
+                        {ui.isLeftSidebarVisible && (
+                            <Toolbar
+                                tool={tool} setTool={setTool} {...toolSettings} brushPresets={toolSettings.brushPresets} onSavePreset={toolSettings.onSavePreset}
+                                onUpdatePreset={toolSettings.onUpdatePreset} onLoadPreset={toolSettings.onLoadPreset} onDeletePreset={toolSettings.onDeletePreset}
+                                activeGuide={guides.activeGuide} setActiveGuide={guides.onSetActiveGuide} isOrthogonalVisible={guides.isOrthogonalVisible}
+                                onToggleOrthogonal={guides.toggleOrthogonal} onExportClick={() => ui.setExportModalOpen(true)}
+                                objects={objects} libraryItems={library.libraryItems} backgroundDataUrl={ai.backgroundDataUrl} debugInfo={ai.debugInfo}
+                                strokeMode={strokeMode} setStrokeMode={setStrokeMode} strokeModifier={strokeModifier} setStrokeModifier={setStrokeModifier}
+                                isSolidBox={isSolidBox} setIsSolidBox={setIsSolidBox}
+                            />
+                        )}
+                        <button
+                            onClick={() => ui.setIsLeftSidebarVisible(!ui.isLeftSidebarVisible)}
+                            className="absolute top-1/2 -translate-y-1/2 bg-theme-bg-secondary p-2 rounded-full shadow-xl z-40 border border-theme-bg-tertiary hover:bg-theme-bg-tertiary transition-all"
+                            style={{ left: ui.isLeftSidebarVisible ? '4.25rem' : '0.25rem' }}
+                            title={ui.isLeftSidebarVisible ? "Ocultar Herramientas" : "Mostrar Herramientas"}
+                        >
+                            {ui.isLeftSidebarVisible ? <ChevronLeftIcon className="w-5 h-5" /> : <ChevronRightIcon className="w-5 h-5" />}
+                        </button>
+                    </>
                 )}
-                <button
-                    onClick={() => ui.setIsLeftSidebarVisible(!ui.isLeftSidebarVisible)}
-                    className="absolute top-1/2 -translate-y-1/2 bg-theme-bg-secondary p-2 rounded-full shadow-xl z-40 border border-theme-bg-tertiary hover:bg-theme-bg-tertiary transition-all"
-                    style={{ left: ui.isLeftSidebarVisible ? '4.25rem' : '0.25rem' }}
-                    title={ui.isLeftSidebarVisible ? "Ocultar Herramientas" : "Mostrar Herramientas"}
-                >
-                    {ui.isLeftSidebarVisible ? <ChevronLeftIcon className="w-5 h-5" /> : <ChevronRightIcon className="w-5 h-5" />}
-                </button>
 
                 <BackgroundImportModal
                     isOpen={isBgImportModalOpen}
