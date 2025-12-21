@@ -838,6 +838,9 @@ export function App() {
     const [isPalmRejectionEnabled, setIsPalmRejectionEnabled] = useState(false); // Default: Disabled (Touch can draw)
     const [debugPointers, setDebugPointers] = useState<Map<number, { x: number, y: number }>>(new Map());
 
+    // -- View State --
+    const [activeView, setActiveView] = useState<'sketch' | 'render'>('sketch');
+
     // -- 3. CUSTOM HOOKS --
     const [selection, setSelection] = useState<Selection | null>(null);
     const [clipboard, setClipboard] = useState<ClipboardData | null>(null);
@@ -1447,6 +1450,28 @@ export function App() {
                             <WorkspaceTemplatesPopover isOpen={isWorkspacePopoverOpen} onClose={() => setWorkspacePopoverOpen(false)} templates={templates.templates} onSave={handleSaveWorkspace} onLoad={handleLoadWorkspace} onDelete={templates.deleteTemplate} onResetPreferences={() => ui.setIsResetConfirmOpen(true)} />
                         </button>
                     </div>
+
+                    {/* Center Tabs */}
+                    <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center bg-[--bg-secondary] rounded-lg p-1 border border-[--bg-tertiary]">
+                        <button
+                            onClick={() => setActiveView('sketch')}
+                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeView === 'sketch'
+                                ? 'bg-[--bg-primary] text-[--text-primary] shadow-sm'
+                                : 'text-[--text-secondary] hover:text-[--text-primary] hover:bg-[--bg-tertiary]'
+                                }`}
+                        >
+                            Sketch
+                        </button>
+                        <button
+                            onClick={() => setActiveView('render')}
+                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeView === 'render'
+                                ? 'bg-[--bg-primary] text-[--text-primary] shadow-sm'
+                                : 'text-[--text-secondary] hover:text-[--text-primary] hover:bg-[--bg-tertiary]'
+                                }`}
+                        >
+                            Render arquitectónico
+                        </button>
+                    </div>
                     <div className="flex items-center gap-2">
                         <div className="flex items-center gap-1 mr-2 px-2 py-1 bg-[--bg-secondary] rounded-md border border-[--bg-tertiary]">
                             {ui.deferredPrompt && (
@@ -1529,70 +1554,81 @@ export function App() {
                     <SparklesIcon className="w-8 h-8" />
                 </button>
                 <main ref={mainAreaRef} className="flex-grow relative" onDrop={(e) => { e.preventDefault(); try { const data = JSON.parse(e.dataTransfer.getData('application/json')); if (data.type === 'library-item') { onDropOnCanvas(data, activeItemId, setSelectedItemIds); } } catch (error) { /* Ignore */ } }} onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }} >
-                    <CanvasContainer
-                        items={drawableObjects} activeItemId={activeItemId} {...toolSettings} tool={tool} setTool={setTool}
-                        onDrawCommit={handleDrawCommit} onUpdateItem={updateItem} viewTransform={canvasView.viewTransform}
-                        setViewTransform={canvasView.setViewTransform} onSelectItem={handleSelectItem} {...guides} isCropping={isCropping}
-                        cropRect={cropRect} setCropRect={setCropRect} isTransforming={isTransforming} transformState={transformState}
-                        setTransformState={setTransformState} transformSourceBbox={transformSourceBbox} isAspectRatioLocked={isAspectRatioLocked}
-                        strokeMode={strokeMode} strokeState={strokeState} setStrokeState={setStrokeState} strokeModifier={strokeModifier}
-                        selection={selection} setSelection={setSelection} onCutSelection={handleCutSelection} onCopySelection={handleCopySelection}
-                        onDeleteSelection={handleDeleteSelection} onDeselect={handleDeselect} getMinZoom={getMinZoom} MAX_ZOOM={MAX_ZOOM}
-                        isAngleSnapEnabled={isAngleSnapEnabled} angleSnapValue={angleSnapValue} onAddItem={addItem}
-                        textEditState={textEditState} setTextEditState={setTextEditState} onCommitText={handleCommitText}
-                        strokeSmoothing={strokeSmoothing}
-                        setDebugPointers={setDebugPointers}
-                        isPalmRejectionEnabled={isPalmRejectionEnabled}
-                        scaleFactor={scaleFactor}
-                        isSolidBox={isSolidBox}
-                        scaleUnit={scaleUnit}
-                    />
-                    <div className="absolute top-36 left-4 md:top-2 md:left-2 flex items-center gap-2 z-10">
-                        {dimensionDisplay && <button ref={scaleButtonRef} onClick={() => setIsScalePopoverOpen(p => !p)} className="bg-[--bg-primary]/80 backdrop-blur-sm text-[--text-secondary] text-xs rounded-md px-2 py-1 pointer-events-auto hover:bg-[--bg-secondary] transition-colors" title="Ajustar escala del lienzo">{dimensionDisplay}</button>}
-                        <button
-                            onClick={() => setIsPalmRejectionEnabled(prev => !prev)}
-                            className={`bg-[--bg-primary]/80 backdrop-blur-sm text-xs rounded-md px-2 py-1 pointer-events-auto hover:bg-[--bg-secondary] transition-colors flex items-center gap-1 ${isPalmRejectionEnabled ? 'text-[--accent-primary] font-bold' : 'text-[--text-secondary]'}`}
-                            title={isPalmRejectionEnabled ? "Rechazo de Palma: ACTIVADO (Solo Lápiz)" : "Rechazo de Palma: DESACTIVADO (Lápiz y Dedo)"}
-                        >
-                            <HandRaisedIcon className="w-4 h-4" />
-                            <span className="hidden md:inline">{isPalmRejectionEnabled ? "Solo Lápiz" : "Táctil + Lápiz"}</span>
-                        </button>
-                    </div>
-                    <button onClick={ui.handleToggleFullscreen} className="absolute top-2 right-2 p-2 rounded-md bg-[--bg-primary]/80 backdrop-blur-sm hover:bg-[--bg-secondary] text-[--text-primary] transition-colors z-10" title={ui.isFullscreen ? "Salir de Pantalla Completa" : "Entrar en Pantalla Completa"}>
-                        {ui.isFullscreen ? <MinimizeIcon className="w-5 h-5" /> : <ExpandIcon className="w-5 h-5" />}
-                    </button>
-                    <ScalePopover isOpen={isScalePopoverOpen} onClose={() => setIsScalePopoverOpen(false)} anchorEl={scaleButtonRef.current} scaleFactor={scaleFactor} scaleUnit={scaleUnit} onSetScaleFactor={handleSetScaleFactor} onSetScaleUnit={handleSetScaleUnit} />
-                    <CanvasToolbar
-                        tool={tool} setTool={setTool} onZoomExtents={canvasView.onZoomExtents} onZoomIn={canvasView.onZoomIn} onZoomOut={canvasView.onZoomOut}
-                        onUndo={undo} onRedo={redo} onClearAll={() => ui.setShowClearConfirm(true)} canUndo={canUndo} canRedo={canRedo}
-                        isCropping={isCropping} onApplyCrop={handleApplyCrop} onCancelCrop={handleCancelCrop} isTransforming={isTransforming}
-                        transformState={transformState} onApplyTransform={handleApplyTransform} onCancelTransform={handleCancelTransform}
-                        isAspectRatioLocked={isAspectRatioLocked} onSetAspectRatioLocked={setAspectRatioLocked} isAngleSnapEnabled={isAngleSnapEnabled}
-                        onToggleAngleSnap={() => setIsAngleSnapEnabled(p => !p)} angleSnapValue={angleSnapValue} onSetAngleSnapValue={setAngleSnapValue}
-                        onSetActiveGuide={guides.onSetActiveGuide} onSetGridType={guides.setGridType} isSnapToGridEnabled={guides.isSnapToGridEnabled}
-                        onToggleSnapToGrid={guides.toggleSnapToGrid} isOrthogonalVisible={guides.isOrthogonalVisible} activeGuide={guides.activeGuide}
-                        orthogonalGuide={guides.orthogonalGuide} onSetOrthogonalAngle={guides.onSetOrthogonalAngle} gridGuide={guides.gridGuide}
-                        onSetGridSpacing={guides.onSetGridSpacing} onSetGridMajorLineFrequency={guides.onSetGridMajorLineFrequency}
-                        onSetGridIsoAngle={guides.onSetGridIsoAngle} onSetGridMajorLineColor={guides.onSetGridMajorLineColor}
-                        onSetGridMinorLineColor={guides.onSetGridMinorLineColor} areGuidesLocked={guides.areGuidesLocked}
-                        onSetAreGuidesLocked={guides.setAreGuidesLocked} isPerspectiveStrokeLockEnabled={guides.isPerspectiveStrokeLockEnabled}
-                        onSetIsPerspectiveStrokeLockEnabled={guides.setIsPerspectiveStrokeLockEnabled}
-                        onResetPerspective={guides.resetPerspective}
-                        scaleFactor={currentState.scaleFactor}
-                        scaleUnit={currentState.scaleUnit} onPaste={handlePaste} hasClipboardContent={!!clipboard}
-                        strokeSmoothing={strokeSmoothing} setStrokeSmoothing={setStrokeSmoothing}
-                        strokeMode={strokeMode} isSolidBox={isSolidBox} setIsSolidBox={setIsSolidBox}
-                    />
-                    <QuickAccessBar
-                        settings={quickAccess.quickAccessSettings} onUpdateColor={quickAccess.updateColor} onAddColor={quickAccess.addColor}
-                        onRemoveColor={quickAccess.removeColor} onUpdateSize={quickAccess.updateSize} onUpdateTool={quickAccess.updateTool}
-                        onAddToolSlot={quickAccess.addToolSlot}
-                        onSelectColor={handleSelectColor} onSelectSize={handleSelectSize} onSelectTool={(qaTool) => { if (qaTool.type === 'tool') setTool(qaTool.tool); else if (qaTool.type === 'fx-preset') { setTool('fx-brush'); toolSettings.onLoadPreset(qaTool.id); } else if (qaTool.type === 'mode-preset') { setTool(qaTool.tool); setStrokeMode(qaTool.mode); } }}
-                        onOpenToolSelector={(index) => { setIsToolSelectorOpen(true); setEditingToolSlotIndex(index); }}
-                        activeTool={tool} activeColor={activeColor} activeSize={activeSize} strokeMode={strokeMode}
-                        onToggleHeader={() => ui.setIsHeaderVisible(!ui.isHeaderVisible)}
-                        isHeaderVisible={ui.isHeaderVisible}
-                    />
+                    {activeView === 'sketch' ? (
+                        <>
+                            <CanvasContainer
+                                items={drawableObjects} activeItemId={activeItemId} {...toolSettings} tool={tool} setTool={setTool}
+                                onDrawCommit={handleDrawCommit} onUpdateItem={updateItem} viewTransform={canvasView.viewTransform}
+                                setViewTransform={canvasView.setViewTransform} onSelectItem={handleSelectItem} {...guides} isCropping={isCropping}
+                                cropRect={cropRect} setCropRect={setCropRect} isTransforming={isTransforming} transformState={transformState}
+                                setTransformState={setTransformState} transformSourceBbox={transformSourceBbox} isAspectRatioLocked={isAspectRatioLocked}
+                                strokeMode={strokeMode} strokeState={strokeState} setStrokeState={setStrokeState} strokeModifier={strokeModifier}
+                                selection={selection} setSelection={setSelection} onCutSelection={handleCutSelection} onCopySelection={handleCopySelection}
+                                onDeleteSelection={handleDeleteSelection} onDeselect={handleDeselect} getMinZoom={getMinZoom} MAX_ZOOM={MAX_ZOOM}
+                                isAngleSnapEnabled={isAngleSnapEnabled} angleSnapValue={angleSnapValue} onAddItem={addItem}
+                                textEditState={textEditState} setTextEditState={setTextEditState} onCommitText={handleCommitText}
+                                strokeSmoothing={strokeSmoothing}
+                                setDebugPointers={setDebugPointers}
+                                isPalmRejectionEnabled={isPalmRejectionEnabled}
+                                scaleFactor={scaleFactor}
+                                isSolidBox={isSolidBox}
+                                scaleUnit={scaleUnit}
+                            />
+                            <div className="absolute top-36 left-4 md:top-2 md:left-2 flex items-center gap-2 z-10">
+                                {dimensionDisplay && <button ref={scaleButtonRef} onClick={() => setIsScalePopoverOpen(p => !p)} className="bg-[--bg-primary]/80 backdrop-blur-sm text-[--text-secondary] text-xs rounded-md px-2 py-1 pointer-events-auto hover:bg-[--bg-secondary] transition-colors" title="Ajustar escala del lienzo">{dimensionDisplay}</button>}
+                                <button
+                                    onClick={() => setIsPalmRejectionEnabled(prev => !prev)}
+                                    className={`bg-[--bg-primary]/80 backdrop-blur-sm text-xs rounded-md px-2 py-1 pointer-events-auto hover:bg-[--bg-secondary] transition-colors flex items-center gap-1 ${isPalmRejectionEnabled ? 'text-[--accent-primary] font-bold' : 'text-[--text-secondary]'}`}
+                                    title={isPalmRejectionEnabled ? "Rechazo de Palma: ACTIVADO (Solo Lápiz)" : "Rechazo de Palma: DESACTIVADO (Lápiz y Dedo)"}
+                                >
+                                    <HandRaisedIcon className="w-4 h-4" />
+                                    <span className="hidden md:inline">{isPalmRejectionEnabled ? "Solo Lápiz" : "Táctil + Lápiz"}</span>
+                                </button>
+                            </div>
+                            <button onClick={ui.handleToggleFullscreen} className="absolute top-2 right-2 p-2 rounded-md bg-[--bg-primary]/80 backdrop-blur-sm hover:bg-[--bg-secondary] text-[--text-primary] transition-colors z-10" title={ui.isFullscreen ? "Salir de Pantalla Completa" : "Entrar en Pantalla Completa"}>
+                                {ui.isFullscreen ? <MinimizeIcon className="w-5 h-5" /> : <ExpandIcon className="w-5 h-5" />}
+                            </button>
+                            <ScalePopover isOpen={isScalePopoverOpen} onClose={() => setIsScalePopoverOpen(false)} anchorEl={scaleButtonRef.current} scaleFactor={scaleFactor} scaleUnit={scaleUnit} onSetScaleFactor={handleSetScaleFactor} onSetScaleUnit={handleSetScaleUnit} />
+                            <CanvasToolbar
+                                tool={tool} setTool={setTool} onZoomExtents={canvasView.onZoomExtents} onZoomIn={canvasView.onZoomIn} onZoomOut={canvasView.onZoomOut}
+                                onUndo={undo} onRedo={redo} onClearAll={() => ui.setShowClearConfirm(true)} canUndo={canUndo} canRedo={canRedo}
+                                isCropping={isCropping} onApplyCrop={handleApplyCrop} onCancelCrop={handleCancelCrop} isTransforming={isTransforming}
+                                transformState={transformState} onApplyTransform={handleApplyTransform} onCancelTransform={handleCancelTransform}
+                                isAspectRatioLocked={isAspectRatioLocked} onSetAspectRatioLocked={setAspectRatioLocked} isAngleSnapEnabled={isAngleSnapEnabled}
+                                onToggleAngleSnap={() => setIsAngleSnapEnabled(p => !p)} angleSnapValue={angleSnapValue} onSetAngleSnapValue={setAngleSnapValue}
+                                onSetActiveGuide={guides.onSetActiveGuide} onSetGridType={guides.setGridType} isSnapToGridEnabled={guides.isSnapToGridEnabled}
+                                onToggleSnapToGrid={guides.toggleSnapToGrid} isOrthogonalVisible={guides.isOrthogonalVisible} activeGuide={guides.activeGuide}
+                                orthogonalGuide={guides.orthogonalGuide} onSetOrthogonalAngle={guides.onSetOrthogonalAngle} gridGuide={guides.gridGuide}
+                                onSetGridSpacing={guides.onSetGridSpacing} onSetGridMajorLineFrequency={guides.onSetGridMajorLineFrequency}
+                                onSetGridIsoAngle={guides.onSetGridIsoAngle} onSetGridMajorLineColor={guides.onSetGridMajorLineColor}
+                                onSetGridMinorLineColor={guides.onSetGridMinorLineColor} areGuidesLocked={guides.areGuidesLocked}
+                                onSetAreGuidesLocked={guides.setAreGuidesLocked} isPerspectiveStrokeLockEnabled={guides.isPerspectiveStrokeLockEnabled}
+                                onSetIsPerspectiveStrokeLockEnabled={guides.setIsPerspectiveStrokeLockEnabled}
+                                onResetPerspective={guides.resetPerspective}
+                                scaleFactor={currentState.scaleFactor}
+                                scaleUnit={currentState.scaleUnit} onPaste={handlePaste} hasClipboardContent={!!clipboard}
+                                strokeSmoothing={strokeSmoothing} setStrokeSmoothing={setStrokeSmoothing}
+                                strokeMode={strokeMode} isSolidBox={isSolidBox} setIsSolidBox={setIsSolidBox}
+                            />
+                            <QuickAccessBar
+                                settings={quickAccess.quickAccessSettings} onUpdateColor={quickAccess.updateColor} onAddColor={quickAccess.addColor}
+                                onRemoveColor={quickAccess.removeColor} onUpdateSize={quickAccess.updateSize} onUpdateTool={quickAccess.updateTool}
+                                onAddToolSlot={quickAccess.addToolSlot}
+                                onSelectColor={handleSelectColor} onSelectSize={handleSelectSize} onSelectTool={(qaTool) => { if (qaTool.type === 'tool') setTool(qaTool.tool); else if (qaTool.type === 'fx-preset') { setTool('fx-brush'); toolSettings.onLoadPreset(qaTool.id); } else if (qaTool.type === 'mode-preset') { setTool(qaTool.tool); setStrokeMode(qaTool.mode); } }}
+                                onOpenToolSelector={(index) => { setIsToolSelectorOpen(true); setEditingToolSlotIndex(index); }}
+                                activeTool={tool} activeColor={activeColor} activeSize={activeSize} strokeMode={strokeMode}
+                                onToggleHeader={() => ui.setIsHeaderVisible(!ui.isHeaderVisible)}
+                                isHeaderVisible={ui.isHeaderVisible}
+                            />
+                        </>
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-[--bg-tertiary] text-[--text-secondary]">
+                            <div className="text-center">
+                                <h2 className="text-2xl font-bold mb-2">Render Arquitectónico</h2>
+                                <p>(Próximamente)</p>
+                            </div>
+                        </div>
+                    )}
                 </main>
                 {ui.isRightSidebarVisible && (
                     <aside ref={ui.rightSidebarRef} className={`flex-shrink-0 w-80 border-l border-[--bg-tertiary] flex flex-col ${aiPanelState.isOpen ? 'z-50' : ''}`}>
