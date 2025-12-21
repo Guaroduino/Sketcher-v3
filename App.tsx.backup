@@ -1,0 +1,244 @@
+import React, { useState, useCallback, useEffect, useRef, useReducer, useMemo, useLayoutEffect } from 'react';
+import { GoogleGenAI, Modality } from "@google/genai";
+import { User, onAuthStateChanged } from 'firebase/auth';
+import { auth, db, storage } from './firebaseConfig';
+import { collection, query, orderBy, onSnapshot, addDoc, doc, deleteDoc, serverTimestamp, getDocs, where } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+
+import { Toolbar } from './components/Toolbar';
+import { Outliner } from './components/Outliner';
+import { CanvasContainer } from './components/CanvasContainer';
+import { TransparencyEditor } from './components/TransparencyEditor';
+import { Library } from './components/Library';
+import { CanvasToolbar } from './components/CanvasToolbar';
+import { ExportModal } from './components/ExportModal';
+import { SingleObjectExportModal } from './components/SingleObjectExportModal';
+import { Auth } from './components/Auth';
+import { historyReducer, initialHistoryState } from './state/appState';
+import { useToolSettings } from './hooks/useToolSettings';
+import { useLibrary } from './hooks/useLibrary';
+import { useGuides } from './hooks/useGuides';
+import { useCanvasView, MAX_ZOOM } from './hooks/useCanvasView';
+import { useCanvasModes } from './hooks/useCanvasModes';
+import { useWorkspaceTemplates } from './hooks/useWorkspaceTemplates';
+import { useQuickAccess } from './hooks/useQuickAccess';
+import { useAIPanel } from './hooks/useAIPanel';
+import { QuickAccessBar } from './components/QuickAccessBar';
+import { ToolSelectorModal } from './components/modals/ToolSelectorModal';
+import { WorkspaceTemplatesPopover } from './components/WorkspaceTemplatesPopover';
+import { AIPanel } from './components/AIPanel';
+
+import { BackgroundImportModal } from './components/modals/BackgroundImportModal';
+import { ConfirmDeleteModal } from './components/modals/ConfirmDeleteModal';
+
+import { CanvasSizeModal } from './components/modals/CanvasSizeModal';
+import { ConfirmClearModal } from './components/modals/ConfirmClearModal';
+import { ConfirmDeleteLibraryItemModal } from './components/modals/ConfirmDeleteLibraryItemModal';
+import { ConfirmResetModal } from './components/modals/ConfirmResetModal';
+import { CropIcon, CheckIcon, XIcon, RulerIcon, PerspectiveIcon, ImageSquareIcon, OrthogonalIcon, MirrorIcon, GridIcon, IsometricIcon, LockIcon, LockOpenIcon, TransformIcon, FreeTransformIcon, SunIcon, MoonIcon, CopyIcon, CutIcon, PasteIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, GoogleIcon, LogOutIcon, ArrowUpIcon, ArrowDownIcon, SnapIcon, BookmarkIcon, SaveIcon, FolderOpenIcon, GalleryIcon, StrokeModeIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, ExpandIcon, MinimizeIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, HistoryIcon, MoreVerticalIcon, AddAboveIcon, AddBelowIcon, HandRaisedIcon, DownloadIcon, SparklesIcon, UndoIcon, RedoIcon } from './components/icons';
+import { ArchitecturalRenderView } from './components/ArchitecturalRenderView';
+import type { SketchObject, ItemType, Tool, CropRect, TransformState, WorkspaceTemplate, QuickAccessTool, ProjectFile, Project, StrokeMode, StrokeState, CanvasItem, StrokeModifier, ScaleUnit, Selection, ClipboardData, AppState, Point } from './types';
+import { getContentBoundingBox, createNewCanvas, createThumbnail, cloneCanvas, generateMipmaps, getCompositeCanvas } from './utils/canvasUtils';
+import { prepareAIRequest } from './utils/aiUtils';
+import { ProjectGalleryModal } from './components/modals/ProjectGalleryModal';
+
+type Theme = 'light' | 'dark';
+
+// Helper to convert a Data URL to a Base64 string for the API
+const dataURLtoBase64 = (dataUrl: string) => dataUrl.split(',')[1];
+
+// ===================================================================================
+// REFACTORED HOOKS
+// ===================================================================================
+
+/**
+ * Manages UI state such as modals, sidebars, and fullscreen mode.
+ */
+function useAppUI() {
+    const [isExportModalOpen, setExportModalOpen] = useState(false);
+    const [isSingleExportModalOpen, setSingleExportModalOpen] = useState(false);
+    const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+    const [showClearConfirm, setShowClearConfirm] = useState(false);
+    const [isCanvasSizeModalOpen, setCanvasSizeModalOpen] = useState(false);
+    const [isProjectGalleryOpen, setProjectGalleryOpen] = useState(false);
+    const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+    const [isRightSidebarVisible, setIsRightSidebarVisible] = useState(false);
+    const [isLeftSidebarVisible, setIsLeftSidebarVisible] = useState(false);
+    const [isHeaderVisible, setIsHeaderVisible] = useState(false);
+    const [rightSidebarTopHeight, setRightSidebarTopHeight] = useState<number | undefined>(undefined);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    const [showSplash, setShowSplash] = useState(true);
+    const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+    useEffect(() => {
+        const handler = (e: any) => {
+            e.preventDefault();
+            setDeferredPrompt(e);
+        };
+        window.addEventListener('beforeinstallprompt', handler);
+        return () => window.removeEventListener('beforeinstallprompt', handler);
+    }, []);
+
+    const handleInstallClick = async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+            setDeferredPrompt(null);
+        }
+    };
+
+    const rightSidebarRef = useRef<HTMLElement>(null);
+    const resizeDataRef = useRef({ isResizing: false, startY: 0, startHeight: 0 });
+
+    // UI Scaling
+    const [uiScale, setUiScale] = useState(1);
+
+    useEffect(() => {
+        const storedScale = localStorage.getItem('sketcher-ui-scale');
+        if (storedScale) {
+            const scale = parseFloat(storedScale);
+            setUiScale(scale);
+            document.documentElement.style.fontSize = `${16 * scale}px`;
+        }
+    }, []);
+
+    const handleUiScaleChange = (newScale: number) => {
+        // Clamp scale between 0.5 (small) and 1.5 (large)
+        const scale = Math.max(0.5, Math.min(1.5, newScale));
+        setUiScale(scale);
+        document.documentElement.style.fontSize = `${16 * scale}px`;
+        // Removed automatic saving to localStorage
+    };
+
+    const handleSaveUiScale = () => {
+        localStorage.setItem('sketcher-ui-scale', String(uiScale));
+        alert("Configuración de tamaño guardada correctamente para futuros inicios.");
+    };
+
+    useEffect(() => {
+        if (rightSidebarRef.current && rightSidebarTopHeight === undefined) {
+            const initialHeight = rightSidebarRef.current.offsetHeight * 0.75;
+            setRightSidebarTopHeight(initialHeight);
+        }
+    }, [rightSidebarTopHeight]);
+
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullscreen(!!(document.fullscreenElement || (document as any).webkitFullscreenElement));
+        };
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+        document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+        document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+        return () => {
+            document.removeEventListener('fullscreenchange', handleFullscreenChange);
+            document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+            document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+            document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+        };
+    }, []);
+
+    const handleToggleFullscreen = () => {
+        if (!isFullscreen) {
+            document.documentElement.requestFullscreen().catch(err => {
+                console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+            });
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+    };
+
+    const handleStart = () => {
+        setShowSplash(false);
+        if (!isFullscreen) {
+            document.documentElement.requestFullscreen().catch(err => {
+                console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+            });
+        }
+    };
+
+    const handlePointerMoveResize = useCallback((e: PointerEvent) => {
+        if (!resizeDataRef.current.isResizing || !rightSidebarRef.current) return;
+        const { startY, startHeight } = resizeDataRef.current;
+        const deltaY = e.clientY - startY;
+        let newHeight = startHeight + deltaY;
+        const sidebarHeight = rightSidebarRef.current.offsetHeight;
+        newHeight = Math.max(100, Math.min(newHeight, sidebarHeight - 100 - 6));
+        setRightSidebarTopHeight(newHeight);
+    }, []);
+
+    const handlePointerUpResize = useCallback(() => {
+        resizeDataRef.current.isResizing = false;
+        document.body.style.cursor = 'default';
+        window.removeEventListener('pointermove', handlePointerMoveResize);
+        window.removeEventListener('pointerup', handlePointerUpResize);
+    }, [handlePointerMoveResize]);
+
+    const handlePointerDownResize = useCallback((e: React.PointerEvent) => {
+        e.preventDefault();
+        if (!rightSidebarRef.current) return;
+        const topPanel = rightSidebarRef.current.children[0] as HTMLElement;
+        resizeDataRef.current = {
+            isResizing: true,
+            startY: e.clientY,
+            startHeight: topPanel.offsetHeight,
+        };
+        document.body.style.cursor = 'ns-resize';
+        window.addEventListener('pointermove', handlePointerMoveResize);
+        window.addEventListener('pointerup', handlePointerUpResize, { once: true });
+    }, [handlePointerMoveResize, handlePointerUpResize]);
+
+    return {
+        isExportModalOpen, setExportModalOpen,
+        isSingleExportModalOpen, setSingleExportModalOpen,
+        deletingItemId, setDeletingItemId,
+        showClearConfirm, setShowClearConfirm,
+        isCanvasSizeModalOpen, setCanvasSizeModalOpen,
+        isProjectGalleryOpen, setProjectGalleryOpen,
+        isResetConfirmOpen, setIsResetConfirmOpen,
+        isRightSidebarVisible, setIsRightSidebarVisible,
+        isLeftSidebarVisible, setIsLeftSidebarVisible,
+        isHeaderVisible, setIsHeaderVisible,
+        rightSidebarTopHeight,
+        isFullscreen,
+        handleToggleFullscreen,
+        rightSidebarRef,
+        handlePointerDownResize,
+        showSplash,
+        handleStart,
+        uiScale,
+        handleUiScaleChange,
+        handleSaveUiScale
+    };
+}
+
+export default function App() {
+    const [user, setUser] = useState<User | null>(null);
+    const [loadingAuth, setLoadingAuth] = useState(true);
+
+    // ===================================
+    // GLOBAL STATE (History & Reducer)
+    // ===================================
+    const [historyState, dispatch] = useReducer(historyReducer, initialHistoryState);
+    const { past, present: currentState, future } = historyState;
+    const { objects, canvasSize, scaleFactor, scaleUnit } = currentState;
+
+    const canUndo = past.length > 0;
+    const canRedo = future.length > 0;
+    
+    // ... rest of the App component (I will use multi_replace to only update the render part, 
+    // but I need to make sure I have the full context if I rewrite the file? 
+    // No, I should use multi_replace for safety if the file is huge.
+    // However, I'm writing the whole file because I want to ensure imports are correct and structure is clean.
+    // Actually, writing the whole App.tsx is risky due to its size (1700+ lines).
+    // I will ABORT writing the whole file and use multi_replace instead.
+    // This write_to_file call was a mistake in strategy given the file size.
+    // I will use replace_file_content or multi_replace_file_content instead.
+    
+    return null; 
+}

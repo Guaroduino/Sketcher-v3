@@ -36,8 +36,9 @@ import { ConfirmClearModal } from './components/modals/ConfirmClearModal';
 import { ConfirmDeleteLibraryItemModal } from './components/modals/ConfirmDeleteLibraryItemModal';
 import { ConfirmResetModal } from './components/modals/ConfirmResetModal';
 import { CropIcon, CheckIcon, XIcon, RulerIcon, PerspectiveIcon, ImageSquareIcon, OrthogonalIcon, MirrorIcon, GridIcon, IsometricIcon, LockIcon, LockOpenIcon, TransformIcon, FreeTransformIcon, SunIcon, MoonIcon, CopyIcon, CutIcon, PasteIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, GoogleIcon, LogOutIcon, ArrowUpIcon, ArrowDownIcon, SnapIcon, BookmarkIcon, SaveIcon, FolderOpenIcon, GalleryIcon, StrokeModeIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, ExpandIcon, MinimizeIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, HistoryIcon, MoreVerticalIcon, AddAboveIcon, AddBelowIcon, HandRaisedIcon, DownloadIcon, SparklesIcon } from './components/icons';
+import { ArchitecturalRenderView } from './components/ArchitecturalRenderView';
 import type { SketchObject, ItemType, Tool, CropRect, TransformState, WorkspaceTemplate, QuickAccessTool, ProjectFile, Project, StrokeMode, StrokeState, CanvasItem, StrokeModifier, ScaleUnit, Selection, ClipboardData, AppState, Point } from './types';
-import { getContentBoundingBox, createNewCanvas, createThumbnail, cloneCanvas, generateMipmaps } from './utils/canvasUtils';
+import { getContentBoundingBox, createNewCanvas, createThumbnail, cloneCanvas, generateMipmaps, getCompositeCanvas } from './utils/canvasUtils';
 import { prepareAIRequest } from './utils/aiUtils';
 
 type Theme = 'light' | 'dark';
@@ -1390,6 +1391,13 @@ export function App() {
     }, [canvasSize, scaleFactor, scaleUnit]);
 
     const drawableObjects = getDrawableObjects();
+    // -- 6. RENDER HELPERS --
+    const getSketchSnapshot = useCallback(() => {
+        const getter = () => drawableObjects;
+        const canvas = getCompositeCanvas(true, currentState.canvasSize, getter, currentState.backgroundObject);
+        return canvas ? canvas.toDataURL('image/png') : null;
+    }, [drawableObjects, currentState.canvasSize, currentState.backgroundObject]);
+
     const itemToDelete = objects.find(item => item.id === ui.deletingItemId);
 
     if (ui.showSplash) {
@@ -1409,7 +1417,7 @@ export function App() {
     return (
         <div className="w-screen h-screen bg-[--bg-primary] text-[--text-primary] flex flex-col font-sans overflow-hidden">
             <div className="absolute bottom-4 right-4 z-50 pointer-events-none opacity-50 text-[10px] text-[--text-secondary]">
-                v0.5.2-debug
+                v0.5.3-debug-render-fix
             </div>
             {/* Modals & Overlays */}
             {ui.isExportModalOpen && <ExportModal isOpen={ui.isExportModalOpen} onClose={() => ui.setExportModalOpen(false)} drawableObjects={drawableObjects.filter((o): o is SketchObject => o.type === 'object')} canvasSize={canvasSize} />}
@@ -1494,6 +1502,10 @@ export function App() {
                             <button onClick={ui.handleSaveUiScale} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title="Guardar configuración de tamaño">
                                 <SaveIcon className="w-4 h-4" />
                             </button>
+                            <div className="w-px h-4 bg-[--bg-tertiary] mx-1"></div>
+                            <button onClick={ui.handleToggleFullscreen} className="p-1.5 rounded-md hover:bg-[--bg-tertiary] text-[--text-secondary]" title={ui.isFullscreen ? "Salir de Pantalla Completa" : "Pantalla Completa"}>
+                                {ui.isFullscreen ? <MinimizeIcon className="w-4 h-4" /> : <ExpandIcon className="w-4 h-4" />}
+                            </button>
                         </div>
 
                         <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-md bg-[--bg-secondary] hover:bg-[--bg-tertiary] text-[--text-secondary]">
@@ -1506,6 +1518,7 @@ export function App() {
 
             {/* Main Content Area */}
             <div className="flex flex-grow min-h-0 relative">
+
                 {ui.isLeftSidebarVisible && (
                     <Toolbar
                         tool={tool} setTool={setTool} {...toolSettings} brushPresets={toolSettings.brushPresets} onSavePreset={toolSettings.onSavePreset}
@@ -1545,15 +1558,20 @@ export function App() {
                     debugInfo={ai.debugInfo}
                 />
 
-                <button
-                    onClick={() => aiPanelState.setIsOpen(true)}
-                    className="absolute bottom-24 left-4 md:bottom-6 md:left-6 p-4 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-2xl hover:scale-110 transition-transform z-40 flex items-center justify-center border-2 border-white/20"
-                    title="Mejorar con IA"
-                    style={{ left: ui.isLeftSidebarVisible ? '6.5rem' : '' }}
-                >
-                    <SparklesIcon className="w-8 h-8" />
-                </button>
+                {activeView === 'sketch' && (
+                    <button
+                        onClick={() => aiPanelState.setIsOpen(true)}
+                        className="absolute bottom-24 left-4 md:bottom-6 md:left-6 p-4 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-2xl hover:scale-110 transition-transform z-40 flex items-center justify-center border-2 border-white/20"
+                        title="Mejorar con IA"
+                        style={{ left: ui.isLeftSidebarVisible ? '6.5rem' : '' }}
+                    >
+                        <SparklesIcon className="w-8 h-8" />
+                    </button>
+                )}
                 <main ref={mainAreaRef} className="flex-grow relative" onDrop={(e) => { e.preventDefault(); try { const data = JSON.parse(e.dataTransfer.getData('application/json')); if (data.type === 'library-item') { onDropOnCanvas(data, activeItemId, setSelectedItemIds); } } catch (error) { /* Ignore */ } }} onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }} >
+                    {/* Fullscreen Toggle - Always Visible */}
+
+
                     {activeView === 'sketch' ? (
                         <>
                             <CanvasContainer
@@ -1585,9 +1603,7 @@ export function App() {
                                     <span className="hidden md:inline">{isPalmRejectionEnabled ? "Solo Lápiz" : "Táctil + Lápiz"}</span>
                                 </button>
                             </div>
-                            <button onClick={ui.handleToggleFullscreen} className="absolute top-2 right-2 p-2 rounded-md bg-[--bg-primary]/80 backdrop-blur-sm hover:bg-[--bg-secondary] text-[--text-primary] transition-colors z-10" title={ui.isFullscreen ? "Salir de Pantalla Completa" : "Entrar en Pantalla Completa"}>
-                                {ui.isFullscreen ? <MinimizeIcon className="w-5 h-5" /> : <ExpandIcon className="w-5 h-5" />}
-                            </button>
+
                             <ScalePopover isOpen={isScalePopoverOpen} onClose={() => setIsScalePopoverOpen(false)} anchorEl={scaleButtonRef.current} scaleFactor={scaleFactor} scaleUnit={scaleUnit} onSetScaleFactor={handleSetScaleFactor} onSetScaleUnit={handleSetScaleUnit} />
                             <CanvasToolbar
                                 tool={tool} setTool={setTool} onZoomExtents={canvasView.onZoomExtents} onZoomIn={canvasView.onZoomIn} onZoomOut={canvasView.onZoomOut}
@@ -1622,15 +1638,17 @@ export function App() {
                             />
                         </>
                     ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-[--bg-tertiary] text-[--text-secondary]">
-                            <div className="text-center">
-                                <h2 className="text-2xl font-bold mb-2">Render Arquitectónico</h2>
-                                <p>(Próximamente)</p>
-                            </div>
-                        </div>
+                        <ArchitecturalRenderView
+                            onImportFromSketch={getSketchSnapshot}
+                            isSidebarOpen={ui.isRightSidebarVisible}
+                            onUndo={() => dispatch({ type: 'UNDO' })}
+                            onRedo={() => dispatch({ type: 'REDO' })}
+                            canUndo={canUndo}
+                            canRedo={canRedo}
+                        />
                     )}
                 </main>
-                {ui.isRightSidebarVisible && (
+                {activeView === 'sketch' && ui.isRightSidebarVisible && (
                     <aside ref={ui.rightSidebarRef} className={`flex-shrink-0 w-80 border-l border-[--bg-tertiary] flex flex-col ${aiPanelState.isOpen ? 'z-50' : ''}`}>
                         <div style={{ height: ui.rightSidebarTopHeight }} className="flex-shrink-0">
                             <Outliner

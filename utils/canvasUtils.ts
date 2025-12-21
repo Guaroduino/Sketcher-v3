@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Point, ViewTransform, CropRect, PerspectiveGuide } from '../types';
+import type { Point, ViewTransform, CropRect, PerspectiveGuide, CanvasItem, SketchObject } from '../types';
 
 export const getCanvasPoint = (e: PointerEvent | React.PointerEvent<HTMLDivElement>, viewTransform: ViewTransform, canvas: HTMLCanvasElement): Point => {
     const rect = canvas.getBoundingClientRect();
@@ -353,6 +353,58 @@ export const cloneCanvasWithContext = (oldCanvas: HTMLCanvasElement): { canvas: 
     if (!newCtx) throw new Error("Failed to get 2D context for cloned canvas");
     newCtx.drawImage(oldCanvas, 0, 0);
     return { canvas: newCanvas, context: newCtx };
+};
+
+export const getCompositeCanvas = (fullResolution: boolean, canvasSize: { width: number, height: number }, getDrawableObjects: () => CanvasItem[], backgroundObject?: CanvasItem): HTMLCanvasElement | null => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvasSize.width;
+    canvas.height = canvasSize.height;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+
+    if (!context) return null;
+
+    // 1. Fill Background
+    // If backgroundObject is a SketchObject and has a canvas, draw it.
+    // Otherwise fill white.
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (backgroundObject) {
+        // Cast to SketchObject to access potential canvas/opacity
+        const bgItem = backgroundObject as unknown as SketchObject;
+        if (bgItem.canvas && bgItem.isVisible) {
+            context.save();
+            context.globalAlpha = bgItem.opacity;
+            context.drawImage(bgItem.canvas, bgItem.offsetX || 0, bgItem.offsetY || 0);
+            context.restore();
+        }
+    }
+
+    // 2. Draw Items
+    const items = getDrawableObjects();
+    items.forEach(item => {
+        // Cast to SketchObject to access properties
+        const sketchItem = item as unknown as SketchObject;
+
+        if (!sketchItem.isVisible) return;
+        if (!sketchItem.canvas) return;
+
+        context.save();
+        context.globalAlpha = sketchItem.opacity;
+
+        // Draw the item's backing canvas
+        // We assume the backing canvas is already the size of the viewport OR positioned.
+        // Looking at SketchObject, it has offsetX/offsetY.
+        // Use 0,0 if not present.
+        const x = sketchItem.offsetX || 0;
+        const y = sketchItem.offsetY || 0;
+
+        context.drawImage(sketchItem.canvas, x, y);
+
+        context.restore();
+    });
+
+    return canvas;
 };
 
 export const createNewCanvas = (width: number, height: number): { canvas: HTMLCanvasElement, context: CanvasRenderingContext2D } => {
