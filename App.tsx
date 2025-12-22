@@ -36,6 +36,7 @@ import { ConfirmDeleteLibraryItemModal } from './components/modals/ConfirmDelete
 import { ConfirmResetModal } from './components/modals/ConfirmResetModal';
 import { CropIcon, CheckIcon, XIcon, RulerIcon, PerspectiveIcon, ImageSquareIcon, OrthogonalIcon, MirrorIcon, GridIcon, IsometricIcon, LockIcon, LockOpenIcon, TransformIcon, FreeTransformIcon, SunIcon, MoonIcon, CopyIcon, CutIcon, PasteIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, GoogleIcon, LogOutIcon, ArrowUpIcon, ArrowDownIcon, SnapIcon, BookmarkIcon, SaveIcon, FolderOpenIcon, GalleryIcon, StrokeModeIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, ExpandIcon, MinimizeIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, HistoryIcon, MoreVerticalIcon, AddAboveIcon, AddBelowIcon, HandRaisedIcon, DownloadIcon, SparklesIcon } from './components/icons';
 import { ArchitecturalRenderView } from './components/ArchitecturalRenderView';
+import { AIRequestInspectorModal } from './components/modals/AIRequestInspectorModal';
 import type { SketchObject, ItemType, Tool, CropRect, TransformState, WorkspaceTemplate, QuickAccessTool, ProjectFile, Project, StrokeMode, StrokeState, CanvasItem, StrokeModifier, ScaleUnit, Selection, ClipboardData, AppState, Point } from './types';
 import { getContentBoundingBox, createNewCanvas, createThumbnail, cloneCanvas, generateMipmaps, getCompositeCanvas } from './utils/canvasUtils';
 import { prepareAIRequest } from './utils/aiUtils';
@@ -474,7 +475,8 @@ function useAI(
     onImportToLibrary: (file: File, parentId: string | null, options?: { scaleFactor?: number }) => void,
     handleSelectItem: (id: string | null) => void,
     setTool: (tool: Tool) => void,
-    currentScaleFactor: number
+    currentScaleFactor: number,
+    inspectRequest?: (payload: { model: string; parts: any[]; config?: any }) => Promise<boolean>
 ) {
     const [isEnhancing, setIsEnhancing] = useState(false);
     const [enhancementPreview, setEnhancementPreview] = useState<{
@@ -669,6 +671,15 @@ function useAI(
             };
             const contents = (parts.length > 0) ? { parts: [...parts, textPart] } : { parts: [textPart] };
 
+            // INSPECTOR CHECK
+            if (inspectRequest) {
+                const confirmed = await inspectRequest({ model, parts: contents.parts, config });
+                if (!confirmed) {
+                    setIsEnhancing(false);
+                    return;
+                }
+            }
+
             const response = await ai.models.generateContent({ model, contents, config });
 
             let newImageBase64: string | null = null;
@@ -799,7 +810,7 @@ function useAI(
         } finally {
             setIsEnhancing(false);
         }
-    }, [dispatch, onImportToLibrary, handleSelectItem, setTool, getCompositeCanvas, getCombinedBbox]);
+    }, [dispatch, onImportToLibrary, handleSelectItem, setTool, getCompositeCanvas, getCombinedBbox, inspectRequest]);
 
     return {
         isEnhancing,
@@ -854,6 +865,29 @@ export function App() {
 
     const [strokeSmoothing, setStrokeSmoothing] = useState(0.5);
 
+    // AI Inspector State
+    const [inspectorPayload, setInspectorPayload] = useState<{ model: string; parts: any[]; config?: any } | null>(null);
+    const [inspectorResolve, setInspectorResolve] = useState<((confirm: boolean) => void) | null>(null);
+
+    const inspectAIRequest = useCallback((payload: { model: string; parts: any[]; config?: any }) => {
+        return new Promise<boolean>((resolve) => {
+            setInspectorPayload(payload);
+            setInspectorResolve(() => resolve);
+        });
+    }, []);
+
+    const confirmInspector = () => {
+        if (inspectorResolve) inspectorResolve(true);
+        setInspectorPayload(null);
+        setInspectorResolve(null);
+    };
+
+    const cancelInspector = () => {
+        if (inspectorResolve) inspectorResolve(false);
+        setInspectorPayload(null);
+        setInspectorResolve(null);
+    };
+
     const ui = useAppUI();
 
     // Custom Hooks
@@ -871,7 +905,7 @@ export function App() {
         }
     }, [selection]);
 
-    const ai = useAI(dispatch, library.onImportToLibrary, handleSelectItem, setTool, scaleFactor);
+    const ai = useAI(dispatch, library.onImportToLibrary, handleSelectItem, setTool, scaleFactor, inspectAIRequest);
     const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
 
     const loadAllToolSettings = useCallback((settings: any) => {
@@ -1620,6 +1654,7 @@ export function App() {
                             canUndo={canUndo}
                             canRedo={canRedo}
                             onRenderComplete={setLastRenderedImage}
+                            onInspectRequest={inspectAIRequest}
                         />
                     </div>
                 </main>
@@ -1647,6 +1682,12 @@ export function App() {
                     {ui.isRightSidebarVisible ? <ChevronRightIcon className="w-5 h-5" /> : <ChevronLeftIcon className="w-5 h-5" />}
                 </button>
             </div >
+            <AIRequestInspectorModal
+                isOpen={!!inspectorPayload}
+                onClose={cancelInspector}
+                onConfirm={confirmInspector}
+                payload={inspectorPayload}
+            />
         </div >
     );
 }

@@ -31,77 +31,104 @@ export const prepareAIRequest = (
 
     switch (payload.activeAiTab) {
         case 'object': {
-            const { enhancementPrompt, enhancementStylePrompt, enhancementNegativePrompt, enhancementCreativity, enhancementChromaKey, enhancementPreviewBgColor } = payload;
-            // For preview, we tolerate empty prompt (show what we have)
-            const description = enhancementPrompt || "";
+            const { enhancementPrompt, enhancementStylePrompt, enhancementNegativePrompt, enhancementCreativity, enhancementChromaKey, enhancementPreviewBgColor, enhancementTextOnly } = payload;
 
-            // Manual Composite Logic for filteredObjects
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = canvasSize.width;
-            tempCanvas.height = canvasSize.height;
-            const tempCtx = tempCanvas.getContext('2d');
-            if (!tempCtx) return null;
+            if (enhancementTextOnly) {
+                // --- TEXT ONLY FLOW ---
 
-            [...filteredObjects].reverse().forEach(obj => {
-                if (obj.canvas) {
-                    tempCtx.globalAlpha = obj.opacity;
-                    tempCtx.drawImage(obj.canvas, 0, 0);
+                // 1. Construct Prompt
+                finalPrompt = `Genera una imagen basada en la siguiente descripción: "${enhancementPrompt}".\nEstilo: "${enhancementStylePrompt}".\n`;
+                let creativityInstruction = '';
+                if (enhancementCreativity <= 40) creativityInstruction = 'Sé muy preciso y literal con la descripción.';
+                else if (enhancementCreativity <= 80) creativityInstruction = 'Interpreta la descripción con buen gusto artístico.';
+                else if (enhancementCreativity <= 120) creativityInstruction = 'Sé creativo e imaginativo con la descripción.';
+                else creativityInstruction = 'Prioriza la creatividad y el impacto visual sobre la literalidad de la descripción.';
+
+                finalPrompt += creativityInstruction + ' ';
+
+                if (enhancementNegativePrompt && enhancementNegativePrompt.trim()) {
+                    finalPrompt += `Asegúrate de evitar estrictamente lo siguiente: "${enhancementNegativePrompt}". `;
                 }
-            });
-            tempCtx.globalAlpha = 1.0;
-
-            const compositeCanvas = tempCanvas;
-            let imageCanvas = compositeCanvas;
-
-            // Bbox Logic
-            const combinedBbox = getCombinedBbox(filteredObjects);
-
-            if (combinedBbox && combinedBbox.width > 0 && combinedBbox.height > 0) {
-                referenceWidth = combinedBbox.width;
-                const cropCanvas = document.createElement('canvas');
-                cropCanvas.width = combinedBbox.width;
-                cropCanvas.height = combinedBbox.height;
-                const cropCtx = cropCanvas.getContext('2d');
-                if (cropCtx) {
-                    cropCtx.drawImage(compositeCanvas, combinedBbox.x, combinedBbox.y, combinedBbox.width, combinedBbox.height, 0, 0, combinedBbox.width, combinedBbox.height);
-                    imageCanvas = cropCanvas;
+                if (enhancementChromaKey && enhancementChromaKey !== 'none') {
+                    const colorHex = enhancementChromaKey === 'green' ? '#00FF00' : '#0000FF';
+                    finalPrompt += `Importante: La imagen resultante DEBE tener un fondo de croma sólido y uniforme de color ${enhancementChromaKey} (${colorHex}). El sujeto principal no debe contener este color.`;
                 }
-            }
 
-            let finalImageCanvas = document.createElement('canvas');
-            finalImageCanvas.width = imageCanvas.width;
-            finalImageCanvas.height = imageCanvas.height;
-            const finalCtx = finalImageCanvas.getContext('2d');
-            if (finalCtx) {
-                finalCtx.fillStyle = enhancementPreviewBgColor || '#FFFFFF';
-                finalCtx.fillRect(0, 0, finalImageCanvas.width, finalImageCanvas.height);
-                finalCtx.drawImage(imageCanvas, 0, 0);
+                // No debug image for text only input, maybe we can add a placeholder?
+                // parts remains empty effectively (no image parts)
             } else {
-                finalImageCanvas = imageCanvas;
+                // --- EXISTING IMAGE TO IMAGE FLOW ---
+                // For preview, we tolerate empty prompt (show what we have)
+                const description = enhancementPrompt || "";
+
+                // Manual Composite Logic for filteredObjects
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvasSize.width;
+                tempCanvas.height = canvasSize.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                if (!tempCtx) return null;
+
+                [...filteredObjects].reverse().forEach(obj => {
+                    if (obj.canvas) {
+                        tempCtx.globalAlpha = obj.opacity;
+                        tempCtx.drawImage(obj.canvas, 0, 0);
+                    }
+                });
+                tempCtx.globalAlpha = 1.0;
+
+                const compositeCanvas = tempCanvas;
+                let imageCanvas = compositeCanvas;
+
+                // Bbox Logic
+                const combinedBbox = getCombinedBbox(filteredObjects);
+
+                if (combinedBbox && combinedBbox.width > 0 && combinedBbox.height > 0) {
+                    referenceWidth = combinedBbox.width;
+                    const cropCanvas = document.createElement('canvas');
+                    cropCanvas.width = combinedBbox.width;
+                    cropCanvas.height = combinedBbox.height;
+                    const cropCtx = cropCanvas.getContext('2d');
+                    if (cropCtx) {
+                        cropCtx.drawImage(compositeCanvas, combinedBbox.x, combinedBbox.y, combinedBbox.width, combinedBbox.height, 0, 0, combinedBbox.width, combinedBbox.height);
+                        imageCanvas = cropCanvas;
+                    }
+                }
+
+                let finalImageCanvas = document.createElement('canvas');
+                finalImageCanvas.width = imageCanvas.width;
+                finalImageCanvas.height = imageCanvas.height;
+                const finalCtx = finalImageCanvas.getContext('2d');
+                if (finalCtx) {
+                    finalCtx.fillStyle = enhancementPreviewBgColor || '#FFFFFF';
+                    finalCtx.fillRect(0, 0, finalImageCanvas.width, finalImageCanvas.height);
+                    finalCtx.drawImage(imageCanvas, 0, 0);
+                } else {
+                    finalImageCanvas = imageCanvas;
+                }
+
+                const dataUrl = finalImageCanvas.toDataURL('image/jpeg');
+                debugImages.push({ name: 'Imagen de Entrada', url: dataUrl });
+                parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(dataUrl) } });
+
+                let creativityInstruction = '';
+                if (enhancementCreativity <= 40) creativityInstruction = 'Sé muy fiel a la imagen de entrada y a la descripción proporcionada. Realiza solo los cambios solicitados.';
+                else if (enhancementCreativity <= 80) creativityInstruction = 'Mantén una fidelidad moderada a la imagen y descripción, pero puedes hacer pequeñas mejoras estéticas.';
+                else if (enhancementCreativity <= 120) creativityInstruction = 'Usa la imagen y la descripción como una fuerte inspiración. Siéntete libre de reinterpretar elementos para un mejor resultado artístico.';
+                else creativityInstruction = 'Usa la imagen y la descripción solo como una vaga inspiración. Prioriza un resultado impactante y altamente creativo sobre la fidelidad al original.';
+
+                const promptParts = [
+                    `Tu tarea es mejorar o transformar una imagen de entrada.`,
+                    `Descripción de la transformación deseada: "${description}".`,
+                    `El estilo visual a aplicar es: "${enhancementStylePrompt}".`,
+                    creativityInstruction,
+                ];
+                if (enhancementNegativePrompt && enhancementNegativePrompt.trim()) promptParts.push(`Asegúrate de evitar estrictamente lo siguiente: "${enhancementNegativePrompt}".`);
+                if (enhancementChromaKey && enhancementChromaKey !== 'none') {
+                    const colorHex = enhancementChromaKey === 'green' ? '#00FF00' : '#0000FF';
+                    promptParts.push(`Importante: La imagen resultante DEBE tener un fondo de croma sólido y uniforme de color ${enhancementChromaKey} (${colorHex}). El sujeto principal no debe contener este color.`);
+                }
+                finalPrompt = promptParts.join(' ');
             }
-
-            const dataUrl = finalImageCanvas.toDataURL('image/jpeg');
-            debugImages.push({ name: 'Imagen de Entrada', url: dataUrl });
-            parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(dataUrl) } });
-
-            let creativityInstruction = '';
-            if (enhancementCreativity <= 40) creativityInstruction = 'Sé muy fiel a la imagen de entrada y a la descripción proporcionada. Realiza solo los cambios solicitados.';
-            else if (enhancementCreativity <= 80) creativityInstruction = 'Mantén una fidelidad moderada a la imagen y descripción, pero puedes hacer pequeñas mejoras estéticas.';
-            else if (enhancementCreativity <= 120) creativityInstruction = 'Usa la imagen y la descripción como una fuerte inspiración. Siéntete libre de reinterpretar elementos para un mejor resultado artístico.';
-            else creativityInstruction = 'Usa la imagen y la descripción solo como una vaga inspiración. Prioriza un resultado impactante y altamente creativo sobre la fidelidad al original.';
-
-            const promptParts = [
-                `Tu tarea es mejorar o transformar una imagen de entrada.`,
-                `Descripción de la transformación deseada: "${description}".`,
-                `El estilo visual a aplicar es: "${enhancementStylePrompt}".`,
-                creativityInstruction,
-            ];
-            if (enhancementNegativePrompt && enhancementNegativePrompt.trim()) promptParts.push(`Asegúrate de evitar estrictamente lo siguiente: "${enhancementNegativePrompt}".`);
-            if (enhancementChromaKey && enhancementChromaKey !== 'none') {
-                const colorHex = enhancementChromaKey === 'green' ? '#00FF00' : '#0000FF';
-                promptParts.push(`Importante: La imagen resultante DEBE tener un fondo de croma sólido y uniforme de color ${enhancementChromaKey} (${colorHex}). El sujeto principal no debe contener este color.`);
-            }
-            finalPrompt = promptParts.join(' ');
             break;
         }
         case 'composition': {

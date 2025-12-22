@@ -15,19 +15,32 @@ export interface ArchitecturalRenderOptions {
     hasStyleReference?: boolean;
 }
 
-const getRoleDefinition = () => "ROLE: You are an Architectural Photographer using high-end equipment (Phase One XF IQ4, 150MP). Your task is to transform a visual sketch/drawing into a indistinguishable-from-reality PHOTOGRAPH.";
+const getRoleDefinition = () =>
+    "ROLE: You are an expert Architectural Photographer. TASK: Convert the input Mixed-Media Composite Layout into a photorealistic 8k architectural photograph.";
 
-const getCameraRule = () => "COMPOSITION RULE: The input image is a sketch/drawing. You must KEEP the exact camera angle and perspective, but you must REPLACE the sketch strokes with realistic physical materials, light, and atmosphere. The output must NOT look like a drawing.";
+const getInputAnalysisAndRules = () => `
+INPUT ANALYSIS (CRITICAL): The input image is a concept collage. It contains two types of data:
+1. Linear Structure: Represents the fixed architecture (walls, windows, roof).
+2. Loose Shapes/Stickers/Colors: Represent volumes of entourage (vegetation, trees, people, cars, furniture).
+
+PROCESSING RULES:
+- ARCHITECTURAL LAYER (STRICT): You must retain the exact perspective and geometry of the linear structural elements. Do not move walls or change the building design.
+- ENTOURAGE LAYER (INTERPRETIVE): You must materialize all loose shapes, colored blobs, or pasted elements into realistic physical objects based on their context.
+  * Example: A green shape on the lawn = A realistic tree or bush.
+  * Example: A boxy shape on the driveway = A realistic car.
+  * Example: Vertical shapes on paths = People.
+
+OBJECTIVE: Do NOT clean up or remove the "messy" elements. Instead, transform them into high-fidelity textures and objects that match the lighting of the scene. The final image must look cohesive, as if taken by a single camera.`;
 
 const getCreativityInstruction = (level: number): string => {
     if (level <= 50) {
-        return "MODE: FAITHFUL ARCHITECTURAL REALIZATION (STRICT). \nGEOMETRY LOCK: You must respect the EXACT volumes, masses, and spatial proportions defined in the input sketch/visual guide. Treat every line as a physical boundary or wall. Do NOT invent new structure. Your mission is to materialize the sketch into a high-end photograph without changing a single wall position or pillar. The geometry is the absolute priority.";
+        return "MODE: FAITHFUL ARCHITECTURAL REALIZATION (STRICT). \nGeometry is the absolute priority. Do NOT invent new structure.";
     } else if (level <= 100) {
-        return "MODE: BALANCED ENHANCEMENT. The sketch is a strong guide for the overall volumes. You can refine textures and add secondary details (furniture, plants, light fixtures) while staying true to the main structural lines provided.";
+        return "MODE: BALANCED ENHANCEMENT. Refine textures and add secondary details while staying true to structural lines.";
     } else if (level <= 150) {
-        return "MODE: CREATIVE INTERPRETATION. Use the sketch as a conceptual massing model. You have the freedom to optimize structural proportions, modify cladding styles, and modernize the architecture for a superior aesthetic result.";
+        return "MODE: CREATIVE INTERPRETATION. You have freedom to optimize structural proportions and modernize the aesthetic.";
     } else {
-        return "MODE: CONCEPTUAL REIMAGINING. The sketch is a loose inspiration for composition. Focus on creating a stunning, award-winning architectural masterpiece. Prioritize visual impact and mood over literal translation of the rough lines.";
+        return "MODE: CONCEPTUAL REIMAGINING. Prioritize visual impact and mood over literal translation of the rough lines.";
     }
 };
 
@@ -57,7 +70,7 @@ const getExteriorPrompts = (options: ArchitecturalRenderOptions): string => {
         prompt += `${weatherMap[options.weather]} `;
     }
 
-    // Comprehensive Style Dictionary (Simplified for direct visual impact)
+    // Comprehensive Style Dictionary
     const styleDescriptors: Record<string, string> = {
         'modern': "STYLE: Modern Minimalist. Materials: Concrete, Glass, Black Steel.",
         'mid_century_modern': "STYLE: Mid-Century Modern. Materials: Walnut wood, stone, glass walls.",
@@ -119,7 +132,7 @@ const getInteriorPrompts = (options: ArchitecturalRenderOptions): string => {
     }
 
     // 3. INTERIOR STYLE
-    prompt += `\nINTERIOR STYLE: ${options.archStyle.toUpperCase().replace('_', ' ')}. Apply generic characteristics of this style (materials, furniture shapes, colors).`;
+    prompt += `\nINTERIOR STYLE: ${options.archStyle.toUpperCase().replace('_', ' ')}. Apply generic characteristics of this style.`;
 
     return prompt;
 };
@@ -127,37 +140,38 @@ const getInteriorPrompts = (options: ArchitecturalRenderOptions): string => {
 export const buildArchitecturalPrompt = (options: ArchitecturalRenderOptions): string => {
     let promptParts: string[] = [];
 
-    // 1. Definition of Role & Output Format
+    // 1. Role (Photographer)
     promptParts.push(getRoleDefinition());
-    promptParts.push("OUTPUT FORMAT: High-Resolution Photograph. 8k, ISO 100, f/8.");
 
-    // 2. Camera & Creativity
-    promptParts.push(getCameraRule());
+    // 2. Input Analysis & Processing Rules (Mixed-Media Logic)
+    promptParts.push(getInputAnalysisAndRules());
+
+    // 3. Dynamic Creativity Level
     promptParts.push(getCreativityInstruction(options.creativeFreedom));
 
-    // 3. Scene Block
+    // 4. Dynamic Scene Details (Style, Weather, Light)
     if (options.sceneType === 'exterior') {
-        promptParts.push("SCENE: EXTERIOR ARCHITECTURE.");
+        promptParts.push("SCENE CONTEXT (EXTERIOR):");
         promptParts.push(getExteriorPrompts(options));
     } else {
-        promptParts.push("SCENE: INTERIOR DESIGN.");
+        promptParts.push("SCENE CONTEXT (INTERIOR):");
         promptParts.push(getInteriorPrompts(options));
     }
 
-    // 4. Additional Instructions
+    // 5. User Additional Prompt
     if (options.additionalPrompt && options.additionalPrompt.trim().length > 0) {
-        promptParts.push("SPECIFIC DETAILS (High Priority):");
+        promptParts.push("ADDITIONAL USER DETAILS (High Priority):");
         promptParts.push(options.additionalPrompt);
     }
 
-    // 5. Style Reference
+    // 6. Style Reference
     if (options.hasStyleReference) {
         promptParts.push("STYLE REFERENCE INSTRUCTION:");
         promptParts.push("A reference image is attached. CAPTURE the exact mood, color grading, and material quality of that reference image and apply it to the sketch geometry.");
     }
 
-    // 6. Negative Prompt (Embedded in text)
-    promptParts.push("RESTRICTIONS & NEGATIVE PROMPT: \n1. Do NOT move walls, change roof slopes, or alter the building's footprint. \n2. Do NOT output a drawing, painting, sketch, or illustration. \n3. Do NOT output messy lines. \n4. The image must look utterly real. \n5. NO structural AI hallucinations; do not invent windows or doors where there are none in the sketch.");
+    // 7. Negative Prompt (Updated)
+    promptParts.push("NEGATIVE PROMPT: Abstract, cartoon, illustration, drawing, blurred, low quality, disappearing objects, empty lawn. Do NOT output a drawing or painting. NO structural AI hallucinations.");
 
     return promptParts.join("\n\n");
 };

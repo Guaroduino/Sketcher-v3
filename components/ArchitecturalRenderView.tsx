@@ -16,6 +16,7 @@ interface ArchitecturalRenderViewProps {
     canUndo: boolean;
     canRedo: boolean;
     onRenderComplete?: (dataUrl: string) => void;
+    onInspectRequest?: (payload: { model: string; parts: any[]; config?: any }) => Promise<boolean>;
 }
 
 type SceneType = 'exterior' | 'interior';
@@ -31,6 +32,7 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
     onImportFromSketch,
     isSidebarOpen,
     onRenderComplete,
+    onInspectRequest,
 }) => {
     const [sceneType, setSceneType] = useState<SceneType>('exterior');
     const [inputImage, setInputImage] = useState<string | null>(null);
@@ -534,6 +536,15 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
             const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
             const model = GEMINI_MODEL_ID;
             const config = { responseModalities: ["IMAGE"] };
+
+            if (onInspectRequest) {
+                const confirmed = await onInspectRequest({ model, parts: contents.parts, config });
+                if (!confirmed) {
+                    setIsGenerating(false);
+                    return;
+                }
+            }
+
             const response = await ai.models.generateContent({ model, contents, config });
 
             let newImageBase64: string | null = null;
@@ -595,6 +606,15 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
             const contents = { parts };
             // @ts-ignore
             const config = { responseModalities: ["IMAGE"] };
+
+            if (onInspectRequest) {
+                const confirmed = await onInspectRequest({ model, parts, config });
+                if (!confirmed) {
+                    setIsGenerating(false);
+                    return;
+                }
+            }
+
             const response = await ai.models.generateContent({ model, contents, config });
 
             let newImageBase64: string | null = null;

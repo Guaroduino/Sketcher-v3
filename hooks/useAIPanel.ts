@@ -25,6 +25,7 @@ export function useAIPanel() {
     const [shouldRemoveContent, setShouldRemoveContent] = useState(false);
     const [sourceScope, setSourceScope] = useState<'all' | 'layer'>('all');
     const [shouldUpdateBackground, setShouldUpdateBackground] = useState(true);
+    const [enhancementTextOnly, setEnhancementTextOnly] = useState(false);
 
     // Composition Tab State
     const [compositionPrompt, setCompositionPrompt] = useState('');
@@ -102,6 +103,7 @@ export function useAIPanel() {
         shouldRemoveContent, setShouldRemoveContent,
         sourceScope, setSourceScope,
         shouldUpdateBackground, setShouldUpdateBackground,
+        enhancementTextOnly, setEnhancementTextOnly,
         compositionPrompt, setCompositionPrompt,
         styleRef, setStyleRef,
         freeFormPrompt, setFreeFormPrompt,

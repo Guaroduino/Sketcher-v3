@@ -50,6 +50,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
         isChromaKeyEnabled, setIsChromaKeyEnabled,
         enhancementInputMode, setEnhancementInputMode,
         enhancementPreviewBgColor, setEnhancementPreviewBgColor,
+        enhancementTextOnly, setEnhancementTextOnly,
         shouldAddToCanvas, setShouldAddToCanvas,
         shouldAddToLibrary, setShouldAddToLibrary,
         shouldRemoveContent, setShouldRemoveContent,
@@ -164,8 +165,14 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                         {/* Object Tab Implementation */}
                         {activeAiTab === 'object' && (
                             <div className="space-y-4">
-                                <div style={{ backgroundColor: enhancementPreviewBgColor }} className="rounded-md p-2 aspect-video flex items-center justify-center">
-                                    {!enhancementPreview ? (
+                                <div style={{ backgroundColor: enhancementPreviewBgColor }} className="rounded-md p-2 aspect-video flex items-center justify-center relative overflow-hidden">
+                                    {enhancementTextOnly ? (
+                                        <div className="flex flex-col items-center justify-center h-full w-full text-center p-4">
+                                            <SparklesIcon className="w-8 h-8 text-theme-accent-primary mb-2 opacity-50" />
+                                            <span className="text-xs font-bold text-theme-text-primary">Modo Generación desde Cero</span>
+                                            <span className="text-[10px] text-theme-text-secondary mt-1">La IA creará una imagen basada únicamente en tu descripción.</span>
+                                        </div>
+                                    ) : !enhancementPreview ? (
                                         <div className="flex flex-col items-center">
                                             <span className="text-xs text-theme-text-secondary">Generando vista previa...</span>
                                             {/* We trigger generation on mount/open if needed, usually passed prop controls this */}
@@ -191,25 +198,43 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                     />
                                 </div>
 
-                                <div>
-                                    <label className="text-xs font-bold text-theme-text-secondary block mb-2">Imagen de Entrada</label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button
-                                            onClick={() => setEnhancementInputMode('full')}
-                                            disabled={isEnhancing}
-                                            className={`text-xs p-2 rounded transition-colors ${enhancementInputMode === 'full' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}
-                                        >
-                                            Lienzo Completo
-                                        </button>
-                                        <button
-                                            onClick={() => setEnhancementInputMode('bbox')}
-                                            disabled={isEnhancing || !enhancementPreview?.bbox}
-                                            className={`text-xs p-2 rounded transition-colors ${enhancementInputMode === 'bbox' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed'}`}
-                                        >
-                                            Ajustar a Contenido
-                                        </button>
-                                    </div>
+                                <div className="flex items-center justify-between py-1 border-b border-theme-bg-tertiary pb-2 mb-2">
+                                    <label htmlFor="text-only-toggle" className="text-xs font-bold text-theme-text-secondary">
+                                        Solo Texto (Sin Imagen Base)
+                                    </label>
+                                    <button
+                                        id="text-only-toggle"
+                                        role="switch"
+                                        aria-checked={enhancementTextOnly}
+                                        onClick={() => setEnhancementTextOnly(prev => !prev)}
+                                        className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-accent-primary focus:ring-offset-theme-bg-primary ${enhancementTextOnly ? 'bg-theme-accent-primary' : 'bg-theme-bg-tertiary'}`}
+                                        disabled={isEnhancing}
+                                    >
+                                        <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${enhancementTextOnly ? 'translate-x-6' : 'translate-x-1'}`} />
+                                    </button>
                                 </div>
+
+                                {!enhancementTextOnly && (
+                                    <div>
+                                        <label className="text-xs font-bold text-theme-text-secondary block mb-2">Imagen de Entrada</label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                onClick={() => setEnhancementInputMode('full')}
+                                                disabled={isEnhancing}
+                                                className={`text-xs p-2 rounded transition-colors ${enhancementInputMode === 'full' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}
+                                            >
+                                                Lienzo Completo
+                                            </button>
+                                            <button
+                                                onClick={() => setEnhancementInputMode('bbox')}
+                                                disabled={isEnhancing || !enhancementPreview?.bbox}
+                                                className={`text-xs p-2 rounded transition-colors ${enhancementInputMode === 'bbox' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed'}`}
+                                            >
+                                                Ajustar a Contenido
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div>
                                     <label className="text-xs font-bold text-theme-text-secondary block mb-1">Descripción del Objeto (Necesario)</label>
@@ -337,6 +362,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                         shouldAddToLibrary,
                                         shouldRemoveContent,
                                         sourceScope,
+                                        enhancementTextOnly,
                                     })}
                                     disabled={!enhancementPrompt.trim() || !enhancementStylePrompt.trim() || isEnhancing}
                                     className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-1 px-3 text-sm rounded-md disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed mt-2"

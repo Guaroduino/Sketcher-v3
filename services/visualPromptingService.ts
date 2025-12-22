@@ -126,50 +126,82 @@ export async function composeVisualGuide(payload: VisualPromptingPayload): Promi
  */
 export function buildVisualPrompt(payload: VisualPromptingPayload): string {
     const mode = payload.mode || 'edit';
+    const hasRegions = payload.regions.length > 0;
 
-    let prompt = `SYSTEM ROLE:
-You are an expert Image-to-Image AI assistant specialized in architectural visualization and semantic editing. You receive a SOURCE_IMAGE (base content) and a SPATIAL_MARKUP_GUIDE (coordinate metadata). Your task is to apply edits described in text strictly at the pixel locations indicated by the markup guide.
+    // CASE 1: GLOBAL EDIT (No Spatial Guides)
+    if (!hasRegions) {
+        let prompt = `SYSTEM ROLE:
+You are an expert Image-to-Image AI assistant specialized in architectural visualization. You receive a SOURCE_IMAGE. Your task is to apply global semantic edits to the image based on the USER INSTRUCTION below.
 
 INSTRUCTIONS:
-1. SPATIAL ANCHORING (MANDATORY): You are provided with two primary images:
-   - IMAGE 1 (SOURCE_IMAGE): The clean, high-visibility base content.
-   - IMAGE 2 (SPATIAL_MARKUP_GUIDE): An overlay of the SOURCE_IMAGE with RED BOUNDING BOXES and REGION NUMBERS.
-2. The red boxes in the SPATIAL_MARKUP_GUIDE define the EXACT PIXEL COORDINATES for editing. You MUST localize your generations strictly within these identified areas.
-3. The numbers (1, 2, 3...) inside the red boxes correspond directly to the "Specific Region Instructions" below.
-4. CONTENT FIDELITY: Preserve all content from the SOURCE_IMAGE that is NOT contained within a region perfectly. 
-5. DO NOT render the red boxes, the numbers, or any markup lines in the final output. They are pure coordinate metadata.
-
-USER INSTRUCTION:
+1. PRESERVATION: Preserve the core structure, geometry, and key elements of the SOURCE_IMAGE unless explicitly instructed to change them.
+2. GLOBAL EDIT: Apply the changes to the entire scene or naturally to relevant objects (e.g. "make it night", "change wall color to blue").
+3. DO NOT hallucinate any bounding boxes, markup, or UI elements. Return a clean, natural image.
 `;
 
-    if (mode === 'render') {
-        prompt += `Global Instruction: Transform this SKETCH/DRAWING into a HIGH-END PHOTOREALISTIC ARCHITECTURAL PHOTOGRAPH. Maintain the geometry and perspective exactly.\n`;
-        if (payload.globalPrompt) prompt += `Context/Description: ${payload.globalPrompt}\n`;
-        if (payload.globalInstructions) prompt += `Style Notes: ${payload.globalInstructions}\n`;
-    } else {
-        prompt += `Global Instruction: Edit the attached Base Image according to the following specific region instructions. Preserve everything outside the regions exactly.\n`;
-        if (payload.globalInstructions) prompt += `Global Enhancement Notes: ${payload.globalInstructions}\n`;
+        if (mode === 'render') {
+            prompt += `\nGlobal Context: This is a sketch/drawing. Transform it into a photorealistic architectural photo.\n`;
+        }
+
+        prompt += `\nUSER INSTRUCTION:\n`;
+        if (payload.globalPrompt) prompt += `Description: ${payload.globalPrompt}\n`;
+        if (payload.globalInstructions) prompt += `Instructions: ${payload.globalInstructions}\n`;
+
+        if (payload.globalReferenceImage) {
+            prompt += `(Note: Use Reference Image 1 as a global style/structure source)\n`;
+        }
+
+        prompt += `\nReturn ONLY the final generated image.`;
+        return prompt;
     }
 
-    let refCounter = 1;
-    if (payload.globalReferenceImage) {
-        prompt += `(Note: Using Reference Image ${refCounter} as global style/structure source)\n`;
-        refCounter++;
-    }
+    // CASE 2: DUAL-REFERENCE SPATIAL EDIT (User's New Workflow)
+    // We now use the exact prompt structure requested by the user.
 
+    let prompt = `SYSTEM ROLE: You are an Expert Photo Editor utilizing a "Dual-Reference" workflow. You are provided with two images:
+
+IMAGE 1 (SOURCE): The clean, original high-resolution architectural photo.
+
+IMAGE 2 (GUIDE): The same photo containing RED MARKUP BOXES indicating active edit zones.
+
+TASK: Apply the [USER CHANGE REQUEST] exclusively to the areas defined by the red boxes in IMAGE 2, but perform the edits on the canvas of IMAGE 1.
+
+CRITICAL EXECUTION RULES:
+
+SPATIAL MAPPING: Compare IMAGE 1 and IMAGE 2. Identify the exact pixels where the red boxes appear in IMAGE 2.
+
+ZONE ISOLATION: Create a mental mask based only on the red boxes from IMAGE 2. Ignore the red color itself; look only at the coordinates it covers.
+
+TARGETED EDITING: In the final output, modify only the pixels inside those coordinates.
+
+Use the visual data from IMAGE 1 (Source) as the base.
+
+Apply the requested change (e.g., "change material", "add light").
+
+Ensure seamless blending with the surrounding pixels of IMAGE 1.
+
+MARKUP ELIMINATION: The final output must look like a pristine photograph. It must NOT contain any red lines, boxes, or UI elements from IMAGE 2. The red boxes are strictly for your internal spatial logic, not for the final render.
+
+USER CHANGE REQUEST:
+`;
+
+    // Inject Dynamic User Requests
     if (payload.regions.length > 0) {
-        prompt += `\nSpecific Region Instructions:\n`;
         payload.regions.sort((a, b) => a.regionNumber - b.regionNumber).forEach(region => {
-            let regionText = `- Region ${region.regionNumber} [LOCATION: Inside Region ${region.regionNumber}]: ${region.prompt}`;
-            if (region.referenceImage) {
-                regionText += ` (Matching Reference Image ${refCounter})`;
-                refCounter++;
-            }
-            prompt += `${regionText}\n`;
+            prompt += `- Inside Red Box ${region.regionNumber}: ${region.prompt}\n`;
+
+            // Note: Reference images are handled by the multimodal part indices, 
+            // but we can mention them here if needed.
+            // For now, we stick to the requested structure.
         });
     }
 
-    prompt += `\nReturn ONLY the final generated image.`;
+    if (payload.globalInstructions) {
+        prompt += `- Global Note: ${payload.globalInstructions}\n`;
+    }
+
+
+    prompt += `\nNEGATIVE PROMPT: Red lines, red boxes, annotations, markup, borders, outlines, glitch, artifacts, changes outside the box, low resolution.`;
 
     return prompt;
 }
@@ -178,38 +210,52 @@ USER INSTRUCTION:
  * Prepares the full request payload for the Gemini API.
  */
 export async function prepareVisualPromptingRequest(payload: VisualPromptingPayload, apiKey: string, promptOverride?: string) {
-    // 1. Generate or Use provided Guide Image
+    const hasRegions = payload.regions.length > 0;
+
+    // 1. Generate or Use provided Guide Image (ONLY needed if we have regions)
     let guideImageBase64 = '';
-    if (payload.visualGuideImage) {
-        guideImageBase64 = payload.visualGuideImage.split(',')[1];
-    } else {
-        guideImageBase64 = (await composeVisualGuide(payload)).split(',')[1];
+    if (hasRegions) {
+        if (payload.visualGuideImage) {
+            guideImageBase64 = payload.visualGuideImage.split(',')[1];
+        } else {
+            guideImageBase64 = (await composeVisualGuide(payload)).split(',')[1];
+        }
     }
 
     // 2. Get Base Image (Source of Truth)
     const baseImageBase64 = payload.baseImage.split(',')[1];
 
     // 3. Build Text Prompt (or use override)
+    // IMPORTANT: If override is provided by UI, we assume UI handles the logic. 
+    // EXCEPT: If UI provides an override but we have NO regions, the override might still reference markup. 
+    // Ideally, UI should also switch prompt builder.
     const textPrompt = promptOverride || buildVisualPrompt(payload);
 
-    // 4. Construct API Payload with STRICT SEQUENCING
-    const parts: any[] = [
-        // PART 1: Source of Truth (Clean)
-        { text: "SOURCE_IMAGE:" },
-        { inlineData: { mimeType: 'image/png', data: baseImageBase64 } },
+    // 4. Construct API Payload
+    const parts: any[] = [];
 
-        // PART 2: Visual Guide (Sketches + Regions + Numbers)
-        { text: "SPATIAL_MARKUP_GUIDE:" },
-        { inlineData: { mimeType: 'image/png', data: guideImageBase64 } },
-    ];
+    // PART 1: Source of Truth (Clean)
+    // If no regions, this is just "the image".
+    parts.push({ text: hasRegions ? "SOURCE_IMAGE:" : "IMAGE:" });
+    parts.push({ inlineData: { mimeType: 'image/png', data: baseImageBase64 } });
+
+    // PART 2: Visual Guide (Sketches + Regions + Numbers) - ONLY IF REGIONS EXIST
+    if (hasRegions) {
+        parts.push({ text: "SPATIAL_MARKUP_GUIDE:" });
+        parts.push({ inlineData: { mimeType: 'image/png', data: guideImageBase64 } });
+    }
 
     // PART 3: Labeled Reference Images (Sequence must match buildVisualPrompt's refCounter)
+    // NOTE: The new Dual-Reference prompt doesn't explicitly ask for "Reference Image X" labels in the text,
+    // but we still send them as parts. To avoid confusing the "Dual-Reference" logic (which expects exactly 2 images + task),
+    // we should be careful. However, multimodal inputs just append. 
+    // Let's simple append them as "Reference Material".
     let refCounter = 1;
 
     // Add Global Reference Image (Style Ref)
     if (payload.globalReferenceImage) {
         const globalRefBase64 = payload.globalReferenceImage.split(',')[1];
-        parts.push({ text: `Reference Image ${refCounter}:` });
+        parts.push({ text: `Reference Material ${refCounter}:` });
         parts.push({ inlineData: { mimeType: 'image/png', data: globalRefBase64 } });
         refCounter++;
     }
@@ -218,7 +264,7 @@ export async function prepareVisualPromptingRequest(payload: VisualPromptingPayl
     payload.regions.sort((a, b) => a.regionNumber - b.regionNumber).forEach(region => {
         if (region.referenceImage) {
             const refBase64 = region.referenceImage.split(',')[1];
-            parts.push({ text: `Reference Image ${refCounter}:` });
+            parts.push({ text: `Region ${region.regionNumber} Reference Material:` });
             parts.push({ inlineData: { mimeType: 'image/png', data: refBase64 } });
             refCounter++;
         }
@@ -229,5 +275,6 @@ export async function prepareVisualPromptingRequest(payload: VisualPromptingPayl
 
     const contents = { parts };
 
+    // Return guideImageBase64 mainly for debug, empty if unused
     return { contents, textPrompt, guideImageBase64 };
 }
