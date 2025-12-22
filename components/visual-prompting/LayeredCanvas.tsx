@@ -191,6 +191,25 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
             });
 
             return canvas.toDataURL('image/jpeg', 0.9);
+        },
+        hasDrawingContent: () => {
+            const ctx = drawingCanvasRef.current?.getContext('2d');
+            if (!ctx) return false;
+            try {
+                const w = ctx.canvas.width;
+                const h = ctx.canvas.height;
+                // Optimization: if canvas is huge, maybe sample? But detailed check is safer.
+                const idata = ctx.getImageData(0, 0, w, h);
+                const data = idata.data;
+                // Check alpha channel of every pixel
+                for (let i = 3; i < data.length; i += 4) {
+                    if (data[i] > 0) return true;
+                }
+                return false;
+            } catch (e) {
+                console.error("Error checking canvas content:", e);
+                return false;
+            }
         }
     }));
 

@@ -37,7 +37,8 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
     const [styleReferenceImage, setStyleReferenceImage] = useState<string | null>(null);
 
     // -- Visual Prompting State --
-    const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
+    // Collapsed by default
+    const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(false);
     const [lastGuideImage, setLastGuideImage] = useState<string | null>(null); // To debug what we sent
     const [lastSentPrompt, setLastSentPrompt] = useState<string | null>(null); // To debug exact text sent
     const [activeTool, setActiveTool] = useState<'pen' | 'eraser' | 'region' | 'polygon' | 'pan'>('pan');
@@ -47,6 +48,15 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
 
     // Canvas Refs
     const canvasRef = useRef<LayeredCanvasRef>(null);
+
+    // -- Mutually Exclusive Panels Logic --
+    // If the main Sidebar (Architectural Config) is opened, we should close the Visual Prompting panel to avoid UI clutter
+    // and signal that the user is focused on the Classic workflow.
+    useEffect(() => {
+        if (isSidebarOpen) {
+            setIsLeftPanelOpen(false);
+        }
+    }, [isSidebarOpen]);
 
     // -- Form State --
     const [timeOfDay, setTimeOfDay] = useState('noon');
@@ -565,89 +575,39 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
             const model = GEMINI_MODEL_ID;
             console.log("Render View using model:", model);
 
-            // Determine Pipeline: Simple vs Visual Prompting
-            // If we have regions or drawings, use Visual Prompting pipeline
-            const hasVisualEdits = regions.length > 0 || (canvasRef.current?.getDrawingDataUrl() !== '');
+            // STRICT SEPARATION: User requested that Photorealistic flow NEVER mixes with Visual Prompting.
+            // This function is triggered by the Right Sidebar (Architectural Config).
+            // It acts STRICTLY as the "Classic" pipeline (Image + Prompt -> Image).
+            // Visual Prompting (Regions/Drawings) is handled exclusively by handleProcessChanges in the Left Panel.
 
-            if (hasVisualEdits) {
-                // Use New Pipeline
-                const layersImage = canvasRef.current?.getDrawingDataUrl() || ''; // Should get transparent png
-                const visualGuideImage = await canvasRef.current?.getVisualGuideSnapshot() || '';
+            console.log("[Prompt Maestro] Sending Classic Prompt:\n", manualPrompt);
 
-                const img = new Image();
-                img.src = inputImage;
-                await img.decode();
+            const parts: any[] = [];
+            const inputBase64 = inputImage.split(',')[1];
+            parts.push({ inlineData: { mimeType: 'image/png', data: inputBase64 } });
 
-                const payload = {
-                    baseImage: inputImage,
-                    layersImage,
-                    visualGuideImage,
-                    regions,
-                    globalPrompt: manualPrompt,
-                    globalInstructions: vpGeneralInstructions,
-                    globalReferenceImage: styleReferenceImage || vpReferenceImage || undefined,
-                    width: img.width,
-                    height: img.height,
-                    mode: 'render' as const // Force Render Mode (Sketch -> Photo)
-                };
+            if (styleReferenceImage) {
+                const styleBase64 = styleReferenceImage.split(',')[1];
+                parts.push({ inlineData: { mimeType: 'image/png', data: styleBase64 } });
+            }
+            parts.push({ text: manualPrompt });
 
-                const { contents, guideImageBase64, textPrompt } = await prepareVisualPromptingRequest(payload, import.meta.env.VITE_GEMINI_API_KEY, aiStructuredPrompt);
-                setLastGuideImage(`data:image/png;base64,${guideImageBase64}`);
-                setLastSentPrompt(textPrompt);
+            const contents = { parts };
+            // @ts-ignore
+            const config = { responseModalities: ["IMAGE"] };
+            const response = await ai.models.generateContent({ model, contents, config });
 
-                // @ts-ignore
-                const config = { responseModalities: ["IMAGE"] };
-                const response = await ai.models.generateContent({ model, contents, config });
+            let newImageBase64: string | null = null;
+            for (const part of response.candidates?.[0]?.content.parts || []) {
+                if (part.inlineData) { newImageBase64 = part.inlineData.data; break; }
+            }
 
-                let newImageBase64: string | null = null;
-                for (const part of response.candidates?.[0]?.content.parts || []) {
-                    if (part.inlineData) { newImageBase64 = part.inlineData.data; break; }
-                }
-
-                if (newImageBase64) {
-                    const newResult = `data:image/png;base64,${newImageBase64}`;
-                    updateResult(newResult);
-                    pushToHistory(inputImage, newResult);
-
-                    // Reset Visual Prompting State for next cycle?
-                    setRegions([]);
-                    canvasRef.current?.clearDrawing();
-                } else {
-                    console.log("Full Response", response);
-                    alert("La IA no generó una imagen.");
-                }
-
+            if (newImageBase64) {
+                const newResult = `data:image/png;base64,${newImageBase64}`;
+                updateResult(newResult);
+                pushToHistory(inputImage, newResult);
             } else {
-                // Use Classic Pipeline
-                console.log("[Prompt Maestro] Sending Classic Prompt:\n", manualPrompt);
-
-                const parts: any[] = [];
-                const inputBase64 = inputImage.split(',')[1];
-                parts.push({ inlineData: { mimeType: 'image/png', data: inputBase64 } });
-
-                if (styleReferenceImage) {
-                    const styleBase64 = styleReferenceImage.split(',')[1];
-                    parts.push({ inlineData: { mimeType: 'image/png', data: styleBase64 } });
-                }
-                parts.push({ text: manualPrompt });
-
-                const contents = { parts };
-                // @ts-ignore
-                const config = { responseModalities: ["IMAGE"] };
-                const response = await ai.models.generateContent({ model, contents, config });
-
-                let newImageBase64: string | null = null;
-                for (const part of response.candidates?.[0]?.content.parts || []) {
-                    if (part.inlineData) { newImageBase64 = part.inlineData.data; break; }
-                }
-
-                if (newImageBase64) {
-                    const newResult = `data:image/png;base64,${newImageBase64}`;
-                    updateResult(newResult);
-                    pushToHistory(inputImage, newResult);
-                } else {
-                    alert("La IA no generó una imagen.");
-                }
+                alert("La IA no generó una imagen.");
             }
 
         } catch (error) {
@@ -691,20 +651,49 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
                 pushToHistory(resultImage, newResult);
 
                 // Client-side 4K scaling and download (Matching Sketch behavior)
+                // NEW: respect original Aspect Ratio
+
+                // load original aspect ratio asynchronously
+                let originalAR = canvasDimensions.width / canvasDimensions.height;
+                if (inputImageRef.current) {
+                    try {
+                        const detectedAR = await new Promise<number>((resolve) => {
+                            const i = new Image();
+                            i.onload = () => {
+                                if (i.naturalHeight > 0) resolve(i.naturalWidth / i.naturalHeight);
+                                else resolve(0);
+                            };
+                            i.onerror = () => resolve(0);
+                            i.src = inputImageRef.current!;
+                        });
+                        if (detectedAR > 0) originalAR = detectedAR;
+                    } catch (e) {
+                        console.warn("Failed to calculate original AR", e);
+                    }
+                }
+
                 const img = new Image();
                 img.onload = () => {
-                    const TARGET_WIDTH = 3840;
-                    const scale = TARGET_WIDTH / img.width;
-                    const targetHeight = Math.round(img.height * scale);
+                    const MAX_DIM = 3840;
+                    let targetWidth, targetHeight;
+
+                    if (originalAR > 1) {
+                        targetWidth = MAX_DIM;
+                        targetHeight = Math.round(MAX_DIM / originalAR);
+                    } else {
+                        targetHeight = MAX_DIM;
+                        targetWidth = Math.round(MAX_DIM * originalAR);
+                    }
 
                     const canvas = document.createElement('canvas');
-                    canvas.width = TARGET_WIDTH;
+                    canvas.width = targetWidth;
                     canvas.height = targetHeight;
                     const ctx = canvas.getContext('2d');
                     if (ctx) {
                         ctx.imageSmoothingEnabled = true;
                         ctx.imageSmoothingQuality = 'high';
-                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        // Draw stretched to restore correct AR
+                        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
 
                         canvas.toBlob((blob) => {
                             if (blob) {
@@ -720,6 +709,7 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
                         }, 'image/png');
                     }
                 };
+                img.src = newResult;
                 img.src = newResult;
 
             } else {
