@@ -23,6 +23,8 @@ export interface VisualPromptingPayload {
     globalReferenceImage?: string; // DataURL of a global style/structure reference
     width: number;
     height: number;
+    mode?: 'edit' | 'render'; // 'edit' = Strict Preservation + Local Edits. 'render' = Global Photo Transition.
+    visualGuideImage?: string; // Optional: direct snapshot from client
 }
 
 /**
@@ -42,7 +44,10 @@ export async function composeVisualGuide(payload: VisualPromptingPayload): Promi
             return;
         }
 
-        // 0. Load Base Image (Background)
+        // 0. Load Base Image (Background) - USE ONLY IF EDIT MODE
+        // For 'render' mode, showing the base image + red boxes might confuse the model into thinking the base image is the "result" to preserve.
+        // Actually, the model needs to see the sketch to know where the regions are relative to the content.
+        // So we keep the base image.
         const baseImg = new Image();
         baseImg.onload = () => {
             // Draw Base Image
@@ -117,25 +122,54 @@ export async function composeVisualGuide(payload: VisualPromptingPayload): Promi
 
 /**
  * Builds the structured text prompt that maps global instructions and region-specific instructions.
+ * Incorporates Reference Image labeling (Ref 1, Ref 2...) to match the multimodal parts.
  */
 export function buildVisualPrompt(payload: VisualPromptingPayload): string {
-    let prompt = `Global Instruction: ${payload.globalPrompt}\n\n`;
+    const mode = payload.mode || 'edit';
+
+    let prompt = `SYSTEM ROLE:
+You are an expert Image-to-Image AI assistant specialized in architectural visualization and semantic editing. You receive a SOURCE_IMAGE (base content) and a SPATIAL_MARKUP_GUIDE (coordinate metadata). Your task is to apply edits described in text strictly at the pixel locations indicated by the markup guide.
+
+INSTRUCTIONS:
+1. SPATIAL ANCHORING (MANDATORY): You are provided with two primary images:
+   - IMAGE 1 (SOURCE_IMAGE): The clean, high-visibility base content.
+   - IMAGE 2 (SPATIAL_MARKUP_GUIDE): An overlay of the SOURCE_IMAGE with RED BOUNDING BOXES and REGION NUMBERS.
+2. The red boxes in the SPATIAL_MARKUP_GUIDE define the EXACT PIXEL COORDINATES for editing. You MUST localize your generations strictly within these identified areas.
+3. The numbers (1, 2, 3...) inside the red boxes correspond directly to the "Specific Region Instructions" below.
+4. CONTENT FIDELITY: Preserve all content from the SOURCE_IMAGE that is NOT contained within a region perfectly. 
+5. DO NOT render the red boxes, the numbers, or any markup lines in the final output. They are pure coordinate metadata.
+
+USER INSTRUCTION:
+`;
+
+    if (mode === 'render') {
+        prompt += `Global Instruction: Transform this SKETCH/DRAWING into a HIGH-END PHOTOREALISTIC ARCHITECTURAL PHOTOGRAPH. Maintain the geometry and perspective exactly.\n`;
+        if (payload.globalPrompt) prompt += `Context/Description: ${payload.globalPrompt}\n`;
+        if (payload.globalInstructions) prompt += `Style Notes: ${payload.globalInstructions}\n`;
+    } else {
+        prompt += `Global Instruction: Edit the attached Base Image according to the following specific region instructions. Preserve everything outside the regions exactly.\n`;
+        if (payload.globalInstructions) prompt += `Global Enhancement Notes: ${payload.globalInstructions}\n`;
+    }
+
+    let refCounter = 1;
+    if (payload.globalReferenceImage) {
+        prompt += `(Note: Using Reference Image ${refCounter} as global style/structure source)\n`;
+        refCounter++;
+    }
 
     if (payload.regions.length > 0) {
-        prompt += `Region Instructions:\n`;
+        prompt += `\nSpecific Region Instructions:\n`;
         payload.regions.sort((a, b) => a.regionNumber - b.regionNumber).forEach(region => {
-            prompt += `- Region ${region.regionNumber}: ${region.prompt}\n`;
+            let regionText = `- Region ${region.regionNumber} [LOCATION: Inside Region ${region.regionNumber}]: ${region.prompt}`;
+            if (region.referenceImage) {
+                regionText += ` (Matching Reference Image ${refCounter})`;
+                refCounter++;
+            }
+            prompt += `${regionText}\n`;
         });
     }
 
-    /* 
-     * System Instruction / Guidelines for the model (can be appended or sent as system instruction)
-     * For the "text" part of the user prompt, we keep it focused on the user's intent.
-     * The "System Prompt" is usually handled at the model config level or prepended here 
-     * if the API doesn't support system instructions well for this specific mode.
-     * We will append a small guide interpretation cue just in case.
-     */
-    prompt += `\n\n(Interpret the red boxes in the visual guide as the edit regions matching these numbers. The sketches indicate the desired shape/composition.)`;
+    prompt += `\nReturn ONLY the final generated image.`;
 
     return prompt;
 }
@@ -143,45 +177,54 @@ export function buildVisualPrompt(payload: VisualPromptingPayload): string {
 /**
  * Prepares the full request payload for the Gemini API.
  */
-export async function prepareVisualPromptingRequest(payload: VisualPromptingPayload, apiKey: string) {
-    // 1. Generate the Guide Image
-    const guideImageBase64 = (await composeVisualGuide(payload)).split(',')[1];
+export async function prepareVisualPromptingRequest(payload: VisualPromptingPayload, apiKey: string, promptOverride?: string) {
+    // 1. Generate or Use provided Guide Image
+    let guideImageBase64 = '';
+    if (payload.visualGuideImage) {
+        guideImageBase64 = payload.visualGuideImage.split(',')[1];
+    } else {
+        guideImageBase64 = (await composeVisualGuide(payload)).split(',')[1];
+    }
 
     // 2. Get Base Image (Source of Truth)
     const baseImageBase64 = payload.baseImage.split(',')[1];
 
-    // 3. Build Text Prompt
-    let textPrompt = buildVisualPrompt(payload);
+    // 3. Build Text Prompt (or use override)
+    const textPrompt = promptOverride || buildVisualPrompt(payload);
 
-    // 4. Construct API Payload
-    // Note: The order usually matters for multi-modal. 
-    // [Base Image, Guide Image, Text Prompt] is a good standard.
-
+    // 4. Construct API Payload with STRICT SEQUENCING
     const parts: any[] = [
-        { inlineData: { mimeType: 'image/png', data: baseImageBase64 } }, // Image 1: Context/Background
-        { inlineData: { mimeType: 'image/png', data: guideImageBase64 } }, // Image 2: Guide (Sketches + Regions)
+        // PART 1: Source of Truth (Clean)
+        { text: "SOURCE_IMAGE:" },
+        { inlineData: { mimeType: 'image/png', data: baseImageBase64 } },
+
+        // PART 2: Visual Guide (Sketches + Regions + Numbers)
+        { text: "SPATIAL_MARKUP_GUIDE:" },
+        { inlineData: { mimeType: 'image/png', data: guideImageBase64 } },
     ];
 
-    // Add Global Reference Image (if any)
+    // PART 3: Labeled Reference Images (Sequence must match buildVisualPrompt's refCounter)
+    let refCounter = 1;
+
+    // Add Global Reference Image (Style Ref)
     if (payload.globalReferenceImage) {
         const globalRefBase64 = payload.globalReferenceImage.split(',')[1];
+        parts.push({ text: `Reference Image ${refCounter}:` });
         parts.push({ inlineData: { mimeType: 'image/png', data: globalRefBase64 } });
+        refCounter++;
     }
 
     // Add Region Reference Images
-    payload.regions.forEach(region => {
+    payload.regions.sort((a, b) => a.regionNumber - b.regionNumber).forEach(region => {
         if (region.referenceImage) {
             const refBase64 = region.referenceImage.split(',')[1];
+            parts.push({ text: `Reference Image ${refCounter}:` });
             parts.push({ inlineData: { mimeType: 'image/png', data: refBase64 } });
+            refCounter++;
         }
     });
 
-    // Append General Instructions to Prompt
-    if (payload.globalInstructions) {
-        // We prepend or append? Appending is usually fine as "Global Context".
-        textPrompt += `\n\nGeneral Guidelines: ${payload.globalInstructions}`;
-    }
-
+    // PART 4: Final Text Instruction
     parts.push({ text: textPrompt });
 
     const contents = { parts };

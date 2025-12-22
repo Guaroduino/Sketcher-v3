@@ -184,6 +184,54 @@ export const prepareAIRequest = (
             finalPrompt = baseScalerPrompt;
             break;
         }
+        case 'sketch': {
+            // Sketch/Watercolor Mode
+            const { sketchWaterLevel, sketchDetailLevel, sketchUserInstruction } = payload;
+
+            // 1. Get Image (Full Composition)
+            const compositionCanvas = getCompositeCanvas(true, canvasSize, getDrawableObjects, backgroundObject);
+            if (compositionCanvas) {
+                const compDataUrl = compositionCanvas.toDataURL('image/jpeg');
+                debugImages.push({ name: 'Imagen Base', url: compDataUrl });
+                parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(compDataUrl) } });
+            }
+
+            // 2. Construct Prompt Hierarchy
+            const promptParts = [];
+
+            // A. Role and Action
+            promptParts.push("Actúa como un maestro pintor. Transforma la imagen adjunta en una pintura de acuarela profesional o boceto artístico.");
+
+            // B. Stylistic Descriptors (Dynamic)
+            // Water Level (Agua)
+            if (sketchWaterLevel >= 75) {
+                promptParts.push("Utiliza una técnica de 'mojado sobre mojado', permitiendo que los colores se mezclen y sangren libremente en los bordes para un efecto etéreo y fluido.");
+            } else if (sketchWaterLevel <= 25) {
+                promptParts.push("Utiliza una técnica de 'pincel seco' o trazos de lápiz marcados, con bordes definidos, texturas rugosas y poca mezcla de colores.");
+            } else {
+                promptParts.push("Utiliza un balance equilibrado de agua y pigmento, logrando transiciones suaves pero manteniendo la definición de las formas principales.");
+            }
+
+            // Detail Level (Detalle)
+            if (sketchDetailLevel >= 75) {
+                promptParts.push("El estilo debe ser altamente detallado y realista (estilo ilustración botánica o arquitectónica), definiendo con precisión texturas y pequeños elementos.");
+            } else if (sketchDetailLevel <= 25) {
+                promptParts.push("Crea un boceto minimalista, gestual y esquemático (estilo 'urban sketching' rápido), ignorando los detalles finos y centrándote en la energía, la composición y las formas básicas.");
+            } else {
+                promptParts.push("Mantén un nivel medio de detalle, sugiriendo las texturas y formas sin sobrecargar la imagen, dejando algunas áreas más abstractas.");
+            }
+
+            // C. Output Constraints
+            promptParts.push("No devuelvas la imagen original. No añadas texto, marcos, firmas ni marcas de agua. El fondo debe simular la textura del papel de acuarela o bloc de dibujo.");
+
+            // D. User Instructions
+            if (sketchUserInstruction && sketchUserInstruction.trim()) {
+                promptParts.push(`Instrucción adicional del usuario: "${sketchUserInstruction}".`);
+            }
+
+            finalPrompt = promptParts.join(' ');
+            break;
+        }
     }
 
     return { parts, debugImages, finalPrompt, referenceWidth, filteredObjects, visibleObjects };

@@ -1,8 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { PhotoIcon, SparklesIcon, UploadIcon, UndoIcon, RedoIcon, SaveIcon, XIcon as CloseIcon, ZoomInIcon, ZoomOutIcon, MaximizeIcon, DownloadIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
 import { GoogleGenAI } from "@google/genai";
 import { buildArchitecturalPrompt, ArchitecturalRenderOptions } from '../utils/architecturalPromptBuilder';
-import { prepareVisualPromptingRequest, Region } from '../services/visualPromptingService';
+import { prepareVisualPromptingRequest, Region, buildVisualPrompt } from '../services/visualPromptingService';
 import { LayeredCanvas, LayeredCanvasRef } from './visual-prompting/LayeredCanvas';
 import { VisualPromptingControls } from './visual-prompting/VisualPromptingControls';
 import { GEMINI_MODEL_ID } from '../utils/constants';
@@ -15,6 +15,7 @@ interface ArchitecturalRenderViewProps {
     onRedo: () => void;
     canUndo: boolean;
     canRedo: boolean;
+    onRenderComplete?: (dataUrl: string) => void;
 }
 
 type SceneType = 'exterior' | 'interior';
@@ -29,6 +30,7 @@ const XIcon: React.FC<{ className?: string }> = ({ className }) => (
 export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = ({
     onImportFromSketch,
     isSidebarOpen,
+    onRenderComplete,
 }) => {
     const [sceneType, setSceneType] = useState<SceneType>('exterior');
     const [inputImage, setInputImage] = useState<string | null>(null);
@@ -65,9 +67,30 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
     const resultImageRef = useRef<string | null>(null);
     const inputImageRef = useRef<string | null>(null);
 
+    // -- Canvas State --
+    const [canvasDimensions, setCanvasDimensions] = useState({ width: 1024, height: 1024 });
+
     // -- Visual Prompting State --
     const [vpGeneralInstructions, setVpGeneralInstructions] = useState('');
     const [vpReferenceImage, setVpReferenceImage] = useState<string | null>(null);
+    const [aiStructuredPrompt, setAiStructuredPrompt] = useState('');
+    const [isPromptManuallyEdited, setIsPromptManuallyEdited] = useState(false);
+
+    // ... (rest of state)
+
+    useEffect(() => {
+        // Sync Ref for Input Image
+        inputImageRef.current = inputImage;
+
+        // Update Canvas Dimensions when Input Image changes
+        if (inputImage) {
+            const img = new Image();
+            img.onload = () => {
+                setCanvasDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+            };
+            img.src = inputImage;
+        }
+    }, [inputImage]);
 
     const [isGenerating, setIsGenerating] = useState(false);
     const [resultImage, setResultImage] = useState<string | null>(null);
@@ -76,8 +99,143 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
     // Upscale State
     const [isUpscaling, setIsUpscaling] = useState(false);
 
+    // -- Unified Result Handling --
+    const updateResult = useCallback((newResult: string) => {
+        const imgResult = new Image();
+        imgResult.onload = () => {
+            if (imgResult.naturalWidth && imgResult.naturalHeight) {
+                setCanvasDimensions({ width: imgResult.naturalWidth, height: imgResult.naturalHeight });
+            }
+            setResultImage(newResult);
+            if (onRenderComplete) onRenderComplete(newResult);
+        };
+        imgResult.src = newResult;
+    }, [onRenderComplete]);
+
+    // -- Failsafe: Sync dimensions with displayed image --
+    const displayedImage = showOriginal ? inputImage : (resultImage || inputImage);
+    useEffect(() => {
+        if (displayedImage) {
+            const img = new Image();
+            img.onload = () => {
+                if (img.naturalWidth !== canvasDimensions.width || img.naturalHeight !== canvasDimensions.height) {
+                    setCanvasDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+                }
+            };
+            img.src = displayedImage;
+        }
+    }, [displayedImage, canvasDimensions.width, canvasDimensions.height]);
+
+    // -- local History State for Generations --
+    const [generationHistory, setGenerationHistory] = useState<{ input: string | null, result: string | null }[]>([]);
+    const [historyIndex, setHistoryIndex] = useState(-1);
+
+    const pushToHistory = useCallback((input: string | null, result: string | null) => {
+        setGenerationHistory(prev => {
+            const newHistory = prev.slice(0, historyIndex + 1);
+            return [...newHistory, { input, result }];
+        });
+        setHistoryIndex(prev => prev + 1);
+    }, [historyIndex]);
+
+    const handleLocalUndo = useCallback(() => {
+        if (historyIndex > 0) {
+            const prev = generationHistory[historyIndex - 1];
+            setInputImage(prev.input);
+            setResultImage(prev.result);
+            setHistoryIndex(prevIdx => prevIdx - 1);
+        } else if (historyIndex === 0) {
+            // Back to initial state (null result)
+            const initial = generationHistory[0];
+            setInputImage(initial.input);
+            setResultImage(null);
+            setHistoryIndex(-1);
+        }
+    }, [historyIndex, generationHistory]);
+
+    const handleLocalRedo = useCallback(() => {
+        if (historyIndex < generationHistory.length - 1) {
+            const next = generationHistory[historyIndex + 1];
+            setInputImage(next.input);
+            setResultImage(next.result);
+            setHistoryIndex(prev => prev + 1);
+        }
+    }, [historyIndex, generationHistory]);
+
     // Navigation State
     const [transform, setTransform] = useState({ zoom: 1, x: 0, y: 0 });
+    const viewportRef = useRef<HTMLDivElement>(null);
+
+    // Sync AI Structured Prompt
+    useEffect(() => {
+        if (!isPromptManuallyEdited) {
+            const hasVisualEdits = regions.length > 0;
+            // Determine mode for preview
+            const mode = resultImage ? 'edit' : 'render';
+
+            const payload = {
+                baseImage: '', // Not needed for prompt text
+                layersImage: '',
+                regions,
+                globalPrompt: manualPrompt,
+                globalInstructions: vpGeneralInstructions,
+                width: 1024,
+                height: 1024,
+                mode: mode as 'edit' | 'render'
+            };
+
+            const generated = buildVisualPrompt(payload);
+            setAiStructuredPrompt(generated);
+        }
+    }, [regions, vpGeneralInstructions, manualPrompt, resultImage, isPromptManuallyEdited]);
+
+    // Fit to Screen Logic
+    const fitToScreen = useCallback(() => {
+        if (!viewportRef.current || canvasDimensions.width === 0 || canvasDimensions.height === 0) return;
+
+        const containerWidth = viewportRef.current.clientWidth;
+        const containerHeight = viewportRef.current.clientHeight;
+        const padding = 40;
+
+        const availableWidth = containerWidth - padding;
+        const availableHeight = containerHeight - padding;
+
+        if (availableWidth <= 0 || availableHeight <= 0) return;
+
+        const scaleX = availableWidth / canvasDimensions.width;
+        const scaleY = availableHeight / canvasDimensions.height;
+
+        // Use the smaller scale to fit entirely
+        // Cap max initial zoom to 1.5 to avoid pixelation on small images, but allow shrink
+        const newZoom = Math.min(scaleX, scaleY, 1.5);
+
+        const centerX = (containerWidth - canvasDimensions.width * newZoom) / 2;
+        const centerY = (containerHeight - canvasDimensions.height * newZoom) / 2;
+
+        setTransform({ zoom: newZoom, x: centerX, y: centerY });
+    }, [canvasDimensions]);
+
+    // Trigger Fit on Load/Resize
+    useEffect(() => {
+        if (inputImage) {
+            // Tiny delay to ensure layout is computed
+            const timer = setTimeout(fitToScreen, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [inputImage, fitToScreen]);
+
+    // Resize Observer for Panel Toggle
+    useEffect(() => {
+        if (!viewportRef.current) return;
+
+        const observer = new ResizeObserver(() => {
+            fitToScreen();
+        });
+
+        observer.observe(viewportRef.current);
+
+        return () => observer.disconnect();
+    }, [fitToScreen]);
 
     // Load saved prompts on mount
     useEffect(() => {
@@ -113,6 +271,42 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
         inputImageRef.current = inputImage;
     }, [inputImage]);
 
+    // Live Preview of Visual Prompt
+    useEffect(() => {
+        // Construct a dummy payload to preview the text
+        const payload = {
+            baseImage: '', // Not needed for text prompt
+            layersImage: '',
+            regions,
+            globalPrompt: manualPrompt,
+            globalInstructions: vpGeneralInstructions,
+            globalReferenceImage: vpReferenceImage || undefined,
+            width: 0,
+            height: 0
+        };
+        const previewText = buildVisualPrompt(payload);
+
+        // Append implicit reference notes (logic duplicated from service for UI preview)
+        let fullPreview = previewText;
+        if (vpGeneralInstructions) {
+            fullPreview += `\n\nGeneral Guidelines: ${vpGeneralInstructions}`;
+        }
+        if (vpReferenceImage) {
+            fullPreview += `\n\n(Note: A Global Reference Image has been attached...)`;
+        }
+        const regionsWithRefs = regions.filter(r => r.referenceImage);
+        if (regionsWithRefs.length > 0) {
+            fullPreview += `\n\n(Note: Specific Reference Images attached for: ${regionsWithRefs.map(r => `R${r.regionNumber}`).join(', ')}...)`;
+        }
+
+        // Only update if we haven't sent a real one yet, OR if we want live preview to override
+        // Let's make "lastSentPrompt" actually be "what is currently shown".
+        // If isGenerating is true, maybe don't update? No, user might edit while generating (bad idea but possible).
+        if (!isGenerating) {
+            setLastSentPrompt(fullPreview);
+        }
+    }, [manualPrompt, regions, vpGeneralInstructions, vpReferenceImage, isGenerating]);
+
 
     const handleSavePrompt = () => {
         if (!manualPrompt.trim()) return;
@@ -138,9 +332,33 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
     const handleImport = () => {
         const dataUrl = onImportFromSketch();
         if (dataUrl) {
-            setInputImage(dataUrl);
-            setResultImage(null);
-            setShowOriginal(false);
+            const img = new Image();
+            img.onload = () => {
+                // Max dimension 2048 (consistent with upload)
+                let w = img.width;
+                let h = img.height;
+                const maxDim = 2048;
+                if (w > maxDim || h > maxDim) {
+                    if (w > h) { h = (h / w) * maxDim; w = maxDim; }
+                    else { w = (w / h) * maxDim; h = maxDim; }
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0, w, h);
+                    const bakedUrl = canvas.toDataURL('image/png');
+                    setCanvasDimensions({ width: w, height: h });
+                    setInputImage(bakedUrl);
+                    setResultImage(null);
+                    setShowOriginal(false);
+                    setGenerationHistory([]);
+                    setHistoryIndex(-1);
+                }
+            };
+            img.src = dataUrl;
         } else {
             alert("No hay contenido visible en el sketch para importar.");
         }
@@ -152,9 +370,34 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
             const reader = new FileReader();
             reader.onload = (ev) => {
                 if (ev.target?.result) {
-                    setInputImage(ev.target.result as string);
-                    setResultImage(null);
-                    setShowOriginal(false);
+                    const result = ev.target.result as string;
+                    const img = new Image();
+                    img.onload = () => {
+                        // Max dimension 2048 for performance and consistency
+                        let w = img.width;
+                        let h = img.height;
+                        const maxDim = 2048;
+                        if (w > maxDim || h > maxDim) {
+                            if (w > h) { h = (h / w) * maxDim; w = maxDim; }
+                            else { w = (w / h) * maxDim; h = maxDim; }
+                        }
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = w;
+                        canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                            ctx.drawImage(img, 0, 0, w, h);
+                            const bakedUrl = canvas.toDataURL('image/png'); // Strip EXIF
+                            setCanvasDimensions({ width: w, height: h });
+                            setInputImage(bakedUrl);
+                            setResultImage(null);
+                            setShowOriginal(false);
+                            setGenerationHistory([]);
+                            setHistoryIndex(-1);
+                        }
+                    };
+                    img.src = result;
                 }
             };
             reader.readAsDataURL(file);
@@ -189,10 +432,11 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
             setLighting('natural');
             setRegions([]); // Clear Regions
             canvasRef.current?.clearDrawing(); // Clear drawings
+            setGenerationHistory([]);
+            setHistoryIndex(-1);
         }
     };
 
-    // --- Visual Prompting Handlers ---
     // --- Visual Prompting Handlers ---
     const handleAddRegion = (data: { type: 'rectangle' | 'polygon', points?: { x: number, y: number }[], x: number, y: number, width: number, height: number }) => {
         const newRegion: Region = {
@@ -253,6 +497,7 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
         try {
             // Use New Pipeline
             const layersImage = canvasRef.current?.getDrawingDataUrl() || ''; // Should get transparent png
+            const visualGuideImage = await canvasRef.current?.getVisualGuideSnapshot() || '';
 
             const img = new Image();
             img.src = activeBaseImage;
@@ -261,25 +506,19 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
             const payload = {
                 baseImage: activeBaseImage,
                 layersImage,
+                visualGuideImage,
                 regions,
-                globalPrompt: manualPrompt,
+                globalPrompt: '', // We ignore the architectural prompt for edits
                 globalInstructions: vpGeneralInstructions,
-                globalReferenceImage: vpReferenceImage || undefined,
-                width: img.width,
-                height: img.height
+                globalReferenceImage: styleReferenceImage || vpReferenceImage || undefined,
+                width: canvasDimensions.width,
+                height: canvasDimensions.height,
+                mode: 'edit' as const // Force Edit Mode (Preserve State)
             };
 
-            const { contents } = await prepareVisualPromptingRequest(payload, import.meta.env.VITE_GEMINI_API_KEY);
-
-            // Add global style reference if exists
-            if (styleReferenceImage) {
-                const styleBase64 = styleReferenceImage.split(',')[1];
-                // Insert after base image (index 1), before guide image? No, usually style ref is independent.
-                // Let's just append it or put it in a known position. 
-                // prepareVisualPromptingRequest returns [Base, Guide, ...RefImages, Text].
-                // Inserting Style Ref at index 2 (after Base and Guide) seems safe.
-                contents.parts.splice(2, 0, { inlineData: { mimeType: 'image/png', data: styleBase64 } });
-            }
+            const { contents, guideImageBase64, textPrompt } = await prepareVisualPromptingRequest(payload, import.meta.env.VITE_GEMINI_API_KEY, aiStructuredPrompt);
+            setLastGuideImage(`data:image/png;base64,${guideImageBase64}`);
+            setLastSentPrompt(textPrompt);
 
             // @ts-ignore
             const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
@@ -293,7 +532,9 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
             }
 
             if (newImageBase64) {
-                setResultImage(`data:image/png;base64,${newImageBase64}`);
+                const newResult = `data:image/png;base64,${newImageBase64}`;
+                updateResult(newResult);
+                pushToHistory(currentResult || currentInput, newResult);
             } else {
                 console.log("Full Response", response);
                 alert("La IA no generó una imagen.");
@@ -331,6 +572,7 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
             if (hasVisualEdits) {
                 // Use New Pipeline
                 const layersImage = canvasRef.current?.getDrawingDataUrl() || ''; // Should get transparent png
+                const visualGuideImage = await canvasRef.current?.getVisualGuideSnapshot() || '';
 
                 const img = new Image();
                 img.src = inputImage;
@@ -339,20 +581,19 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
                 const payload = {
                     baseImage: inputImage,
                     layersImage,
+                    visualGuideImage,
                     regions,
                     globalPrompt: manualPrompt,
+                    globalInstructions: vpGeneralInstructions,
+                    globalReferenceImage: styleReferenceImage || vpReferenceImage || undefined,
                     width: img.width,
-                    height: img.height
+                    height: img.height,
+                    mode: 'render' as const // Force Render Mode (Sketch -> Photo)
                 };
 
-                const { contents, guideImageBase64, textPrompt } = await prepareVisualPromptingRequest(payload, import.meta.env.VITE_GEMINI_API_KEY);
+                const { contents, guideImageBase64, textPrompt } = await prepareVisualPromptingRequest(payload, import.meta.env.VITE_GEMINI_API_KEY, aiStructuredPrompt);
                 setLastGuideImage(`data:image/png;base64,${guideImageBase64}`);
                 setLastSentPrompt(textPrompt);
-
-                if (styleReferenceImage) {
-                    const styleBase64 = styleReferenceImage.split(',')[1];
-                    contents.parts.splice(2, 0, { inlineData: { mimeType: 'image/png', data: styleBase64 } });
-                }
 
                 // @ts-ignore
                 const config = { responseModalities: ["IMAGE"] };
@@ -364,7 +605,13 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
                 }
 
                 if (newImageBase64) {
-                    setResultImage(`data:image/png;base64,${newImageBase64}`);
+                    const newResult = `data:image/png;base64,${newImageBase64}`;
+                    updateResult(newResult);
+                    pushToHistory(inputImage, newResult);
+
+                    // Reset Visual Prompting State for next cycle?
+                    setRegions([]);
+                    canvasRef.current?.clearDrawing();
                 } else {
                     console.log("Full Response", response);
                     alert("La IA no generó una imagen.");
@@ -395,7 +642,9 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
                 }
 
                 if (newImageBase64) {
-                    setResultImage(`data:image/png;base64,${newImageBase64}`);
+                    const newResult = `data:image/png;base64,${newImageBase64}`;
+                    updateResult(newResult);
+                    pushToHistory(inputImage, newResult);
                 } else {
                     alert("La IA no generó una imagen.");
                 }
@@ -414,8 +663,9 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
 
         setIsUpscaling(true);
         try {
+            // @ts-ignore
             const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
-            const model = 'gemini-3-pro-image-preview'; // Keep high quality for upscale
+            const model = GEMINI_MODEL_ID;
 
             const prompt = "Upscale this architectural render to 4K resolution. Enhance fine details, sharpen textures, and improve overall clarity while maintaining the exact composition and style of the original image. Output as a high-fidelity photorealistic image.";
 
@@ -436,7 +686,42 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
             }
 
             if (newImageBase64) {
-                setResultImage(`data:image/png;base64,${newImageBase64}`);
+                const newResult = `data:image/png;base64,${newImageBase64}`;
+                updateResult(newResult);
+                pushToHistory(resultImage, newResult);
+
+                // Client-side 4K scaling and download (Matching Sketch behavior)
+                const img = new Image();
+                img.onload = () => {
+                    const TARGET_WIDTH = 3840;
+                    const scale = TARGET_WIDTH / img.width;
+                    const targetHeight = Math.round(img.height * scale);
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = TARGET_WIDTH;
+                    canvas.height = targetHeight;
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.imageSmoothingQuality = 'high';
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                        canvas.toBlob((blob) => {
+                            if (blob) {
+                                const downloadUrl = URL.createObjectURL(blob);
+                                const link = document.createElement('a');
+                                link.href = downloadUrl;
+                                link.download = `Architectural_Render_4K_${Date.now()}.png`;
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                                URL.revokeObjectURL(downloadUrl);
+                            }
+                        }, 'image/png');
+                    }
+                };
+                img.src = newResult;
+
             } else {
                 alert("La IA no pudo escalar la imagen.");
             }
@@ -481,6 +766,10 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
                     onGeneralInstructionsChange={setVpGeneralInstructions}
                     referenceImage={vpReferenceImage}
                     onReferenceImageChange={setVpReferenceImage}
+                    structuredPrompt={aiStructuredPrompt}
+                    onStructuredPromptChange={(v) => { setAiStructuredPrompt(v); setIsPromptManuallyEdited(true); }}
+                    onResetStructuredPrompt={() => setIsPromptManuallyEdited(false)}
+                    isPromptModified={isPromptManuallyEdited}
                 />
             </aside>
 
@@ -498,19 +787,15 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
             <div className="flex-grow flex flex-col h-full relative min-w-0">
 
                 {/* 1.1 Viewport (Image Area) */}
-                <div className="flex-grow bg-black/20 relative overflow-hidden">
+                <div ref={viewportRef} className="flex-grow bg-black/20 relative overflow-hidden">
                     {/* Image Display Wrapper for Zoom/Pan */}
                     <div className="w-full h-full">
                         {inputImage ? (
                             <LayeredCanvas
                                 ref={canvasRef}
                                 baseImage={showOriginal ? inputImage : (resultImage || inputImage)}
-                                width={1024} // Should be dynamic based on image? 
-                                height={1024} // This is a placeholder. 
-                                // Ideally we get width/height from the loaded image or we set the canvas size to match the image natural size.
-                                // For MVP, let's assume 1024 or force resize.
-                                // Better: Wrapper that measures image?
-                                // Let's simplify: pass zoom/pan and let canvas handle transform.
+                                width={canvasDimensions.width}
+                                height={canvasDimensions.height}
                                 activeTool={activeTool}
                                 regions={regions}
                                 brushSize={brushSize}
@@ -553,6 +838,28 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
                             {showOriginal ? <SparklesIcon className="w-3 h-3 text-purple-400" /> : <PhotoIcon className="w-3 h-3" />}
                             {showOriginal ? "Ver Render" : "Ver Original"}
                         </button>
+
+                        <div className="h-4 w-px bg-theme-bg-tertiary"></div>
+
+                        {/* Undo / Redo */}
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={handleLocalUndo}
+                                disabled={historyIndex < 0}
+                                className="p-1.5 hover:bg-theme-bg-hover rounded-full text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                title="Deshacer Generación"
+                            >
+                                <UndoIcon className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={handleLocalRedo}
+                                disabled={historyIndex >= generationHistory.length - 1}
+                                className="p-1.5 hover:bg-theme-bg-hover rounded-full text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                title="Rehacer Generación"
+                            >
+                                <RedoIcon className="w-4 h-4" />
+                            </button>
+                        </div>
 
                         <div className="h-4 w-px bg-theme-bg-tertiary"></div>
 
@@ -610,8 +917,8 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
                             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-theme-bg-tertiary h-24 flex-shrink-0">
                                 {/* 1. VP Base Input */}
                                 <div className="min-w-[80px] w-[80px] border border-theme-bg-tertiary bg-black/40 rounded relative overflow-hidden flex items-center justify-center group flex-shrink-0">
-                                    {inputImage ? (
-                                        <img src={inputImage} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" />
+                                    {(resultImage || inputImage) ? (
+                                        <img src={resultImage || inputImage || undefined} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" />
                                     ) : (
                                         <span className="text-[8px] text-gray-600">N/A</span>
                                     )}
@@ -646,12 +953,20 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
                                 )}
                             </div>
 
-                            {/* Shared Prompt Read-Only */}
+                            {/* Shared Prompt Editor */}
                             <div className="flex-grow flex flex-col min-h-0">
-                                <label className="text-[9px] font-bold text-theme-text-tertiary uppercase mb-1">Prompt Enviado (Debug)</label>
-                                <div className="flex-grow bg-[#111] rounded p-2 text-[10px] text-gray-400 font-mono overflow-y-auto border border-theme-bg-tertiary whitespace-pre-wrap">
-                                    {lastSentPrompt || manualPrompt || <span className="italic opacity-30">Prompt vacío</span>}
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="text-[9px] font-bold text-theme-text-tertiary uppercase">Prompt Estructurado Visual</label>
+                                    {isPromptManuallyEdited && (
+                                        <button onClick={() => setIsPromptManuallyEdited(false)} className="text-[8px] text-blue-400 hover:text-blue-300 font-bold">Reset Auto</button>
+                                    )}
                                 </div>
+                                <textarea
+                                    value={aiStructuredPrompt}
+                                    onChange={(e) => { setAiStructuredPrompt(e.target.value); setIsPromptManuallyEdited(true); }}
+                                    className={`flex-grow bg-[#111] rounded p-2 text-[10px] font-mono border outline-none resize-none transition-colors ${isPromptManuallyEdited ? 'border-blue-500/50 text-blue-100' : 'border-theme-bg-tertiary text-gray-400'}`}
+                                    placeholder="Prompt Visual..."
+                                />
                             </div>
                         </div>
                     </div>

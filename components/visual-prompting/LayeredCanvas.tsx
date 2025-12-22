@@ -7,6 +7,7 @@ export interface LayeredCanvasRef {
     clearDrawing: () => void;
     undo: () => void;
     redo: () => void;
+    getVisualGuideSnapshot: () => Promise<string>;
 }
 
 interface LayeredCanvasProps {
@@ -71,10 +72,27 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
         }
     }, [width, height]);
 
+    // Multi-touch State
+    const pointerCache = useRef<Map<number, React.PointerEvent>>(new Map());
+    const prevDiff = useRef<number>(-1);
+
+    // Helper to calculate distance between two points
+    const getDistance = (p1: React.PointerEvent, p2: React.PointerEvent) => {
+        const dx = p1.clientX - p2.clientX;
+        const dy = p1.clientY - p2.clientY;
+        return Math.hypot(dx, dy);
+    };
+
+    // Helper to calculate center of two points
+    const getCenter = (p1: React.PointerEvent, p2: React.PointerEvent) => {
+        return {
+            x: (p1.clientX + p2.clientX) / 2,
+            y: (p1.clientY + p2.clientY) / 2
+        };
+    };
 
     useImperativeHandle(ref, () => ({
         getDrawingDataUrl: () => {
-            // We need to render the current polygon if it's not finished? No, usually not.
             return drawingCanvasRef.current?.toDataURL('image/png') || '';
         },
         clearDrawing: () => {
@@ -97,6 +115,82 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
                 setHistoryIndex(newIndex);
                 restoreHistory(newIndex);
             }
+        },
+        getVisualGuideSnapshot: async () => {
+            // WYSIWYG Snapshot Generation
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return '';
+
+            // 1. Draw Base Image
+            if (baseImage) {
+                const img = new Image();
+                img.src = baseImage;
+                await new Promise<void>((resolve) => {
+                    if (img.complete) resolve();
+                    else img.onload = () => resolve();
+                });
+                ctx.drawImage(img, 0, 0, width, height);
+            }
+
+            // 2. Draw Drawings
+            if (drawingCanvasRef.current) {
+                ctx.drawImage(drawingCanvasRef.current, 0, 0);
+            }
+
+            // 3. Draw Regions (Simulate SVG Overlay)
+            regions.forEach((r, index) => {
+                ctx.save();
+
+                // Style matching SVG
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 2; // Fixed width for guide image (not zoom dependent)
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.1)';
+
+                if (r.type === 'polygon' && r.points) {
+                    ctx.beginPath();
+                    r.points.forEach((p, i) => {
+                        if (i === 0) ctx.moveTo(p.x, p.y);
+                        else ctx.lineTo(p.x, p.y);
+                    });
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Label Background
+                    const firstPoint = r.points[0];
+                    ctx.fillStyle = '#ff0000';
+                    ctx.fillRect(firstPoint.x, firstPoint.y - 20, 20, 20);
+
+                    // Label Text
+                    ctx.fillStyle = 'white';
+                    ctx.font = 'bold 12px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(r.regionNumber?.toString() || (index + 1).toString(), firstPoint.x + 10, firstPoint.y - 10);
+
+                } else {
+                    // Rectangle
+                    ctx.fillRect(r.x, r.y, r.width, r.height);
+                    ctx.strokeRect(r.x, r.y, r.width, r.height);
+
+                    // Label Background
+                    ctx.fillStyle = '#ff0000';
+                    ctx.fillRect(r.x, r.y - 20, 20, 20);
+
+                    // Label Text
+                    ctx.fillStyle = 'white';
+                    ctx.font = 'bold 12px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(r.regionNumber?.toString() || (index + 1).toString(), r.x + 10, r.y - 10);
+                }
+                ctx.restore();
+            });
+
+            return canvas.toDataURL('image/jpeg', 0.9);
         }
     }));
 
@@ -116,22 +210,31 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
         ctx.putImageData(history[index], 0, 0);
     };
 
-
     // --- Event Handlers ---
 
-    const getCanvasPoint = (e: React.PointerEvent) => {
+    const getCanvasPoint = (e: React.PointerEvent | { clientX: number, clientY: number }) => {
         if (!containerRef.current) return { x: 0, y: 0 };
         const rect = containerRef.current.getBoundingClientRect();
-        const x = (e.clientX - rect.left - pan.x) / zoom;
-        const y = (e.clientY - rect.top - pan.y) / zoom;
-        return { x, y };
+        return {
+            x: (e.clientX - rect.left - pan.x) / zoom,
+            y: (e.clientY - rect.top - pan.y) / zoom
+        };
     };
 
     const handePointerDown = (e: React.PointerEvent) => {
-        // e.preventDefault(); // Don't prevent default on pointerdown always, can block focus
+        // Track pointer
+        pointerCache.current.set(e.pointerId, e);
 
-        // Palm Rejection: If pen tool but touch, ignore (unless we implement sophisticated logic)
-        // For now, assume mapped correctly.
+        if (pointerCache.current.size === 2) {
+            // Start Pinch
+            const it = pointerCache.current.values();
+            const p1 = it.next().value;
+            const p2 = it.next().value;
+            prevDiff.current = getDistance(p1, p2);
+            isPanning.current = false; // Disable single finger pan if pinching
+            isDrawing.current = false;
+            return;
+        }
 
         if (activeTool === 'pan' || e.button === 1 || (activeTool !== 'pan' && e.pointerType === 'touch' && !e.isPrimary)) {
             isPanning.current = true;
@@ -139,35 +242,72 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
             return;
         }
 
-        if (activeTool === 'pen' || activeTool === 'eraser') {
-            isDrawing.current = true;
-            const { x, y } = getCanvasPoint(e);
-            const ctx = drawingCanvasRef.current?.getContext('2d');
-            if (ctx) {
-                ctx.beginPath();
-                ctx.moveTo(x, y);
-                ctx.strokeStyle = activeTool === 'eraser' ? 'rgba(0,0,0,1)' : brushColor;
-                ctx.lineWidth = brushSize / zoom; // Adjust size by zoom? Or keep constant? Usually constant relative to canvas.
-                // Wait, brushSize should typically be relative to Canvas pixels.
-                ctx.lineWidth = brushSize;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                if (activeTool === 'eraser') ctx.globalCompositeOperation = 'destination-out';
-                else ctx.globalCompositeOperation = 'source-over';
+        // Only draw if 1 pointer and not panning
+        if (pointerCache.current.size === 1) {
+            if (activeTool === 'pen' || activeTool === 'eraser') {
+                isDrawing.current = true;
+                const { x, y } = getCanvasPoint(e);
+                const ctx = drawingCanvasRef.current?.getContext('2d');
+                if (ctx) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    ctx.strokeStyle = activeTool === 'eraser' ? 'rgba(0,0,0,1)' : brushColor;
+                    ctx.lineWidth = brushSize;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    if (activeTool === 'eraser') ctx.globalCompositeOperation = 'destination-out';
+                    else ctx.globalCompositeOperation = 'source-over';
+                }
+            } else if (activeTool === 'region') {
+                isDrawing.current = true;
+                lastPos.current = getCanvasPoint(e);
+            } else if (activeTool === 'polygon') {
+                const pt = getCanvasPoint(e);
+                setCurrentPolygonPoints(prev => [...prev, pt]);
             }
-        } else if (activeTool === 'region') {
-            // Start Region Box
-            isDrawing.current = true;
-            lastPos.current = getCanvasPoint(e);
-        } else if (activeTool === 'polygon') {
-            const pt = getCanvasPoint(e);
-            // Add point to current polygon
-            setCurrentPolygonPoints(prev => [...prev, pt]);
         }
     };
 
     const handlePointerMove = (e: React.PointerEvent) => {
         e.preventDefault();
+
+        // Update pointer in cache
+        if (pointerCache.current.has(e.pointerId)) {
+            pointerCache.current.set(e.pointerId, e);
+        }
+
+        // Multi-touch Pinch/Pan
+        if (pointerCache.current.size === 2) {
+            const it = pointerCache.current.values();
+            const p1 = it.next().value;
+            const p2 = it.next().value;
+
+            // 1. Zoom
+            const curDiff = getDistance(p1, p2);
+            if (prevDiff.current > 0) {
+                const delta = curDiff - prevDiff.current;
+                const zoomFactor = delta * 0.005; // Sensitivity
+                const newZoom = Math.max(0.1, Math.min(10, zoom + zoomFactor));
+
+                // Zoom towards center of pinch
+                const center = getCenter(p1, p2);
+                if (containerRef.current) {
+                    const rect = containerRef.current.getBoundingClientRect();
+                    const mx = center.x - rect.left;
+                    const my = center.y - rect.top;
+
+                    // P_new = M - (M - P_old) * (Z_new / Z_old)
+                    const scaleChange = newZoom / zoom;
+                    const newPanX = mx - (mx - pan.x) * scaleChange;
+                    const newPanY = my - (my - pan.y) * scaleChange;
+
+                    onZoomChange(newZoom);
+                    onPanChange({ x: newPanX, y: newPanY });
+                }
+            }
+            prevDiff.current = curDiff;
+            return;
+        }
 
         if (isPanning.current) {
             const dx = e.clientX - lastPos.current.x;
@@ -179,39 +319,45 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
 
         if (isDrawing.current) {
             const { x, y } = getCanvasPoint(e);
-
             if (activeTool === 'pen' || activeTool === 'eraser') {
                 const ctx = drawingCanvasRef.current?.getContext('2d');
                 if (ctx) {
-                    // Pressure sensitivity
-                    const pressure = e.pressure !== 0.5 ? e.pressure : 1; // 0.5 is default/mouse
+                    const pressure = e.pressure !== 0.5 ? e.pressure : 1;
                     ctx.lineWidth = brushSize * pressure;
                     ctx.lineTo(x, y);
                     ctx.stroke();
-                    // For smoother lines, use quadratic curves, but simple lineTo is OK for now.
                     ctx.beginPath();
                     ctx.moveTo(x, y);
                 }
             }
-            // Region preview drawing handling can be done here with a temp overlay or state
         }
     };
 
     const handlePointerUp = (e: React.PointerEvent) => {
-        if (isPanning.current) {
+        pointerCache.current.delete(e.pointerId);
+
+        if (pointerCache.current.size < 2) {
+            prevDiff.current = -1;
+        }
+
+        if (isPanning.current && pointerCache.current.size === 0) {
             isPanning.current = false;
         }
-        if (isDrawing.current) {
+
+        if (isDrawing.current && pointerCache.current.size === 0) {
             isDrawing.current = false;
             if (activeTool === 'pen' || activeTool === 'eraser') {
-                // Close path?
                 saveHistory();
                 const ctx = drawingCanvasRef.current?.getContext('2d');
-                if (ctx) ctx.globalCompositeOperation = 'source-over'; // Reset
+                if (ctx) ctx.globalCompositeOperation = 'source-over';
             } else if (activeTool === 'region') {
-                // Finish region
                 const end = getCanvasPoint(e);
+                // Correctly use stored start point (need to handle coordinate space carefully)
+                // lastPos for region was stored as canvas coords in pointerDown
+                // But wait, lastPos is shared with Pan. 
+                // Let's rely on stored start point which WAS converted to canvas coords.
                 const start = lastPos.current;
+
                 const w = Math.abs(end.x - start.x);
                 const h = Math.abs(end.y - start.y);
                 const rx = Math.min(end.x, start.x);
@@ -224,9 +370,10 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
     };
 
     const handleMouseDoubleClick = (e: React.MouseEvent) => {
+        // ... (existing implementation)
         if (activeTool === 'polygon' && currentPolygonPoints.length > 2 && onRegionCreated) {
+            // ... logic from existing
             const points = [...currentPolygonPoints];
-            // Calculate BBox
             const xs = points.map(p => p.x);
             const ys = points.map(p => p.y);
             const minX = Math.min(...xs);
@@ -247,13 +394,23 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
     };
 
     const handleWheel = (e: React.WheelEvent) => {
-        // Zoom logic
-        if (e.ctrlKey || e.metaKey) {
-            e.preventDefault();
-            const zoomSensitivity = 0.001;
-            const delta = -e.deltaY * zoomSensitivity;
-            const newZoom = Math.max(0.1, Math.min(10, zoom * (1 + delta)));
+        e.preventDefault();
+        const zoomSensitivity = 0.001;
+        const delta = -e.deltaY * zoomSensitivity;
+        const newZoom = Math.max(0.1, Math.min(10, zoom * (1 + delta)));
+
+        if (containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+
+            // Zoom towards mouse
+            const scaleChange = newZoom / zoom;
+            const newPanX = mx - (mx - pan.x) * scaleChange;
+            const newPanY = my - (my - pan.y) * scaleChange;
+
             onZoomChange(newZoom);
+            onPanChange({ x: newPanX, y: newPanY });
         }
     };
 
@@ -288,7 +445,7 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
                 }}
             >
                 {/* 1. Base Image Layer */}
-                {baseImage && <img src={baseImage} style={{ width, height, position: 'absolute', pointerEvents: 'none' }} alt="Base" />}
+                {baseImage && <img src={baseImage} style={{ width: '100%', height: '100%', objectFit: 'contain', position: 'absolute', pointerEvents: 'none' }} alt="Base" />}
 
                 {/* 2. Drawing Layer */}
                 <canvas

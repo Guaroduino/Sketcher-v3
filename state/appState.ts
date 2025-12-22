@@ -441,12 +441,36 @@ function appReducer(state: AppState, action: Action): AppState {
                     }
                     if (image) {
                         updatedObject.backgroundImage = image;
-                        updatedObject.context.clearRect(0, 0, o.context.canvas.width, o.context.canvas.height);
+                        const canvasWidth = o.context.canvas.width;
+                        const canvasHeight = o.context.canvas.height;
+
+                        updatedObject.context.clearRect(0, 0, canvasWidth, canvasHeight);
                         if (updatedObject.color) { // Draw color behind image if it exists
                             updatedObject.context.fillStyle = updatedObject.color;
-                            updatedObject.context.fillRect(0, 0, o.context.canvas.width, o.context.canvas.height);
+                            updatedObject.context.fillRect(0, 0, canvasWidth, canvasHeight);
                         }
-                        updatedObject.context.drawImage(image, 0, 0, o.context.canvas.width, o.context.canvas.height);
+
+                        // Fit (Letterbox) logic to preserve aspect ratio
+                        const imageAspect = image.width / image.height;
+                        const canvasAspect = canvasWidth / canvasHeight;
+
+                        let renderWidth, renderHeight, x, y;
+
+                        if (imageAspect > canvasAspect) {
+                            // Image is wider than canvas
+                            renderWidth = canvasWidth;
+                            renderHeight = canvasWidth / imageAspect;
+                            x = 0;
+                            y = (canvasHeight - renderHeight) / 2;
+                        } else {
+                            // Image is taller than canvas
+                            renderWidth = canvasHeight * imageAspect;
+                            renderHeight = canvasHeight;
+                            x = (canvasWidth - renderWidth) / 2;
+                            y = 0;
+                        }
+
+                        updatedObject.context.drawImage(image, x, y, renderWidth, renderHeight);
                         updatedObject.mipmaps = generateMipmaps(o.context.canvas);
                     }
                     return updatedObject;

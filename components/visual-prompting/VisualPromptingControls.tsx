@@ -7,7 +7,8 @@ import {
     HandIcon as CursorClickIcon,
     SparklesIcon,
     UploadIcon,
-    XIcon as CloseIcon
+    XIcon as CloseIcon,
+    UndoIcon
 } from '../../components/icons';
 import { Region } from '../../services/visualPromptingService';
 
@@ -32,6 +33,12 @@ interface VisualPromptingControlsProps {
     onToolChange: (tool: 'pen' | 'eraser' | 'region' | 'polygon' | 'pan') => void;
     onProcessChanges: () => void;
     isGenerating?: boolean;
+
+    // Structured Prompt Editor
+    structuredPrompt: string;
+    onStructuredPromptChange: (text: string) => void;
+    onResetStructuredPrompt: () => void;
+    isPromptModified: boolean;
 }
 
 export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = ({
@@ -50,7 +57,11 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
     activeTool,
     onToolChange,
     onProcessChanges,
-    isGenerating = false
+    isGenerating = false,
+    structuredPrompt,
+    onStructuredPromptChange,
+    onResetStructuredPrompt,
+    isPromptModified
 }) => {
     return (
         <div className="flex flex-col h-full bg-[#1e1e1e] border-r border-[#333]">
@@ -261,6 +272,40 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
                         ))
                     )}
                 </div>
+            </div>
+
+            {/* AI Structured Prompt Editor (Advanced) */}
+            <div className="p-4 border-t border-[#333] bg-[#1a1a1a] space-y-2">
+                <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-bold text-theme-accent-primary uppercase tracking-wider">Prompt Estructurado (AI)</label>
+                    {isPromptModified && (
+                        <button
+                            onClick={onResetStructuredPrompt}
+                            className="text-[9px] text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1"
+                        >
+                            <UndoIcon className="w-2.5 h-2.5" />
+                            Reset Auto
+                        </button>
+                    )}
+                </div>
+                <div className="relative group/prompt">
+                    <textarea
+                        value={structuredPrompt}
+                        onChange={(e) => onStructuredPromptChange(e.target.value)}
+                        placeholder="El prompt estructurado se generará aquí..."
+                        className={`w-full h-40 bg-[#000] text-[10px] font-mono p-2 rounded border transition-colors outline-none resize-none leading-relaxed ${isPromptModified ? 'border-blue-500/50 text-blue-100' : 'border-[#333] text-gray-400'}`}
+                    />
+                    {!isPromptModified && (
+                        <div className="absolute top-2 right-2 opacity-0 group-hover/prompt:opacity-100 transition-opacity pointer-events-none">
+                            <span className="bg-[#222] text-[8px] px-1 py-0.5 rounded border border-[#444] text-gray-400">Auto-Generado</span>
+                        </div>
+                    )}
+                </div>
+                <p className="text-[8px] text-gray-500 italic leading-tight">
+                    {isPromptModified
+                        ? "Has editado manualmente el prompt. Se usará exactamente este texto."
+                        : "Este es el objeto que se envía a Gemini. Haz clic para personalizar."}
+                </p>
             </div>
 
             {/* Footer Action Button */}

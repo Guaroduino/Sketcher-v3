@@ -62,7 +62,10 @@ export const AIPanel: React.FC<AIPanelProps> = ({
         freeFormSlots, setFreeFormSlots,
         savedPrompts, savePrompt, deletePrompt,
         upscaleFormat, setUpscaleFormat,
-        upscaleCreativity, setUpscaleCreativity
+        upscaleCreativity, setUpscaleCreativity,
+        sketchWaterLevel, setSketchWaterLevel,
+        sketchDetailLevel, setSketchDetailLevel,
+        sketchUserInstruction, setSketchUserInstruction
         // ... other state
     } = aiPanelState;
 
@@ -85,7 +88,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
     // Generate preview when active tab changes
     useEffect(() => {
         if (isOpen) {
-            const includeBg = activeAiTab === 'composition';
+            const includeBg = activeAiTab === 'composition' || activeAiTab === 'sketch' || activeAiTab === 'upscale';
             onGenerateEnhancementPreview(includeBg);
         }
     }, [isOpen, activeAiTab]);
@@ -101,7 +104,8 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                 compositionPrompt, styleRef,
                 freeFormPrompt, freeFormSlots,
                 shouldUpdateBackground, shouldAddToCanvas, shouldAddToLibrary, shouldRemoveContent, sourceScope,
-                upscaleCreativity
+                upscaleCreativity,
+                sketchWaterLevel, sketchDetailLevel, sketchUserInstruction
             });
         }, 500); // 500ms debounce
 
@@ -112,7 +116,8 @@ export const AIPanel: React.FC<AIPanelProps> = ({
         compositionPrompt, styleRef,
         freeFormPrompt, freeFormSlots,
         shouldUpdateBackground, shouldAddToCanvas, shouldAddToLibrary, shouldRemoveContent, sourceScope,
-        upscaleCreativity
+        upscaleCreativity,
+        sketchWaterLevel, sketchDetailLevel, sketchUserInstruction
     ]);
 
     // Load prompt handler
@@ -148,6 +153,9 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                             </button>
                             <button onClick={() => setActiveAiTab('free')} className={`flex-1 p-2 text-sm font-semibold transition-colors ${activeAiTab === 'free' ? 'text-theme-accent-primary border-b-2 border-theme-accent-primary' : 'text-theme-text-secondary hover:bg-theme-bg-tertiary'}`}>
                                 LIBRE
+                            </button>
+                            <button onClick={() => setActiveAiTab('sketch')} className={`flex-1 p-2 text-sm font-semibold transition-colors ${activeAiTab === 'sketch' ? 'text-theme-accent-primary border-b-2 border-theme-accent-primary' : 'text-theme-text-secondary hover:bg-theme-bg-tertiary'}`}>
+                                ACUARELA
                             </button>
                             <button onClick={() => setActiveAiTab('upscale')} className={`flex-1 p-2 text-sm font-semibold transition-colors ${activeAiTab === 'upscale' ? 'text-theme-accent-primary border-b-2 border-theme-accent-primary' : 'text-theme-text-secondary hover:bg-theme-bg-tertiary'}`}>
                                 ESCALAR
@@ -529,6 +537,114 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                     className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-1 px-3 text-sm rounded-md disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
                                 >
                                     {isEnhancing ? 'Generando...' : 'Generar Libre'}
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Sketch Tab Implementation */}
+                        {activeAiTab === 'sketch' && (
+                            <div className="space-y-4">
+                                <div className="rounded-md p-2 aspect-video flex items-center justify-center bg-gray-800 border border-gray-700">
+                                    {!enhancementPreview ? (
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-xs text-theme-text-secondary">Generando vista previa...</span>
+                                        </div>
+                                    ) : (
+                                        <img
+                                            src={enhancementPreview.fullDataUrl}
+                                            alt="Sketch Preview"
+                                            className="max-w-full max-h-full object-contain"
+                                        />
+                                    )}
+                                </div>
+
+                                <div className="p-3 bg-theme-bg-secondary rounded-md text-xs text-theme-text-secondary border border-theme-bg-tertiary">
+                                    Transforma tu lienzo actual en una pintura de acuarela o dibujo artístico basado en tus ajustes.
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold text-theme-text-secondary block mb-1">Carga de Agua (Estilo): {sketchWaterLevel}</label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        value={sketchWaterLevel}
+                                        onChange={(e) => setSketchWaterLevel(parseInt(e.target.value))}
+                                        className="w-full accent-theme-accent-primary"
+                                        disabled={isEnhancing}
+                                    />
+                                    <div className="flex justify-between text-xs text-theme-text-secondary mt-1">
+                                        <span>Seco (Lápiz)</span>
+                                        <span>Mojado (Acuarela)</span>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold text-theme-text-secondary block mb-1">Nivel de Detalle: {sketchDetailLevel}</label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        value={sketchDetailLevel}
+                                        onChange={(e) => setSketchDetailLevel(parseInt(e.target.value))}
+                                        className="w-full accent-theme-accent-primary"
+                                        disabled={isEnhancing}
+                                    />
+                                    <div className="flex justify-between text-xs text-theme-text-secondary mt-1">
+                                        <span>Minimalista</span>
+                                        <span>Hiperrealista</span>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold text-theme-text-secondary block mb-1">Instrucciones Adicionales (Opcional)</label>
+                                    <textarea
+                                        value={sketchUserInstruction}
+                                        onChange={(e) => setSketchUserInstruction(e.target.value)}
+                                        placeholder="Ej: 'Añade un tono más azulado al cielo', 'Usa colores cálidos del atardecer'."
+                                        className="w-full h-16 p-2 bg-theme-bg-tertiary text-theme-text-primary text-sm rounded-md resize-none focus:ring-1 focus:ring-theme-accent-primary focus:outline-none"
+                                        disabled={isEnhancing}
+                                    />
+                                </div>
+
+                                <div className="flex items-center gap-4 mt-2">
+                                    <div className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            id="sketch-add-to-canvas"
+                                            checked={shouldAddToCanvas}
+                                            onChange={(e) => setShouldAddToCanvas(e.target.checked)}
+                                            className="h-4 w-4 bg-theme-bg-tertiary border-theme-bg-hover rounded accent-theme-accent-primary"
+                                            disabled={isEnhancing}
+                                        />
+                                        <label htmlFor="sketch-add-to-canvas" className="ml-2 text-xs text-theme-text-secondary">Añadir a Canvas</label>
+                                    </div>
+                                    <div className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            id="sketch-add-to-library"
+                                            checked={shouldAddToLibrary}
+                                            onChange={(e) => setShouldAddToLibrary(e.target.checked)}
+                                            className="h-4 w-4 bg-theme-bg-tertiary border-theme-bg-hover rounded accent-theme-accent-primary"
+                                            disabled={isEnhancing}
+                                        />
+                                        <label htmlFor="sketch-add-to-library" className="ml-2 text-xs text-theme-text-secondary">Añadir a Librería</label>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={() => onEnhance({
+                                        activeAiTab,
+                                        sketchWaterLevel,
+                                        sketchDetailLevel,
+                                        sketchUserInstruction,
+                                        shouldAddToLibrary,
+                                        shouldAddToCanvas
+                                    })}
+                                    disabled={isEnhancing}
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 text-sm rounded-md disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed mt-4 shadow-lg transition-all transform active:scale-95"
+                                >
+                                    {isEnhancing ? 'Pintando...' : 'Generar Acuarela'}
                                 </button>
                             </div>
                         )}

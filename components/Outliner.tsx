@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { CanvasItem, ItemType } from '../types';
-import { LayersIcon, PlusIcon, TrashIcon, EyeOpenIcon, EyeClosedIcon, UploadIcon, FolderIcon, MergeIcon, ExportIcon, CopyIcon, ArrowUpIcon, ArrowDownIcon, MergeUpIcon, MoreVerticalIcon, AddAboveIcon, AddBelowIcon } from './icons';
+import { LayersIcon, PlusIcon, TrashIcon, EyeOpenIcon, EyeClosedIcon, UploadIcon, FolderIcon, MergeIcon, ExportIcon, CopyIcon, ArrowUpIcon, ArrowDownIcon, MergeUpIcon, MoreVerticalIcon, AddAboveIcon, AddBelowIcon, SparklesIcon } from './icons';
 
 type DragPosition = 'top' | 'bottom' | 'middle';
 
@@ -24,6 +24,8 @@ interface OutlinerProps {
   onMergeItemUp: (id: string) => void;
   onAddObjectAbove: (id: string) => void;
   onAddObjectBelow: (id: string) => void;
+  lastRenderedImage?: string | null;
+  onImportRender?: () => void;
 }
 
 export const Outliner: React.FC<OutlinerProps> = ({
@@ -46,6 +48,8 @@ export const Outliner: React.FC<OutlinerProps> = ({
   onMergeItemUp,
   onAddObjectAbove,
   onAddObjectBelow,
+  lastRenderedImage,
+  onImportRender,
 }) => {
   const [isAddMenuOpen, setAddMenuOpen] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
@@ -71,69 +75,69 @@ export const Outliner: React.FC<OutlinerProps> = ({
       e.target.value = ''; // Reset
     }
   };
-  
-    const handleDragStart = (e: React.DragEvent<HTMLDivElement>, item: CanvasItem) => {
-        e.stopPropagation();
-        e.dataTransfer.effectAllowed = 'copyMove';
-        // Use JSON to pass rich data
-        e.dataTransfer.setData('application/json', JSON.stringify({ type: 'outliner-item', id: item.id }));
-    };
 
-    const handleDragOver = (e: React.DragEvent<HTMLDivElement>, item: CanvasItem) => {
-        e.preventDefault();
-        e.stopPropagation();
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, item: CanvasItem) => {
+    e.stopPropagation();
+    e.dataTransfer.effectAllowed = 'copyMove';
+    // Use JSON to pass rich data
+    e.dataTransfer.setData('application/json', JSON.stringify({ type: 'outliner-item', id: item.id }));
+  };
 
-        const rect = e.currentTarget.getBoundingClientRect();
-        const y = e.clientY - rect.top;
-        const height = rect.height;
-        let position: DragPosition;
-        
-        const draggedItemType = e.dataTransfer.types.find(t => t === 'application/json');
-        if (!draggedItemType) return;
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>, item: CanvasItem) => {
+    e.preventDefault();
+    e.stopPropagation();
 
-        const isObjectDrop = true; // Assume any drop could be an object for merging
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const height = rect.height;
+    let position: DragPosition;
 
-        if (item.type === 'group' || (item.type === 'object' && isObjectDrop)) {
-            const dropInsideThreshold = height * 0.25;
-            if (y < dropInsideThreshold) {
-                position = 'top';
-            } else if (y > height - dropInsideThreshold) {
-                position = 'bottom';
-            } else {
-                position = 'middle';
-            }
+    const draggedItemType = e.dataTransfer.types.find(t => t === 'application/json');
+    if (!draggedItemType) return;
+
+    const isObjectDrop = true; // Assume any drop could be an object for merging
+
+    if (item.type === 'group' || (item.type === 'object' && isObjectDrop)) {
+      const dropInsideThreshold = height * 0.25;
+      if (y < dropInsideThreshold) {
+        position = 'top';
+      } else if (y > height - dropInsideThreshold) {
+        position = 'bottom';
+      } else {
+        position = 'middle';
+      }
+    } else {
+      position = y < height / 2 ? 'top' : 'bottom';
+    }
+    setDragOverInfo({ id: item.id, position });
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    setDragOverInfo(null);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetItem: CanvasItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverInfo(null);
+
+    try {
+      const data = JSON.parse(e.dataTransfer.getData('application/json'));
+      if (data.type !== 'outliner-item' || !data.id) return;
+      const draggedId = data.id;
+
+      if (dragOverInfo && dragOverInfo.id === targetItem.id) {
+        if (dragOverInfo.position === 'middle' && targetItem.type === 'object') {
+          onMergeItems(draggedId, targetItem.id);
         } else {
-            position = y < height / 2 ? 'top' : 'bottom';
+          onMoveItem(draggedId, targetItem.id, dragOverInfo.position);
         }
-        setDragOverInfo({ id: item.id, position });
-    };
-
-    const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-        e.stopPropagation();
-        setDragOverInfo(null);
-    };
-
-    const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetItem: CanvasItem) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setDragOverInfo(null);
-        
-        try {
-            const data = JSON.parse(e.dataTransfer.getData('application/json'));
-            if (data.type !== 'outliner-item' || !data.id) return;
-            const draggedId = data.id;
-
-            if (dragOverInfo && dragOverInfo.id === targetItem.id) {
-                if (dragOverInfo.position === 'middle' && targetItem.type === 'object') {
-                    onMergeItems(draggedId, targetItem.id);
-                } else {
-                    onMoveItem(draggedId, targetItem.id, dragOverInfo.position);
-                }
-            }
-        } catch (error) {
-            // Potentially a drop from another source, ignore for now.
-        }
-    };
+      }
+    } catch (error) {
+      // Potentially a drop from another source, ignore for now.
+    }
+  };
 
 
   const renderItem = (item: CanvasItem, depth: number) => {
@@ -141,15 +145,15 @@ export const Outliner: React.FC<OutlinerProps> = ({
     const isGroup = item.type === 'group';
     const isObject = item.type === 'object';
     const isActive = activeItemId === item.id;
-    
+
     const isDragOver = dragOverInfo?.id === item.id;
     const dragOverPosition = dragOverInfo?.position;
     const isMergeTarget = isObject && isDragOver && dragOverPosition === 'middle';
 
     const getBgColor = () => {
-        if (isDragOver && dragOverPosition === 'middle' && isObject) return 'bg-red-700';
-        if (isActive) return 'bg-theme-accent-hover';
-        return 'bg-theme-bg-secondary hover:bg-theme-bg-tertiary';
+      if (isDragOver && dragOverPosition === 'middle' && isObject) return 'bg-red-700';
+      if (isActive) return 'bg-theme-accent-hover';
+      return 'bg-theme-bg-secondary hover:bg-theme-bg-tertiary';
     }
 
     return (
@@ -166,11 +170,11 @@ export const Outliner: React.FC<OutlinerProps> = ({
       >
         {isDragOver && dragOverPosition === 'top' && <div className="absolute top-0 left-0 right-0 h-0.5 bg-theme-accent-primary z-10" />}
         {isDragOver && dragOverPosition === 'bottom' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-theme-accent-primary z-10" />}
-        
+
         <div className="flex items-center justify-between">
           <div className="flex items-center flex-grow min-w-0">
-             <span className="flex-shrink-0 cursor-grab text-theme-text-secondary hover:text-theme-text-primary mr-2">
-                <MoreVerticalIcon className="w-5 h-5"/>
+            <span className="flex-shrink-0 cursor-grab text-theme-text-secondary hover:text-theme-text-primary mr-2">
+              <MoreVerticalIcon className="w-5 h-5" />
             </span>
             {isGroup && <FolderIcon className="w-4 h-4 mr-2 text-red-400 flex-shrink-0" />}
             {isMergeTarget && <MergeIcon className="w-4 h-4 mr-2 text-red-400" />}
@@ -198,84 +202,84 @@ export const Outliner: React.FC<OutlinerProps> = ({
               )}
             </button>
             {!(item.type === 'object' && item.isBackground) && (
-                <button
+              <button
                 onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteItem(item.id);
+                  e.stopPropagation();
+                  onDeleteItem(item.id);
                 }}
                 className="p-1 text-theme-text-secondary hover:text-red-500"
-                >
+              >
                 <TrashIcon className="w-4 h-4" />
-                </button>
+              </button>
             )}
           </div>
         </div>
         {isActive && (item.type === 'object') && (
-            <div className="mt-2 space-y-2">
-                <div>
-                    <label htmlFor={`opacity-${item.id}`} className="text-xs text-theme-text-secondary">Opacidad</label>
-                    <input
-                        id={`opacity-${item.id}`}
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={item.opacity * 100}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => onUpdateItem(item.id, { opacity: parseInt(e.target.value, 10) / 100 })}
-                        className="w-full h-1 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer"
-                    />
-                </div>
-                 <div className="flex items-center flex-wrap gap-1 border-t border-theme-bg-tertiary pt-2">
-                    <button
-                        onClick={(e) => { e.stopPropagation(); onMoveItemUpDown(item.id, 'up'); }}
-                        disabled={!activeItemState.canMoveUp}
-                        className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed" title="Mover arriba">
-                        <ArrowUpIcon className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                        onClick={(e) => { e.stopPropagation(); onMoveItemUpDown(item.id, 'down'); }}
-                        disabled={!activeItemState.canMoveDown}
-                        className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed" title="Mover abajo">
-                        <ArrowDownIcon className="w-3.5 h-3.5" />
-                    </button>
-                    {isObject && (
-                        <>
-                            <div className="w-px h-3.5 bg-theme-bg-tertiary mx-0.5" />
-
-                            <button
-                                onClick={(e) => { e.stopPropagation(); onAddObjectAbove(item.id); }}
-                                className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover" title="Añadir objeto arriba">
-                                <AddAboveIcon className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); onAddObjectBelow(item.id); }}
-                                className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover" title="Añadir objeto abajo">
-                                <AddBelowIcon className="w-3.5 h-3.5" />
-                            </button>
-
-                            <div className="w-px h-3.5 bg-theme-bg-tertiary mx-0.5" />
-
-                            <button
-                                onClick={(e) => { e.stopPropagation(); onMergeItemUp(item.id); }}
-                                disabled={!activeItemState.canMergeUp}
-                                className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed" title="Combinar arriba">
-                                <MergeUpIcon className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); onMergeItemDown(item.id); }}
-                                disabled={!activeItemState.canMergeDown}
-                                className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed" title="Combinar abajo">
-                                <MergeIcon className="w-3.5 h-3.5" />
-                            </button>
-                        </>
-                    )}
-                </div>
+          <div className="mt-2 space-y-2">
+            <div>
+              <label htmlFor={`opacity-${item.id}`} className="text-xs text-theme-text-secondary">Opacidad</label>
+              <input
+                id={`opacity-${item.id}`}
+                type="range"
+                min="0"
+                max="100"
+                value={item.opacity * 100}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => onUpdateItem(item.id, { opacity: parseInt(e.target.value, 10) / 100 })}
+                className="w-full h-1 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer"
+              />
             </div>
-         )}
+            <div className="flex items-center flex-wrap gap-1 border-t border-theme-bg-tertiary pt-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); onMoveItemUpDown(item.id, 'up'); }}
+                disabled={!activeItemState.canMoveUp}
+                className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed" title="Mover arriba">
+                <ArrowUpIcon className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onMoveItemUpDown(item.id, 'down'); }}
+                disabled={!activeItemState.canMoveDown}
+                className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed" title="Mover abajo">
+                <ArrowDownIcon className="w-3.5 h-3.5" />
+              </button>
+              {isObject && (
+                <>
+                  <div className="w-px h-3.5 bg-theme-bg-tertiary mx-0.5" />
+
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onAddObjectAbove(item.id); }}
+                    className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover" title="Añadir objeto arriba">
+                    <AddAboveIcon className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onAddObjectBelow(item.id); }}
+                    className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover" title="Añadir objeto abajo">
+                    <AddBelowIcon className="w-3.5 h-3.5" />
+                  </button>
+
+                  <div className="w-px h-3.5 bg-theme-bg-tertiary mx-0.5" />
+
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onMergeItemUp(item.id); }}
+                    disabled={!activeItemState.canMergeUp}
+                    className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed" title="Combinar arriba">
+                    <MergeUpIcon className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onMergeItemDown(item.id); }}
+                    disabled={!activeItemState.canMergeDown}
+                    className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed" title="Combinar abajo">
+                    <MergeIcon className="w-3.5 h-3.5" />
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
-  
+
   const renderTree = (parentId: string | null = null, depth = 0) => {
     return items
       .filter(item => item.parentId === parentId && !(item.type === 'object' && item.isBackground))
@@ -294,7 +298,7 @@ export const Outliner: React.FC<OutlinerProps> = ({
           <h3 className="text-sm font-bold uppercase text-theme-text-secondary">Outliner</h3>
         </div>
         <div className="flex items-center space-x-1">
-           <button
+          <button
             onClick={onExportItem}
             disabled={!activeItemId || !!items.find(i => i.id === activeItemId && i.type === 'object' && i.isBackground)}
             className="p-2 rounded-md hover:bg-theme-bg-tertiary disabled:text-gray-600 disabled:cursor-not-allowed disabled:hover:bg-transparent"
@@ -302,7 +306,7 @@ export const Outliner: React.FC<OutlinerProps> = ({
           >
             <ExportIcon className="w-5 h-5" />
           </button>
-           <button
+          <button
             onClick={() => activeItemId && onCopyItem(activeItemId)}
             disabled={!activeItemId || !!items.find(i => i.id === activeItemId && i.type === 'object' && i.isBackground)}
             className="p-2 rounded-md hover:bg-theme-bg-tertiary disabled:text-gray-600 disabled:cursor-not-allowed disabled:hover:bg-transparent"
@@ -331,51 +335,60 @@ export const Outliner: React.FC<OutlinerProps> = ({
       <div className="flex-shrink-0 border-t border-theme-bg-tertiary mt-4 pt-4">
         <h3 className="text-sm font-bold uppercase text-theme-text-secondary mb-3">Canvas</h3>
         <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-                 <input
-                    type="color"
-                    id="canvas-color"
-                    value={(backgroundObject?.type === 'object' && backgroundObject.color) || '#FFFFFF'}
-                    onChange={(e) => onUpdateBackground({ color: e.target.value })}
-                    className="w-10 h-10 p-0.5 bg-theme-bg-tertiary border border-theme-bg-hover rounded-md cursor-pointer flex-shrink-0"
-                    title="Color de fondo"
-                />
-                <button
-                    onDoubleClick={onOpenCanvasSizeModal}
-                    className="h-10 px-3 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover cursor-pointer text-theme-text-secondary text-sm flex-grow"
-                    title="Tamaño del lienzo (doble clic)"
-                >
-                    Personalizado
-                </button>
-                {backgroundObject && (
-                  <button
-                      onClick={() => onUpdateItem(backgroundObject.id, { isVisible: !backgroundObject.isVisible })}
-                      className="h-10 w-10 flex-shrink-0 p-2 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover cursor-pointer text-theme-text-secondary"
-                      title={backgroundObject.isVisible ? "Ocultar fondo" : "Mostrar fondo"}
-                  >
-                      {backgroundObject.isVisible ? <EyeOpenIcon className="w-5 h-5" /> : <EyeClosedIcon className="w-5 h-5" />}
-                  </button>
-                )}
-                <label htmlFor="canvas-image-upload" className="h-10 w-10 flex items-center justify-center p-2 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover cursor-pointer text-theme-text-secondary flex-shrink-0" title="Importar imagen de fondo">
-                    <UploadIcon className="w-5 h-5" />
-                </label>
-                <input
-                    id="canvas-image-upload"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleFileChange}
-                />
-                 {hasBackgroundImage && (
-                    <button
-                        onClick={onRemoveBackgroundImage}
-                        className="h-10 w-10 flex-shrink-0 p-2 rounded-lg bg-red-800 hover:bg-red-700 cursor-pointer text-gray-200"
-                        title="Eliminar imagen de fondo"
-                    >
-                        <TrashIcon className="w-5 h-5" />
-                    </button>
-                )}
-            </div>
+          <div className="flex items-center space-x-2">
+            <input
+              type="color"
+              id="canvas-color"
+              value={(backgroundObject?.type === 'object' && backgroundObject.color) || '#FFFFFF'}
+              onChange={(e) => onUpdateBackground({ color: e.target.value })}
+              className="w-10 h-10 p-0.5 bg-theme-bg-tertiary border border-theme-bg-hover rounded-md cursor-pointer flex-shrink-0"
+              title="Color de fondo"
+            />
+            <button
+              onDoubleClick={onOpenCanvasSizeModal}
+              className="h-10 px-3 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover cursor-pointer text-theme-text-secondary text-sm flex-grow"
+              title="Tamaño del lienzo (doble clic)"
+            >
+              Personalizado
+            </button>
+            {backgroundObject && (
+              <button
+                onClick={() => onUpdateItem(backgroundObject.id, { isVisible: !backgroundObject.isVisible })}
+                className="h-10 w-10 flex-shrink-0 p-2 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover cursor-pointer text-theme-text-secondary"
+                title={backgroundObject.isVisible ? "Ocultar fondo" : "Mostrar fondo"}
+              >
+                {backgroundObject.isVisible ? <EyeOpenIcon className="w-5 h-5" /> : <EyeClosedIcon className="w-5 h-5" />}
+              </button>
+            )}
+            <label htmlFor="canvas-image-upload" className="h-10 w-10 flex items-center justify-center p-2 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover cursor-pointer text-theme-text-secondary flex-shrink-0" title="Importar imagen de fondo">
+              <UploadIcon className="w-5 h-5" />
+            </label>
+            <input
+              id="canvas-image-upload"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            {lastRenderedImage && (
+              <button
+                onClick={onImportRender}
+                className="h-10 w-10 flex items-center justify-center p-2 rounded-lg bg-theme-accent-primary hover:bg-theme-accent-hover cursor-pointer text-white flex-shrink-0 animate-pulse border border-white/20"
+                title="Importar último render de la pestaña Render"
+              >
+                <SparklesIcon className="w-5 h-5" />
+              </button>
+            )}
+            {hasBackgroundImage && (
+              <button
+                onClick={onRemoveBackgroundImage}
+                className="h-10 w-10 flex-shrink-0 p-2 rounded-lg bg-red-800 hover:bg-red-700 cursor-pointer text-gray-200"
+                title="Eliminar imagen de fondo"
+              >
+                <TrashIcon className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

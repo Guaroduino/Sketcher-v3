@@ -10,7 +10,7 @@ export type PromptType = keyof SavedPrompts;
 
 export function useAIPanel() {
     const [isOpen, setIsOpen] = useState(false);
-    const [activeAiTab, setActiveAiTab] = useState<'object' | 'composition' | 'free' | 'upscale'>('object');
+    const [activeAiTab, setActiveAiTab] = useState<'object' | 'composition' | 'free' | 'upscale' | 'sketch'>('object');
 
     // Object Tab State
     const [enhancementPrompt, setEnhancementPrompt] = useState('');
@@ -83,6 +83,11 @@ export function useAIPanel() {
     const [upscaleFormat, setUpscaleFormat] = useState<'png' | 'jpg'>('png');
     const [upscaleCreativity, setUpscaleCreativity] = useState<number>(0);
 
+    // Sketch Tab State
+    const [sketchWaterLevel, setSketchWaterLevel] = useState<number>(50);
+    const [sketchDetailLevel, setSketchDetailLevel] = useState<number>(50);
+    const [sketchUserInstruction, setSketchUserInstruction] = useState<string>('');
+
     return {
         isOpen, setIsOpen,
         activeAiTab, setActiveAiTab,
@@ -106,6 +111,9 @@ export function useAIPanel() {
         freeFormSlots, setFreeFormSlots,
         savedPrompts, savePrompt, deletePrompt,
         upscaleFormat, setUpscaleFormat,
-        upscaleCreativity, setUpscaleCreativity
+        upscaleCreativity, setUpscaleCreativity,
+        sketchWaterLevel, setSketchWaterLevel,
+        sketchDetailLevel, setSketchDetailLevel,
+        sketchUserInstruction, setSketchUserInstruction
     };
 }
