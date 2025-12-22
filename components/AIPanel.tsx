@@ -8,8 +8,6 @@ import { AIPreviewPanel } from './AIPreviewPanel';
 interface AIPanelProps {
     isOpen: boolean;
     onClose: () => void;
-    // We pass the hook return value as props or just the necessary parts
-    aiPanelState: ReturnType<typeof useAIPanel>;
     onEnhance: (payload: any) => void;
     isEnhancing: boolean;
     enhancementPreview: { fullDataUrl: string; croppedDataUrl: string | null; bbox: CropRect | null } | null;
@@ -33,7 +31,6 @@ const PromptManager: React.FC<{
 export const AIPanel: React.FC<AIPanelProps> = ({
     isOpen,
     onClose,
-    aiPanelState,
     onEnhance,
     isEnhancing,
     enhancementPreview,
@@ -41,6 +38,8 @@ export const AIPanel: React.FC<AIPanelProps> = ({
     debugInfo,
     onUpdateDebugInfo,
 }) => {
+    // Internal State Management to prevent App re-renders
+    const aiPanelState = useAIPanel();
     const {
         activeAiTab, setActiveAiTab,
         enhancementPrompt, setEnhancementPrompt,

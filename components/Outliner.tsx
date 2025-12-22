@@ -28,7 +28,7 @@ interface OutlinerProps {
   onImportRender?: () => void;
 }
 
-export const Outliner: React.FC<OutlinerProps> = ({
+export const Outliner: React.FC<OutlinerProps> = React.memo(({
   items,
   activeItemId,
   onAddItem,
@@ -393,4 +393,4 @@ export const Outliner: React.FC<OutlinerProps> = ({
       </div>
     </div>
   );
-};
+});

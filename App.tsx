@@ -22,7 +22,6 @@ import { useCanvasView, MAX_ZOOM } from './hooks/useCanvasView';
 import { useCanvasModes } from './hooks/useCanvasModes';
 import { useWorkspaceTemplates } from './hooks/useWorkspaceTemplates';
 import { useQuickAccess } from './hooks/useQuickAccess';
-import { useAIPanel } from './hooks/useAIPanel';
 import { QuickAccessBar } from './components/QuickAccessBar';
 import { ToolSelectorModal } from './components/modals/ToolSelectorModal';
 import { WorkspaceTemplatesPopover } from './components/WorkspaceTemplatesPopover';
@@ -873,7 +872,7 @@ export function App() {
     }, [selection]);
 
     const ai = useAI(dispatch, library.onImportToLibrary, handleSelectItem, setTool, scaleFactor);
-    const aiPanelState = useAIPanel();
+    const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
 
     const loadAllToolSettings = useCallback((settings: any) => {
         toolSettings.setBrushSettings(settings.brushSettings);
@@ -1523,9 +1522,8 @@ export function App() {
                 />
 
                 <AIPanel
-                    isOpen={aiPanelState.isOpen}
-                    onClose={() => aiPanelState.setIsOpen(false)}
-                    aiPanelState={aiPanelState}
+                    isOpen={isAIPanelOpen}
+                    onClose={() => setIsAIPanelOpen(false)}
                     onEnhance={(payload) => ai.handleEnhance(payload, canvasSize, getDrawableObjects, backgroundObject, activeItemId, objects)}
                     onUpdateDebugInfo={(payload) => ai.updateDebugInfo(payload, canvasSize, getDrawableObjects, backgroundObject, activeItemId, objects)}
                     isEnhancing={ai.isEnhancing}
@@ -1536,7 +1534,7 @@ export function App() {
 
                 {activeView === 'sketch' && (
                     <button
-                        onClick={() => aiPanelState.setIsOpen(true)}
+                        onClick={() => setIsAIPanelOpen(true)}
                         className="absolute bottom-24 left-4 md:bottom-6 md:left-6 p-4 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-2xl hover:scale-110 transition-transform z-40 flex items-center justify-center border-2 border-white/20"
                         title="Mejorar con IA"
                         style={{ left: ui.isLeftSidebarVisible ? '6.5rem' : '' }}
@@ -1626,7 +1624,7 @@ export function App() {
                     </div>
                 </main>
                 {activeView === 'sketch' && ui.isRightSidebarVisible && (
-                    <aside ref={ui.rightSidebarRef} className={`flex-shrink-0 w-80 border-l border-theme-bg-tertiary flex flex-col ${aiPanelState.isOpen ? 'z-50' : ''}`}>
+                    <aside ref={ui.rightSidebarRef} className={`flex-shrink-0 w-80 border-l border-theme-bg-tertiary flex flex-col ${isAIPanelOpen ? 'z-50' : ''}`}>
                         <div style={{ height: ui.rightSidebarTopHeight }} className="flex-shrink-0">
                             <Outliner
                                 items={objects} activeItemId={activeItemId} onAddItem={addItem} onCopyItem={copyItem} onDeleteItem={deleteItem} onSelectItem={handleSelectItem}

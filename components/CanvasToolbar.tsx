@@ -56,7 +56,7 @@ interface CanvasToolbarProps {
   setIsSolidBox: (v: boolean) => void;
 }
 
-export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
+export const CanvasToolbar: React.FC<CanvasToolbarProps> = React.memo(({
   tool,
   setTool,
   onSetActiveGuide,
@@ -440,4 +440,4 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
       </div>
     </div>
   );
-};
+});

@@ -14,7 +14,7 @@ interface LibraryProps {
   onMoveItems: (itemIds: string[], targetParentId: string | null) => void;
 }
 
-export const Library: React.FC<LibraryProps> = ({ user, items, onImportImage, onCreateFolder, onEditItem, onDeleteItem, onAddItemToScene, onMoveItems }) => {
+export const Library: React.FC<LibraryProps> = React.memo(({ user, items, onImportImage, onCreateFolder, onEditItem, onDeleteItem, onAddItemToScene, onMoveItems }) => {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -254,4 +254,4 @@ export const Library: React.FC<LibraryProps> = ({ user, items, onImportImage, on
       </div>
     </div>
   );
-};
+});

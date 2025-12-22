@@ -9,7 +9,6 @@ export type SavedPrompts = {
 export type PromptType = keyof SavedPrompts;
 
 export function useAIPanel() {
-    const [isOpen, setIsOpen] = useState(false);
     const [activeAiTab, setActiveAiTab] = useState<'object' | 'composition' | 'free' | 'upscale' | 'sketch'>('object');
 
     // Object Tab State
@@ -89,7 +88,6 @@ export function useAIPanel() {
     const [sketchUserInstruction, setSketchUserInstruction] = useState<string>('');
 
     return {
-        isOpen, setIsOpen,
         activeAiTab, setActiveAiTab,
         enhancementPrompt, setEnhancementPrompt,
         enhancementStylePrompt, setEnhancementStylePrompt,

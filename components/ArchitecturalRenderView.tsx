@@ -27,7 +27,7 @@ const XIcon: React.FC<{ className?: string }> = ({ className }) => (
     </svg>
 );
 
-export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = ({
+export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = React.memo(({
     onImportFromSketch,
     isSidebarOpen,
     onRenderComplete,
@@ -1151,7 +1151,7 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = (
             </aside>
         </div>
     );
-};
+});
 
 const CollapsiblePillGroup: React.FC<{ label: string, options: { label: string, value: string }[], value: string, onChange: (val: string) => void }> = ({ label, options, value, onChange }) => {
     const [isOpen, setIsOpen] = useState(false);
