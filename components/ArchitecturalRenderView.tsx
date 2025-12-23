@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { PhotoIcon, SparklesIcon, UploadIcon, UndoIcon, RedoIcon, SaveIcon, XIcon as CloseIcon, ZoomInIcon, ZoomOutIcon, MaximizeIcon, DownloadIcon, ChevronLeftIcon, ChevronRightIcon, FolderOpenIcon } from './icons';
 import { GoogleGenAI } from "@google/genai";
 import { buildArchitecturalPrompt, ArchitecturalRenderOptions } from '../utils/architecturalPromptBuilder';
@@ -31,7 +31,54 @@ const XIcon: React.FC<{ className?: string }> = ({ className }) => (
     </svg>
 );
 
-export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = React.memo(({
+
+const CollapsiblePillGroup: React.FC<{ label: string, options: { label: string, value: string }[], value: string, onChange: (val: string) => void }> = ({ label, options, value, onChange }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const selectedLabel = options.find(o => o.value === value)?.label || value;
+
+    return (
+        <div className="border border-theme-bg-tertiary rounded-lg overflow-hidden transition-all bg-theme-bg-primary">
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full flex items-center justify-between p-2 bg-theme-bg-tertiary/30 hover:bg-theme-bg-tertiary/50 transition-colors"
+            >
+                <div className="flex flex-col items-start">
+                    <span className="text-[9px] font-bold text-theme-text-secondary uppercase tracking-wider">{label}</span>
+                    {!isOpen && <span className="text-[10px] font-medium text-theme-accent-primary truncate max-w-[180px]">{selectedLabel}</span>}
+                </div>
+                {/* Chevron */}
+                <svg className={`w-3 h-3 text-theme-text-secondary transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+            </button>
+
+            {isOpen && (
+                <div className="p-2 bg-theme-bg-primary border-t border-theme-bg-tertiary">
+                    <div className="flex flex-wrap gap-1.5">
+                        {options.map(opt => (
+                            <button
+                                key={opt.value}
+                                onClick={() => { onChange(opt.value); setIsOpen(false); }}
+                                className={`px-2 py-1 rounded-md text-[10px] font-medium border transition-all flex-grow text-center ${value === opt.value
+                                    ? 'bg-theme-text-primary text-theme-bg-primary border-theme-text-primary'
+                                    : 'bg-transparent text-theme-text-secondary border-theme-bg-tertiary hover:border-theme-text-secondary'
+                                    }`}
+                            >
+                                {opt.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export interface ArchitecturalRenderViewHandle {
+    setInputImageFromFile: (file: File) => void;
+}
+
+export const ArchitecturalRenderView = React.memo(React.forwardRef<ArchitecturalRenderViewHandle, ArchitecturalRenderViewProps>(({
     onImportFromSketch,
     isSidebarOpen,
     onRenderComplete,
@@ -39,9 +86,59 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
     credits,
     deductCredit,
     onSaveToLibrary
-}) => {
+}, ref) => {
     const [sceneType, setSceneType] = useState<SceneType>('exterior');
     const [inputImage, setInputImage] = useState<string | null>(null);
+
+    const processInputImage = (file: File) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            if (ev.target?.result) {
+                const result = ev.target.result as string;
+                const img = new Image();
+                img.onload = () => {
+                    // Max dimension 2048 for performance and consistency
+                    let w = img.width;
+                    let h = img.height;
+                    const maxDim = 2048;
+                    if (w > maxDim || h > maxDim) {
+                        if (w > h) { h = (h / w) * maxDim; w = maxDim; }
+                        else { w = (w / h) * maxDim; h = maxDim; }
+                    }
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.drawImage(img, 0, 0, w, h);
+                        const bakedUrl = canvas.toDataURL('image/png'); // Strip EXIF
+                        setCanvasDimensions({ width: w, height: h });
+                        setInputImage(bakedUrl);
+                        setResultImage(null);
+                        setShowOriginal(false);
+                        setGenerationHistory([]);
+                        setHistoryIndex(-1);
+                    }
+                };
+                img.src = result;
+            }
+        };
+        reader.readAsDataURL(file);
+    };
+
+    useImperativeHandle(ref, () => ({
+        setInputImageFromFile: (file: File) => {
+            processInputImage(file);
+        }
+    }));
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            processInputImage(file);
+        }
+    };
     const [styleReferenceImage, setStyleReferenceImage] = useState<string | null>(null);
 
     // -- Visual Prompting State --
@@ -382,45 +479,7 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
         }
     };
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                if (ev.target?.result) {
-                    const result = ev.target.result as string;
-                    const img = new Image();
-                    img.onload = () => {
-                        // Max dimension 2048 for performance and consistency
-                        let w = img.width;
-                        let h = img.height;
-                        const maxDim = 2048;
-                        if (w > maxDim || h > maxDim) {
-                            if (w > h) { h = (h / w) * maxDim; w = maxDim; }
-                            else { w = (w / h) * maxDim; h = maxDim; }
-                        }
 
-                        const canvas = document.createElement('canvas');
-                        canvas.width = w;
-                        canvas.height = h;
-                        const ctx = canvas.getContext('2d');
-                        if (ctx) {
-                            ctx.drawImage(img, 0, 0, w, h);
-                            const bakedUrl = canvas.toDataURL('image/png'); // Strip EXIF
-                            setCanvasDimensions({ width: w, height: h });
-                            setInputImage(bakedUrl);
-                            setResultImage(null);
-                            setShowOriginal(false);
-                            setGenerationHistory([]);
-                            setHistoryIndex(-1);
-                        }
-                    };
-                    img.src = result;
-                }
-            };
-            reader.readAsDataURL(file);
-        }
-    };
 
     const handleStyleRefUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -831,7 +890,7 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
             <button
                 onClick={() => setIsLeftPanelOpen(!isLeftPanelOpen)}
                 className="absolute top-1/2 -translate-y-1/2 bg-theme-bg-secondary p-2 rounded-full shadow-xl z-40 border border-theme-bg-tertiary hover:bg-theme-bg-tertiary transition-all"
-                style={{ left: isLeftPanelOpen ? '19.25rem' : '3.25rem' }}
+                style={{ left: isLeftPanelOpen ? '16.25rem' : '0.25rem' }}
                 title={isLeftPanelOpen ? "Cerrar Panel" : "Abrir Panel"}
             >
                 {isLeftPanelOpen ? <ChevronLeftIcon className="w-5 h-5" /> : <ChevronRightIcon className="w-5 h-5" />}
@@ -1082,46 +1141,4 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
             </aside>
         </div>
     );
-});
-
-const CollapsiblePillGroup: React.FC<{ label: string, options: { label: string, value: string }[], value: string, onChange: (val: string) => void }> = ({ label, options, value, onChange }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const selectedLabel = options.find(o => o.value === value)?.label || value;
-
-    return (
-        <div className="border border-theme-bg-tertiary rounded-lg overflow-hidden transition-all bg-theme-bg-primary">
-            <button
-                onClick={() => setIsOpen(!isOpen)}
-                className="w-full flex items-center justify-between p-2 bg-theme-bg-tertiary/30 hover:bg-theme-bg-tertiary/50 transition-colors"
-            >
-                <div className="flex flex-col items-start">
-                    <span className="text-[9px] font-bold text-theme-text-secondary uppercase tracking-wider">{label}</span>
-                    {!isOpen && <span className="text-[10px] font-medium text-theme-accent-primary truncate max-w-[180px]">{selectedLabel}</span>}
-                </div>
-                {/* Chevron */}
-                <svg className={`w-3 h-3 text-theme-text-secondary transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-            </button>
-
-            {isOpen && (
-                <div className="p-2 bg-theme-bg-primary border-t border-theme-bg-tertiary">
-                    <div className="flex flex-wrap gap-1.5">
-                        {options.map(opt => (
-                            <button
-                                key={opt.value}
-                                onClick={() => { onChange(opt.value); setIsOpen(false); }}
-                                className={`px-2 py-1 rounded-md text-[10px] font-medium border transition-all flex-grow text-center ${value === opt.value
-                                    ? 'bg-theme-text-primary text-theme-bg-primary border-theme-text-primary'
-                                    : 'bg-transparent text-theme-text-secondary border-theme-bg-tertiary hover:border-theme-text-secondary'
-                                    }`}
-                            >
-                                {opt.label}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
+}));

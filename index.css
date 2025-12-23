@@ -57,6 +57,15 @@ body,
   overflow: hidden;
   overscroll-behavior: none;
   touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Enable text selection where appropriate */
+input, textarea, [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+  touch-action: auto; /* Usually we want touch actions on inputs */
 }
 
 body,

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { LibraryItem, RgbColor, LibraryFolder, LibraryImage, ScaleUnit } from '../types';
+import { createThumbnail } from '../utils/canvasUtils';
 import { User } from 'firebase/auth';
 import { db, storage } from '../firebaseConfig';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy, serverTimestamp, where, getDocs } from 'firebase/firestore';
@@ -282,6 +283,7 @@ export function useLibrary(user: User | null) {
 
     const handleCancelDeleteLibraryItem = () => setDeletingLibraryItem(null);
 
+
     const publishToPublicGallery = useCallback(async (item: LibraryImage, title: string, description?: string) => {
         if (!user || user.isAnonymous) {
             alert("Debes iniciar sesión para publicar en la galería.");
@@ -289,9 +291,37 @@ export function useLibrary(user: User | null) {
         }
 
         try {
+            // 1. Generate Thumbnail
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.src = item.dataUrl || '';
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+            });
+
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.drawImage(img, 0, 0);
+            }
+
+            // Create thumbnail (max 300x300 for grid)
+            const thumbnailBlob = await createThumbnail(canvas, 300, 300);
+
+            // 2. Upload Thumbnail
+            const thumbnailPath = `public_gallery_thumbnails/${user.uid}_${Date.now()}_thumb.png`;
+            const thumbnailRef = ref(storage, thumbnailPath);
+            await uploadBytes(thumbnailRef, thumbnailBlob);
+            const thumbnailUrl = await getDownloadURL(thumbnailRef);
+
+            // 3. Save to Firestore
             await addDoc(collection(db, 'public_gallery'), {
                 originalLibraryId: item.id,
                 imageUrl: item.dataUrl,
+                thumbnailUrl: thumbnailUrl,
                 title: title,
                 description: description || '',
                 authorId: user.uid,

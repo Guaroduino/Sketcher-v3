@@ -24,23 +24,25 @@ export function useCredits(user: User | null) {
         const unsubscribe = onSnapshot(userDocRef, async (docSnapshot) => {
             if (docSnapshot.exists()) {
                 const data = docSnapshot.data();
+                console.log("useCredits: Fetched user data:", data); // DEBUG LOG
+
                 if (typeof data.credits === 'number') {
                     setCredits(data.credits);
                 } else {
-                    // Document exists but no credits field, initialize it
                     await updateDoc(userDocRef, { credits: DEFAULT_CREDITS });
                 }
 
                 // Role handling
                 if (data.role && (data.role === 'admin' || data.role === 'regular')) {
+                    console.log("useCredits: Setting role to:", data.role); // DEBUG LOG
                     setRole(data.role);
                 } else {
-                    // Default to regular if missing
+                    console.warn("useCredits: Role missing or invalid, defaulting to regular. Found:", data.role); // DEBUG LOG
                     setRole('regular');
                 }
 
             } else {
-                // Document doesn't exist, create it with default credits and role
+                console.log("useCredits: User document does not exist, creating new one."); // DEBUG LOG
                 await setDoc(userDocRef, {
                     email: user.email,
                     createdAt: new Date(),

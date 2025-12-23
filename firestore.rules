@@ -1,12 +1,28 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
-    match /public_gallery/{document=**} {
+    
+    match /public_gallery/{imageId} {
       allow read: if true;
       allow create: if request.auth != null;
+      // Allow delete if user is admin OR if user is the author (using resource.data to check existing doc)
+      allow update, delete: if request.auth != null && 
+        (isAdmin() || resource.data.userId == request.auth.uid || resource.data.authorId == request.auth.uid);
+    }
+    
+    // Allow users to archive deleted images
+    match /public_gallery_archive/{document=**} {
+       allow create: if request.auth != null;
+       allow read: if isAdmin();
     }
   }
 }

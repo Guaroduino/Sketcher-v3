@@ -13,9 +13,12 @@ interface LibraryProps {
   onAddItemToScene: (id: string) => void;
   onMoveItems: (itemIds: string[], targetParentId: string | null) => void;
   onPublish: (item: LibraryImage) => void;
+  allowUpload?: boolean;
+  allowPublish?: boolean;
+  className?: string; // For grid columns override
 }
 
-export const Library: React.FC<LibraryProps> = React.memo(({ user, items, onImportImage, onCreateFolder, onEditItem, onDeleteItem, onAddItemToScene, onMoveItems, onPublish }) => {
+export const Library: React.FC<LibraryProps> = React.memo(({ user, items, onImportImage, onCreateFolder, onEditItem, onDeleteItem, onAddItemToScene, onMoveItems, onPublish, allowUpload = false, allowPublish = false, className }) => {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -114,6 +117,35 @@ export const Library: React.FC<LibraryProps> = React.memo(({ user, items, onImpo
           )}
         </div>
 
+        {/* Controls - Moved to Top */}
+        <div className="flex-shrink-0 mb-4 flex items-center gap-2">
+          {allowUpload && (
+            <>
+              <label htmlFor="library-image-upload" className="flex-grow flex items-center justify-center p-2 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover cursor-pointer text-theme-text-secondary disabled:opacity-50 disabled:cursor-not-allowed">
+                <UploadIcon className="w-5 h-5 mr-2" />
+                <span className="text-sm">Importar</span>
+              </label>
+              <input
+                id="library-image-upload"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+                disabled={!user}
+              />
+              <button
+                onClick={() => setIsCreatingFolder(true)}
+                disabled={!user || isCreatingFolder}
+                className="flex-shrink-0 flex items-center justify-center p-2 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover cursor-pointer text-theme-text-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Crear nueva carpeta"
+              >
+                <FolderIcon className="w-5 h-5 mr-2" />
+                <span className="text-sm">Nueva Carpeta</span>
+              </button>
+            </>
+          )}
+        </div>
+
         {/* Breadcrumbs */}
         <div className="flex items-center text-sm text-theme-text-secondary flex-wrap">
           {currentFolderId !== null && (
@@ -149,7 +181,7 @@ export const Library: React.FC<LibraryProps> = React.memo(({ user, items, onImpo
             <p className="text-xs">Importe imágenes o cree una nueva carpeta.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-2">
+          <div className={`grid gap-2 ${className || 'grid-cols-3'}`}>
             {isCreatingFolder && (
               <div className="aspect-square bg-theme-bg-secondary rounded-md flex flex-col items-center justify-center p-2">
                 <FolderIcon className="w-10 h-10 text-theme-text-secondary mb-1" />
@@ -166,102 +198,70 @@ export const Library: React.FC<LibraryProps> = React.memo(({ user, items, onImpo
                 />
               </div>
             )}
-            {displayedItems.map(item => {
-              const isSelected = selectedItemIds.has(item.id);
-              return (
-                <div
-                  key={item.id}
-                  draggable={item.type === 'image'}
-                  onDragStart={(e) => handleDragStart(e, item)}
-                  onDoubleClick={() => handleItemDoubleClick(item)}
-                  className={`group relative aspect-square bg-theme-bg-secondary rounded-md flex flex-col items-center justify-center p-1 hover:bg-theme-bg-hover ${item.type === 'folder' ? 'cursor-pointer' : 'cursor-grab'} transition-all duration-150 border-2 ${isSelected ? 'border-theme-accent-primary' : 'border-transparent'}`}
-                  title={item.name}
-                >
-                  {/* Selection Button */}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleToggleSelection(item.id); }}
-                    aria-label={`Select ${item.name}`}
-                    className="absolute top-1 left-1 w-5 h-5 bg-black/30 backdrop-blur-sm rounded-sm flex items-center justify-center border border-white/30 z-10 hover:bg-black/50"
-                  >
-                    {isSelected && <CheckIcon className="w-4 h-4 text-white" />}
-                  </button>
-
-                  {/* Main content */}
-                  {item.type === 'image' && item.dataUrl ? (
-                    <img src={item.dataUrl} alt={item.name} className="max-w-full max-h-full object-contain pointer-events-none" />
-                  ) : item.type === 'folder' ? (
-                    <FolderIcon className="w-10 h-10 text-red-400" />
-                  ) : (
-                    <CubeIcon className="w-8 h-8 text-gray-500 pointer-events-none" />
-                  )}
-                  <span className="text-xs text-theme-text-secondary mt-1 truncate w-full text-center pointer-events-none">{item.name}</span>
-
-                  {/* Overlay Buttons */}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onDeleteItem(item); }}
-                    aria-label={`Delete ${item.name}`}
-                    className="absolute top-1 right-1 p-1 bg-theme-bg-primary/60 rounded-full text-theme-text-primary opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 z-10"
-                  >
-                    <TrashIcon className="w-4 h-4" />
-                  </button>
-
-
-
-                  {item.type === 'image' && (
-                    <>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onPublish(item as LibraryImage); }}
-                        aria-label={`Publish ${item.name}`}
-                        className="absolute top-1 left-7 p-1 bg-theme-bg-primary/60 rounded-full text-theme-text-primary opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-500 z-10"
-                        title="Publicar en Galería"
-                      >
-                        <UploadIcon className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onAddItemToScene(item.id); }}
-                        aria-label={`Add ${item.name} to scene`}
-                        className="absolute bottom-1 left-1 p-1 bg-theme-bg-primary/60 rounded-full text-theme-text-primary opacity-0 group-hover:opacity-100 transition-opacity hover:bg-green-500 z-10"
-                      >
-                        <PlusIcon className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onEditItem(item.id); }}
-                        aria-label={`Edit transparency for ${item.name}`}
-                        className="absolute bottom-1 right-1 p-1 bg-theme-bg-primary/60 rounded-full text-theme-text-primary opacity-0 group-hover:opacity-100 transition-opacity hover:bg-theme-accent-primary z-10"
-                      >
-                        <MagicWandIcon className="w-4 h-4" />
-                      </button>
-                    </>
-                  )}
-                </div>
-              );
-            })}
+            {displayedItems.map(item => (
+              <div
+                key={item.id}
+                className={`group relative aspect-square bg-theme-bg-tertiary rounded-md overflow-hidden cursor-pointer border ${selectedItemIds.has(item.id) ? 'border-blue-500' : 'border-transparent'} hover:border-theme-text-secondary transition-colors`}
+                onClick={() => handleToggleSelection(item.id)}
+                onDoubleClick={() => handleItemDoubleClick(item)}
+                draggable={item.type === 'image'}
+                onDragStart={(e) => handleDragStart(e, item)}
+              >
+                {item.type === 'folder' ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center p-2">
+                    <FolderIcon className="w-10 h-10 text-theme-text-primary mb-1" />
+                    <p className="text-xs text-center truncate w-full text-theme-text-secondary">{item.name}</p>
+                  </div>
+                ) : (
+                  <>
+                    <img src={item.dataUrl} alt={item.name} className="w-full h-full object-contain p-1" loading="lazy" />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-1">
+                      <div className="flex justify-between items-start">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleToggleSelection(item.id); }} // Use toggle logic 
+                          className={`w-4 h-4 rounded border ${selectedItemIds.has(item.id) ? 'bg-blue-500 border-blue-500' : 'bg-white/20 border-white/50'}`}
+                        />
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onDeleteItem(item); }}
+                          className="bg-red-500/80 hover:bg-red-600 text-white rounded p-0.5"
+                          title="Eliminar"
+                        >
+                          <TrashIcon className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <div className="flex justify-between items-end gap-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onAddItemToScene(item.id); }}
+                          className="flex-grow bg-theme-bg-primary/80 hover:bg-theme-bg-secondary text-theme-text-primary text-[10px] py-0.5 rounded text-center flex items-center justify-center"
+                          title="Añadir al lienzo"
+                        >
+                          <PlusIcon className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onEditItem(item.id); }}
+                          className="bg-theme-bg-primary/80 hover:bg-theme-bg-secondary text-theme-text-primary p-0.5 rounded"
+                          title="Editar Transparencia"
+                        >
+                          <MagicWandIcon className="w-3 h-3" />
+                        </button>
+                        {item.type === 'image' && allowPublish && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onPublish(item as LibraryImage); }}
+                            aria-label={`Publish ${item.name}`}
+                            className="bg-blue-500/80 hover:bg-blue-600 text-white p-0.5 rounded"
+                            title="Publicar en Galería"
+                          >
+                            <UploadIcon className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
           </div>
         )}
-      </div>
-
-      <div className="flex-shrink-0 mt-4 flex items-center gap-2">
-        <label htmlFor="library-image-upload" className="flex-grow flex items-center justify-center p-2 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover cursor-pointer text-theme-text-secondary disabled:opacity-50 disabled:cursor-not-allowed">
-          <UploadIcon className="w-5 h-5 mr-2" />
-          <span className="text-sm">Importar</span>
-        </label>
-        <input
-          id="library-image-upload"
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleFileChange}
-          disabled={!user}
-        />
-        <button
-          onClick={() => setIsCreatingFolder(true)}
-          disabled={!user || isCreatingFolder}
-          className="flex-shrink-0 flex items-center justify-center p-2 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover cursor-pointer text-theme-text-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Crear nueva carpeta"
-        >
-          <FolderIcon className="w-5 h-5 mr-2" />
-          <span className="text-sm">Nueva Carpeta</span>
-        </button>
       </div>
     </div >
   );

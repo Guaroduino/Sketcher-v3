@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import type { QuickAccessSettings, WorkspaceTemplate, Tool, QuickAccessTool } from '../types';
 
 const initialQuickAccessSettings: QuickAccessSettings = {
-  colors: ['#ef4444', '#22c55e', '#3b82f6'],
+  colors: ['#ef4444', '#22c55e', '#3b82f6', '#000000'],
   sizes: [10, 40, 150],
   tools: [
     { type: 'tool', tool: 'brush' },

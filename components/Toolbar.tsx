@@ -40,6 +40,7 @@ interface ToolbarProps {
     isOrthogonalVisible: boolean;
     onToggleOrthogonal: () => void;
     onExportClick: () => void;
+    onImportBackgroundClick?: () => void;
 
     strokeMode: StrokeMode;
     setStrokeMode: (mode: StrokeMode) => void;
@@ -213,11 +214,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 strokeModifierDropdownRef.current && !strokeModifierDropdownRef.current.contains(target)) {
                 setIsStrokeModifierMenuOpen(false);
             }
-            if (selectionToolsMenuRef.current && !selectionToolsMenuRef.current.contains(target) &&
+            // Fix: Don't close tool menus if interacting with settings panel
+            const isClickInSettings = settingsPanelRef.current && settingsPanelRef.current.contains(target);
+
+            if (!isClickInSettings && selectionToolsMenuRef.current && !selectionToolsMenuRef.current.contains(target) &&
                 selectionToolsDropdownRef.current && !selectionToolsDropdownRef.current.contains(target)) {
                 setIsSelectionToolsMenuOpen(false);
             }
-            if (drawingToolsMenuRef.current && !drawingToolsMenuRef.current.contains(target) &&
+            if (!isClickInSettings && drawingToolsMenuRef.current && !drawingToolsMenuRef.current.contains(target) &&
                 drawingToolsDropdownRef.current && !drawingToolsDropdownRef.current.contains(target)) {
                 setIsDrawingToolsMenuOpen(false);
             }
@@ -284,11 +288,11 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         const anchorRect = currentTarget.getBoundingClientRect();
         const wrapperRect = toolbarWrapperRef.current!.getBoundingClientRect();
 
-        // Close all dropdowns
-        setIsSelectionToolsMenuOpen(false);
-        setIsDrawingToolsMenuOpen(false);
+        // Close unrelated dropdowns (Modes/Modifiers) but KEEP Tool Lists open
         setIsStrokeModeMenuOpen(false);
         setIsStrokeModifierMenuOpen(false);
+        // Removed: setIsSelectionToolsMenuOpen(false);
+        // Removed: setIsDrawingToolsMenuOpen(false);
 
         // Open settings panel, but first save its target position
         setSettingsPanelPosition({
@@ -942,6 +946,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 <div className="mt-auto flex flex-col items-center space-y-2">
                     <button onClick={() => handleToolClick('crop')} className={toolButtonClasses('crop')} title="Recortar">
                         <CropIcon className="w-6 h-6" />
+                    </button>
+                    <button onClick={props.onImportBackgroundClick} className="p-3 rounded-lg bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-tertiary" title="Importar Fondo">
+                        <UploadIcon className="w-6 h-6" />
                     </button>
                     <button onClick={onExportClick} className="p-3 rounded-lg bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-tertiary" title="Exportar Imagen">
                         <ExportIcon className="w-6 h-6" />

@@ -26,12 +26,24 @@ export function useCanvasModes(
         const img = new Image();
         img.crossOrigin = 'anonymous';
         img.onload = () => {
-            const itemScaleFactor = libraryItem.scaleFactor || 5;
-            const scale = globalScaleFactor / itemScaleFactor;
-            const initialDimensions = {
-                width: img.width * scale,
-                height: img.height * scale,
-            };
+            const initialDimensions = { width: 0, height: 0 };
+
+            if (libraryItem.scaleFactor) {
+                // Use defined scale factor if available (legacy/metric behavior)
+                const scale = globalScaleFactor / libraryItem.scaleFactor;
+                initialDimensions.width = img.width * scale;
+                initialDimensions.height = img.height * scale;
+            } else {
+                // Fallback: Scale to ~50% of canvas width or height, whichever is smaller
+                const targetWidth = canvasSize.width * 0.5;
+                const targetHeight = canvasSize.height * 0.5;
+                const scaleX = targetWidth / img.width;
+                const scaleY = targetHeight / img.height;
+                const scale = Math.min(scaleX, scaleY);
+
+                initialDimensions.width = img.width * scale;
+                initialDimensions.height = img.height * scale;
+            }
 
             dispatch({
                 type: 'ADD_ITEM',

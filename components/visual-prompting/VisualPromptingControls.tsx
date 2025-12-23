@@ -275,7 +275,8 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
             </div>
 
             {/* AI Structured Prompt Editor (Advanced) */}
-            <div className="p-4 border-t border-theme-bg-tertiary bg-theme-bg-secondary space-y-2">
+            {/* AI Structured Prompt Editor (Hidden per user request) */}
+            {/* <div className="p-4 border-t border-theme-bg-tertiary bg-theme-bg-secondary space-y-2">
                 <div className="flex justify-between items-center">
                     <label className="text-[10px] font-bold text-theme-accent-primary uppercase tracking-wider">Prompt Estructurado (AI)</label>
                     {isPromptModified && (
@@ -306,7 +307,7 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
                         ? "Has editado manualmente el prompt. Se usará exactamente este texto."
                         : "Este es el objeto que se envía a Gemini. Haz clic para personalizar."}
                 </p>
-            </div>
+            </div> */}
 
             {/* Footer Action Button */}
             <div className="p-4 border-t border-theme-bg-tertiary bg-theme-bg-secondary">

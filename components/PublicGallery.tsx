@@ -1,24 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, limit, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, doc, deleteDoc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
-import { PhotoIcon, XIcon, UserIcon, CalendarIcon } from './icons';
+import { PhotoIcon, XIcon, UserIcon, CalendarIcon, TrashIcon } from './icons';
+
+import { User } from 'firebase/auth'; // Ensure this import exists or use 'any' if type is not available directly, but User is better. 
+// Actually, App.tsx uses a User type, likely from firebase/auth or a local definition. I'll assume firebase/auth for now or check imports.
+// Wait, App.tsx imports User from firebase/auth usually, or defines it. 
+// Let's just use `any` for user prop temporarily to avoid import hell if I don't see the User type definition file, 
+// OR better, checking imports in PublicGallery. It doesn't import User.
+// I will start by adding the authorId field.
 
 interface PublicGalleryProps {
     isOpen: boolean;
     onClose: () => void;
+    isAdmin?: boolean;
+    currentUser?: any; // Using any to avoid import issues for now, or I can try loading it if I knew where it was defined.
 }
 
 interface PublicImage {
     id: string;
     imageUrl: string;
+    thumbnailUrl?: string;
     title: string;
     authorName: string;
+    authorId?: string; // Added authorId
     createdAt: any;
-    description?: string;
-    likes?: number;
+    description: string;
+    likes: number;
 }
 
-export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose }) => {
+export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose, isAdmin = false, currentUser }) => {
     const [images, setImages] = useState<PublicImage[]>([]);
     const [loading, setLoading] = useState(false);
     const [selectedImage, setSelectedImage] = useState<PublicImage | null>(null);
@@ -44,8 +55,10 @@ export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose })
                 loadedImages.push({
                     id: doc.id,
                     imageUrl: data.imageUrl,
+                    thumbnailUrl: data.thumbnailUrl,
                     title: data.title || 'Untitled',
                     authorName: data.authorName || 'Anonymous',
+                    authorId: data.userId || data.authorId, // Support both fields just in case
                     createdAt: data.createdAt,
                     description: data.description,
                     likes: data.likes || 0
@@ -56,6 +69,45 @@ export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose })
             console.error("Error fetching public gallery:", error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleDelete = async (e: React.MouseEvent, imageId: string, imageAuthorId?: string) => {
+        e.stopPropagation();
+
+        const isOwner = currentUser && imageAuthorId && currentUser.uid === imageAuthorId;
+
+        if (!isAdmin && !isOwner) {
+            alert("No tienes permiso para eliminar esta imagen.");
+            return;
+        }
+
+        if (window.confirm("¿Seguro que quieres eliminar esta imagen de la galería pública? Se guardará en el archivo.")) {
+            try {
+                // 1. Get current doc
+                const docRef = doc(db, 'public_gallery', imageId);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    // 2. Add to archive
+                    await addDoc(collection(db, 'public_gallery_archive'), {
+                        ...data,
+                        archivedAt: serverTimestamp(),
+                        deletedBy: isAdmin ? 'admin' : 'author',
+                        deleterId: currentUser?.uid || 'unknown',
+                        originalId: imageId
+                    });
+                    // 3. Delete from public gallery
+                    await deleteDoc(docRef);
+
+                    setImages(prev => prev.filter(img => img.id !== imageId));
+                    if (selectedImage?.id === imageId) setSelectedImage(null);
+                }
+            } catch (error) {
+                console.error("Error deleting image:", error);
+                alert("Error al eliminar la imagen.");
+            }
         }
     };
 
@@ -95,7 +147,19 @@ export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose })
                                     className="group relative aspect-square rounded-xl overflow-hidden bg-theme-bg-tertiary cursor-pointer border border-transparent hover:border-theme-accent-primary transition-all hover:shadow-lg"
                                     onClick={() => setSelectedImage(img)}
                                 >
-                                    <img src={img.imageUrl} alt={img.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                                    <img src={img.thumbnailUrl || img.imageUrl} alt={img.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+
+                                    {/* Delete Button (Top Right) */}
+                                    {(isAdmin || (currentUser && img.authorId && currentUser.uid === img.authorId)) && (
+                                        <button
+                                            onClick={(e) => handleDelete(e, img.id, img.authorId)}
+                                            className="absolute top-2 right-2 p-2 bg-red-500/90 hover:bg-red-600 rounded-full text-white opacity-0 group-hover:opacity-100 transition-all z-20 shadow-sm"
+                                            title="Eliminar imagen"
+                                        >
+                                            <TrashIcon className="w-4 h-4" />
+                                        </button>
+                                    )}
+
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
                                         <p className="text-white font-bold text-sm truncate">{img.title}</p>
                                         <div className="flex items-center justify-between mt-1">
@@ -132,13 +196,25 @@ export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose })
                                 <div className="p-2 bg-theme-bg-tertiary rounded-full">
                                     <UserIcon className="w-5 h-5" />
                                 </div>
-                                <div className="flex flex-col">
+                                <div className="flex flex-col flex-1">
                                     <span className="text-sm font-bold">{selectedImage.authorName}</span>
                                     <span className="text-xs flex items-center gap-1 opacity-70">
                                         <CalendarIcon className="w-3 h-3" />
                                         {selectedImage.createdAt?.toDate ? selectedImage.createdAt.toDate().toLocaleDateString() : 'Reciente'}
                                     </span>
                                 </div>
+
+                                {/* Delete Button in Modal */}
+                                {(isAdmin || (currentUser && selectedImage.authorId && currentUser.uid === selectedImage.authorId)) && (
+                                    <button
+                                        onClick={(e) => handleDelete(e, selectedImage.id, selectedImage.authorId)}
+                                        className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors flex items-center gap-2"
+                                        title="Eliminar imagen"
+                                    >
+                                        <TrashIcon className="w-5 h-5" />
+                                        <span className="text-xs font-bold hidden md:inline">Eliminar</span>
+                                    </button>
+                                )}
                             </div>
 
                             {selectedImage.description && (

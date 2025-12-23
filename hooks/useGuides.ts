@@ -8,7 +8,7 @@ export function useGuides(canvasSize: { width: number, height: number }) {
     const [mirrorGuides, setMirrorGuides] = useState<MirrorGuide[]>([]);
     const [perspectiveGuide, setPerspectiveGuide] = useState<PerspectiveGuide | null>(null);
     const [orthogonalGuide, setOrthogonalGuide] = useState<OrthogonalGuide>({ angle: 0 });
-    const [gridGuide, setGridGuide] = useState<GridGuide>({ type: 'cartesian', spacing: 10, majorLineFrequency: 10, isoAngle: 60, majorLineColor: 'rgba(239, 68, 68, 0.6)', minorLineColor: 'rgba(128, 128, 128, 0.3)' });
+    const [gridGuide, setGridGuide] = useState<GridGuide>({ type: 'none', spacing: 10, majorLineFrequency: 10, isoAngle: 60, majorLineColor: 'rgba(239, 68, 68, 0.6)', minorLineColor: 'rgba(128, 128, 128, 0.3)' });
     const [areGuidesLocked, setAreGuidesLocked] = useState<boolean>(false);
     const [isPerspectiveStrokeLockEnabled, setIsPerspectiveStrokeLockEnabled] = useState(false);
     const [isSnapToGridEnabled, setIsSnapToGridEnabled] = useState(false);

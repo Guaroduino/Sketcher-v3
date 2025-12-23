@@ -36,8 +36,11 @@ import { CanvasSizeModal } from './components/modals/CanvasSizeModal';
 import { ConfirmClearModal } from './components/modals/ConfirmClearModal';
 import { ConfirmDeleteLibraryItemModal } from './components/modals/ConfirmDeleteLibraryItemModal';
 import { ConfirmResetModal } from './components/modals/ConfirmResetModal';
-import { CropIcon, CheckIcon, XIcon, RulerIcon, PerspectiveIcon, ImageSquareIcon, OrthogonalIcon, MirrorIcon, GridIcon, IsometricIcon, LockIcon, LockOpenIcon, TransformIcon, FreeTransformIcon, SunIcon, MoonIcon, CopyIcon, CutIcon, PasteIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, GoogleIcon, LogOutIcon, ArrowUpIcon, ArrowDownIcon, SnapIcon, BookmarkIcon, SaveIcon, FolderOpenIcon, GalleryIcon, StrokeModeIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, ExpandIcon, MinimizeIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, HistoryIcon, MoreVerticalIcon, AddAboveIcon, AddBelowIcon, HandRaisedIcon, DownloadIcon, SparklesIcon } from './components/icons';
-import { ArchitecturalRenderView } from './components/ArchitecturalRenderView';
+import { CropIcon, CheckIcon, XIcon, RulerIcon, PerspectiveIcon, ImageSquareIcon, OrthogonalIcon, MirrorIcon, GridIcon, IsometricIcon, LockIcon, LockOpenIcon, TransformIcon, FreeTransformIcon, SunIcon, MoonIcon, CopyIcon, CutIcon, PasteIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, GoogleIcon, LogOutIcon, ArrowUpIcon, ArrowDownIcon, SnapIcon, BookmarkIcon, SaveIcon, FolderOpenIcon, GalleryIcon, StrokeModeIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, ExpandIcon, MinimizeIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, HistoryIcon, MoreVerticalIcon, AddAboveIcon, AddBelowIcon, HandRaisedIcon, DownloadIcon, SparklesIcon, MenuIcon } from './components/icons';
+import { ArchitecturalRenderView, ArchitecturalRenderViewHandle } from './components/ArchitecturalRenderView';
+import { FreeModeView, FreeModeViewHandle } from './components/FreeModeView';
+
+
 import { AIRequestInspectorModal } from './components/modals/AIRequestInspectorModal';
 import type { SketchObject, ItemType, Tool, CropRect, TransformState, WorkspaceTemplate, QuickAccessTool, ProjectFile, Project, StrokeMode, StrokeState, CanvasItem, StrokeModifier, ScaleUnit, Selection, ClipboardData, AppState, Point } from './types';
 import { getContentBoundingBox, createNewCanvas, createThumbnail, cloneCanvas, generateMipmaps, getCompositeCanvas } from './utils/canvasUtils';
@@ -793,7 +796,7 @@ function useAI(
                     if (payload.shouldAddToLibrary) {
                         fetch(processedDataUrl).then(res => res.blob()).then(blob => {
                             if (blob) onImportToLibrary(new File([blob], `${newName}.png`, { type: 'image/png' }), null, {
-                                scaleFactor: finalScaleFactor,
+                                scaleFactor: 0, // Force 0 scale factor for AI generated images so they use the smart scaling logic (50% viewport) on drag & drop
                                 transparentColors,
                                 tolerance,
                                 originalFile
@@ -900,8 +903,9 @@ export function App() {
     const [debugPointers, setDebugPointers] = useState<Map<number, { x: number, y: number }>>(new Map());
 
     // -- View State --
-    const [activeView, setActiveView] = useState<'sketch' | 'render'>('sketch');
+    const [activeView, setActiveView] = useState<'sketch' | 'render' | 'free'>('sketch'); // Using string for safety
     const [lastRenderedImage, setLastRenderedImage] = useState<string | null>(null);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     // -- 3. CUSTOM HOOKS --
     const [selection, setSelection] = useState<Selection | null>(null);
@@ -959,6 +963,8 @@ export function App() {
     };
 
     const ui = useAppUI();
+    const freeModeRef = useRef<FreeModeViewHandle>(null);
+    const archRenderRef = useRef<ArchitecturalRenderViewHandle>(null);
 
     // Custom Hooks
     const toolSettings = useToolSettings();
@@ -1192,29 +1198,54 @@ export function App() {
                     if (items[i].type.indexOf('image') !== -1) {
                         const blob = items[i].getAsFile();
                         if (blob) {
-                            const img = new Image();
-                            const url = URL.createObjectURL(blob);
-                            img.onload = () => {
-                                // Logic: Fit Image to Canvas width/height (Fill) + Crop Canvas to Fit (Match Image)
-                                // Effectively: Set Canvas Size to Image Size
-                                dispatch({ type: 'RESIZE_CANVAS', payload: { width: img.width, height: img.height } });
-                                dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: img } });
-                                URL.revokeObjectURL(url);
-                            };
-                            img.src = url;
-                            e.preventDefault(); // Prevent default paste behavior
+                            e.preventDefault();
+
+                            // LOGIC: Handle paste based on active view
+                            if (activeView === 'render') {
+                                // 1. Render View: Import as Background Prompt
+                                const file = new File([blob], `Pasted_Image_${Date.now()}.png`, { type: 'image/png' });
+                                setPendingBgFile(file);
+                                setIsBgImportModalOpen(true);
+                            } else if (activeView === 'free') {
+                                // 2. Free Mode: Attach to Chat
+                                const reader = new FileReader();
+                                reader.onload = (ev) => {
+                                    if (ev.target?.result && freeModeRef.current) {
+                                        freeModeRef.current.addAttachment(ev.target.result as string);
+                                    }
+                                };
+                                reader.readAsDataURL(blob);
+                            } else {
+                                // 3. Sketch Mode: Add to Canvas (Existing Logic)
+                                // We need to convert blob to proper ClipboardData format for dispatch
+                                // Or simpler: use a FileReader and direct dispatch if needed, but existing dispatch works with ClipboardData object from event?
+                                // The original code dispatch uses 'clipboard' which is read from navigator? No, paylod uses 'clipboard' type.
+                                // Let's look at how PASTE_FROM_CLIPBOARD handler works. It expects 'clipboard' object.
+                                // But here we have a blob.
+                                // Actually, existing code below was:
+                                // dispatch({ type: 'PASTE_FROM_CLIPBOARD', payload: { ... clipboard: ... } })
+                                // But wait, existing code calls 'handlePaste' which reads from navigator.clipboard OR uses event data?
+                                // The original code didn't actually use the blob inside the listener logic for dispatch!
+                                // It just called preventDefault.
+                                // Wait, let's check original.
+
+                                // Original just did: 
+                                // if (blob) { ... e.preventDefault(); ... }
+                                // It seems the actual paste logic was handled elsewhere or incomplete in the snippet showed.
+                                // Ah, see line 1211 (original): it didn't do anything after preventing default?
+                                // Wait, the provided snippet ended at line 1195.
+                                // Let's assume we need to trigger the standard paste action for sketch.
+
+                                handlePaste(); // This function (defined later) handles the logic.
+                            }
                         }
                     }
                 }
             }
         };
 
-        window.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('paste', handleGlobalPaste);
-        return () => {
-            window.removeEventListener('keydown', handleKeyDown);
-            window.removeEventListener('paste', handleGlobalPaste);
-        };
+
+
     }, []);
 
     useEffect(() => { setStrokeState(null); }, [tool, strokeMode]);
@@ -1383,6 +1414,68 @@ export function App() {
         setTool('transform');
     }, [clipboard, canvasSize, activeItemId, handleSelectItem, dispatch]);
 
+    // KeyDown Handler
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') { setStrokeState(null); setSelection(null); }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
+    // Global Paste Handler
+    useEffect(() => {
+        const handleGlobalPaste = (e: ClipboardEvent) => {
+            // NOTE: We do NOT return early for inputs anymore, because we want to intercept IMAGES even if an input is focused.
+            // Text pastes will fall through because we only preventDefault if we find an image.
+
+            if (e.clipboardData && e.clipboardData.items) {
+                const items = e.clipboardData.items;
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i].type.indexOf('image') !== -1) {
+                        const blob = items[i].getAsFile();
+                        if (blob) {
+                            e.preventDefault();
+                            console.log('Global Paste Detected. ActiveView:', activeView);
+                            if (activeView === 'free') {
+                                console.log('Handling paste for Free Mode');
+                                // 1. Free Mode: Attach to Chat
+                                const reader = new FileReader();
+                                reader.onload = (ev) => {
+                                    if (ev.target?.result && freeModeRef.current) {
+                                        freeModeRef.current.addAttachment(ev.target.result as string);
+                                    } else {
+                                        console.error('FreeModeRef is null:', freeModeRef.current);
+                                    }
+                                };
+                                reader.readAsDataURL(blob);
+                            } else {
+                                console.log('Handling paste for Render/Sketch Mode');
+                                const file = new File([blob], `Pasted_Image_${Date.now()}.png`, { type: 'image/png' });
+
+                                if (activeView === 'render') {
+                                    // 2. Render Mode: Use "Upload" logic (Input Image) via Ref
+                                    if (archRenderRef.current) {
+                                        console.log("Delegating paste to ArchitecturalRenderView");
+                                        archRenderRef.current.setInputImageFromFile(file);
+                                    } else {
+                                        console.error("ArchRenderRef is null");
+                                    }
+                                } else {
+                                    // 3. Sketch Mode: Import as Background (Ask to resize/fit)
+                                    setPendingBgFile(file);
+                                    setIsBgImportModalOpen(true);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        window.addEventListener('paste', handleGlobalPaste);
+        return () => window.removeEventListener('paste', handleGlobalPaste);
+    }, [activeView, activeItemId, canvasSize, dispatch]);
+
     // Outliner button logic
     const visualList = useMemo(() => {
         const getVisibleTree = (parentId: string | null = null): CanvasItem[] => {
@@ -1489,10 +1582,16 @@ export function App() {
                 <div className="text-center p-8">
                     <h1 className="text-5xl font-bold mb-4">Sketcher</h1>
                     <p className="text-lg text-theme-text-secondary mb-10">Tu lienzo creativo te espera.</p>
-                    <button onClick={ui.handleStart} className="px-10 py-4 bg-theme-accent-primary text-white font-bold text-lg rounded-lg shadow-lg hover:bg-theme-accent-hover transform hover:scale-105 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-offset-2 focus:ring-offset-theme-bg-primary focus:ring-theme-accent-primary">
-                        Comenzar a Dibujar
-                    </button>
+                    <div className="flex flex-col gap-4 items-center">
+                        <button onClick={ui.handleStart} className="px-10 py-4 bg-theme-accent-primary text-white font-bold text-lg rounded-lg shadow-lg hover:bg-theme-accent-hover transform hover:scale-105 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-offset-2 focus:ring-offset-theme-bg-primary focus:ring-theme-accent-primary">
+                            Comenzar a Dibujar
+                        </button>
+                        <button onClick={() => ui.setIsPublicGalleryOpen(true)} className="text-theme-text-secondary hover:text-theme-accent-primary transition-colors text-sm font-semibold underline">
+                            Explorar Galería Pública
+                        </button>
+                    </div>
                 </div>
+                <PublicGallery isOpen={ui.isPublicGalleryOpen} onClose={() => ui.setIsPublicGalleryOpen(false)} isAdmin={credits?.role === 'admin'} />
             </div>
         );
     }
@@ -1528,82 +1627,138 @@ export function App() {
                 onAddLibraryItemToScene={(item) => addItem(item.type, item.dataUrl)}
                 onPublishLibraryItem={(item) => library.publishToPublicGallery(item, item.name || 'Sin Título')}
                 onDeleteLibraryItem={library.onConfirmDeleteLibraryItem}
+                onImportImage={library.onImportToLibrary}
+                onCreateFolder={library.onCreateFolder}
+                onEditItem={library.onEditTransparency}
+                onMoveItems={library.onMoveItems}
             />
 
             {/* Main Header */}
             {ui.isHeaderVisible && (
-                <header className="flex-shrink-0 flex items-center justify-between p-2 bg-theme-bg-primary border-b border-theme-bg-tertiary z-20">
-                    <div className="flex items-center gap-4">
-                        <h1 className="text-xl font-bold">Sketcher</h1>
-                        <button onClick={() => ui.setProjectGalleryOpen(true)} className="flex items-center gap-2 p-2 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary border border-theme-bg-tertiary transition-colors text-sm">
-                            <GalleryIcon className="w-5 h-5" />
-                            <span>Proyectos</span>
-                        </button>
-                        <button onClick={() => ui.setIsPublicGalleryOpen(true)} className="flex items-center gap-2 p-2 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary border border-theme-bg-tertiary transition-colors text-sm">
-                            <SparklesIcon className="w-5 h-5 text-theme-accent-primary" />
-                            <span>Galería Pública</span>
-                        </button>
-                        <button ref={workspaceButtonRef} onClick={() => setWorkspacePopoverOpen(p => !p)} className="flex items-center gap-2 p-2 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary border border-theme-bg-tertiary transition-colors text-sm relative">
-                            <BookmarkIcon className="w-5 h-5" />
-                            <span>Plantillas</span>
-                            <WorkspaceTemplatesPopover isOpen={isWorkspacePopoverOpen} onClose={() => setWorkspacePopoverOpen(false)} templates={templates.templates} onSave={handleSaveWorkspace} onLoad={handleLoadWorkspace} onDelete={templates.deleteTemplate} onResetPreferences={() => ui.setIsResetConfirmOpen(true)} />
-                        </button>
-                    </div>
+                <header className="flex-shrink-0 relative z-20">
+                    <div className="flex items-center justify-between p-2 bg-theme-bg-primary border-b border-theme-bg-tertiary">
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                                {/* Mobile Menu Button */}
+                                <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="md:hidden p-2 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary">
+                                    <MenuIcon className="w-5 h-5" />
+                                </button>
+                                <h1 className="text-xl font-bold">Sketcher</h1>
+                            </div>
 
-                    {/* Center Tabs */}
-                    <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center bg-theme-bg-secondary rounded-lg p-1 border border-theme-bg-tertiary">
-                        <button
-                            onClick={() => setActiveView('sketch')}
-                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeView === 'sketch'
-                                ? 'bg-theme-bg-primary text-theme-text-primary shadow-sm'
-                                : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'
-                                }`}
-                        >
-                            Sketch
-                        </button>
-                        <button
-                            onClick={() => { setActiveView('render'); ui.setIsRightSidebarVisible(true); }}
-                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeView === 'render'
-                                ? 'bg-theme-bg-primary text-theme-text-primary shadow-sm'
-                                : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'
-                                }`}
-                        >
-                            Render arquitectónico
-                        </button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1 mr-2 px-2 py-1 bg-theme-bg-secondary rounded-md border border-theme-bg-tertiary">
-                            {ui.deferredPrompt && (
-                                <>
-                                    <button onClick={ui.handleInstallClick} className="flex items-center gap-1 p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title="Instalar Aplicación">
-                                        <DownloadIcon className="w-4 h-4" />
-                                        <span className="text-xs font-bold hidden sm:inline">Instalar</span>
-                                    </button>
-                                    <div className="w-px h-4 bg-theme-bg-tertiary mx-1"></div>
-                                </>
-                            )}
-                            <button onClick={() => ui.setUiScale(ui.uiScale - 0.1)} className="p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title="Reducir Interfaz">
-                                <span className="text-xs font-bold">A-</span>
+                            {/* DESKTOP NAVIGATION (Hidden on Mobile) */}
+                            <div className="hidden md:flex items-center gap-2">
+                                <button onClick={() => ui.setProjectGalleryOpen(true)} className="flex items-center gap-2 p-2 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary border border-theme-bg-tertiary transition-colors text-sm">
+                                    <GalleryIcon className="w-5 h-5" />
+                                    <span>Proyectos</span>
+                                </button>
+                                <button ref={workspaceButtonRef} onClick={() => setWorkspacePopoverOpen(p => !p)} className="flex items-center gap-2 p-2 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary border border-theme-bg-tertiary transition-colors text-sm relative">
+                                    <BookmarkIcon className="w-5 h-5" />
+                                    <span>Plantillas</span>
+                                    {/* Keep Popover attached to button in DOM */}
+                                    <WorkspaceTemplatesPopover isOpen={isWorkspacePopoverOpen} onClose={() => setWorkspacePopoverOpen(false)} templates={templates.templates} onSave={handleSaveWorkspace} onLoad={handleLoadWorkspace} onDelete={templates.deleteTemplate} onResetPreferences={() => ui.setIsResetConfirmOpen(true)} />
+                                </button>
+                                <button onClick={() => ui.setIsPublicGalleryOpen(true)} className="flex items-center gap-2 p-2 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary border border-theme-bg-tertiary transition-colors text-sm">
+                                    <SparklesIcon className="w-5 h-5 text-theme-accent-primary" />
+                                    <span>Galería Pública</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Center Tabs */}
+                        <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center bg-theme-bg-secondary rounded-lg p-1 border border-theme-bg-tertiary hidden md:flex">
+                            <button
+                                onClick={() => setActiveView('sketch')}
+                                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeView === 'sketch'
+                                    ? 'bg-theme-bg-primary text-theme-text-primary shadow-sm'
+                                    : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'
+                                    }`}
+                            >
+                                Sketch
                             </button>
-                            <span className="text-xs font-mono w-8 text-center">{Math.round(ui.uiScale * 100)}%</span>
-                            <button onClick={() => ui.setUiScale(ui.uiScale + 0.1)} className="p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title="Aumentar Interfaz">
-                                <span className="text-xs font-bold">A+</span>
+                            <button
+                                onClick={() => { setActiveView('render'); ui.setIsRightSidebarVisible(true); }}
+                                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeView === 'render'
+                                    ? 'bg-theme-bg-primary text-theme-text-primary shadow-sm'
+                                    : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'
+                                    }`}
+                            >
+                                Render
                             </button>
-                            <div className="w-px h-4 bg-theme-bg-tertiary mx-1"></div>
-                            <button onClick={ui.handleSaveUiScale} className="p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title="Guardar configuración de tamaño">
-                                <SaveIcon className="w-4 h-4" />
-                            </button>
-                            <div className="w-px h-4 bg-theme-bg-tertiary mx-1"></div>
-                            <button onClick={ui.handleToggleFullscreen} className="p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title={ui.isFullscreen ? "Salir de Pantalla Completa" : "Pantalla Completa"}>
-                                {ui.isFullscreen ? <MinimizeIcon className="w-4 h-4" /> : <ExpandIcon className="w-4 h-4" />}
+                            <button
+                                onClick={() => { setActiveView('free'); ui.setIsRightSidebarVisible(false); }}
+                                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeView === 'free'
+                                    ? 'bg-theme-bg-primary text-theme-text-primary shadow-sm'
+                                    : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'
+                                    }`}
+                            >
+                                Libre
                             </button>
                         </div>
 
-                        <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary text-theme-text-secondary">
-                            {theme === 'dark' ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
-                        </button>
-                        <Auth user={user} credits={credits} />
+                        <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 mr-2 px-2 py-1 bg-theme-bg-secondary rounded-md border border-theme-bg-tertiary">
+                                {ui.deferredPrompt && (
+                                    <>
+                                        <button onClick={ui.handleInstallClick} className="flex items-center gap-1 p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title="Instalar Aplicación">
+                                            <DownloadIcon className="w-4 h-4" />
+                                            <span className="text-xs font-bold hidden sm:inline">Instalar</span>
+                                        </button>
+                                        <div className="w-px h-4 bg-theme-bg-tertiary mx-1"></div>
+                                    </>
+                                )}
+                                <button onClick={() => ui.setUiScale(ui.uiScale - 0.1)} className="p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title="Reducir Interfaz">
+                                    <span className="text-xs font-bold">A-</span>
+                                </button>
+                                <span className="text-xs font-mono w-8 text-center">{Math.round(ui.uiScale * 100)}%</span>
+                                <button onClick={() => ui.setUiScale(ui.uiScale + 0.1)} className="p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title="Aumentar Interfaz">
+                                    <span className="text-xs font-bold">A+</span>
+                                </button>
+                                <div className="w-px h-4 bg-theme-bg-tertiary mx-1"></div>
+                                <button onClick={ui.handleSaveUiScale} className="p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title="Guardar configuración de tamaño">
+                                    <SaveIcon className="w-4 h-4" />
+                                </button>
+                                <div className="w-px h-4 bg-theme-bg-tertiary mx-1"></div>
+                                <button onClick={ui.handleToggleFullscreen} className="p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title={ui.isFullscreen ? "Salir de Pantalla Completa" : "Pantalla Completa"}>
+                                    {ui.isFullscreen ? <MinimizeIcon className="w-4 h-4" /> : <ExpandIcon className="w-4 h-4" />}
+                                </button>
+                            </div>
+
+                            <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary text-theme-text-secondary">
+                                {theme === 'dark' ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
+                            </button>
+                            <Auth user={user} credits={credits} role={role} />
+                        </div>
                     </div>
+
+                    {/* MOBILE MENU DROPDOWN */}
+                    {isMobileMenuOpen && (
+                        <div className="md:hidden absolute top-full left-0 w-full bg-theme-bg-secondary border-b border-theme-bg-tertiary shadow-xl flex flex-col p-4 gap-3 z-50">
+                            <div className="flex flex-col gap-2">
+                                <label className="text-[10px] uppercase font-bold text-theme-text-tertiary">Navegación</label>
+                                <button onClick={() => { ui.setProjectGalleryOpen(true); setIsMobileMenuOpen(false); }} className="flex items-center gap-3 p-3 rounded-md bg-theme-bg-primary hover:bg-theme-bg-hover text-sm font-medium">
+                                    <GalleryIcon className="w-5 h-5" /> Proyectos
+                                </button>
+                                <button onClick={() => { setWorkspacePopoverOpen(true); setIsMobileMenuOpen(false); }} className="flex items-center gap-3 p-3 rounded-md bg-theme-bg-primary hover:bg-theme-bg-hover text-sm font-medium">
+                                    <BookmarkIcon className="w-5 h-5" /> Plantillas
+                                </button>
+                                <button onClick={() => { ui.setIsPublicGalleryOpen(true); setIsMobileMenuOpen(false); }} className="flex items-center gap-3 p-3 rounded-md bg-theme-bg-primary hover:bg-theme-bg-hover text-sm font-medium">
+                                    <SparklesIcon className="w-5 h-5 text-theme-accent-primary" /> Galería Pública
+                                </button>
+                            </div>
+
+                            <div className="h-px bg-theme-bg-tertiary"></div>
+
+                            <div className="flex flex-col gap-2">
+                                <label className="text-[10px] uppercase font-bold text-theme-text-tertiary">Modo</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <button onClick={() => { setActiveView('sketch'); setIsMobileMenuOpen(false); }} className={`p-2 rounded text-xs font-bold text-center ${activeView === 'sketch' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-primary'}`}>Sketch</button>
+                                    <button onClick={() => { setActiveView('render'); ui.setIsRightSidebarVisible(true); setIsMobileMenuOpen(false); }} className={`p-2 rounded text-xs font-bold text-center ${activeView === 'render' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-primary'}`}>Render</button>
+                                    <button onClick={() => { setActiveView('free'); ui.setIsRightSidebarVisible(false); setIsMobileMenuOpen(false); }} className={`p-2 rounded text-xs font-bold text-center ${activeView === 'free' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-primary'}`}>Libre</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </header>
             )}
 
@@ -1618,6 +1773,7 @@ export function App() {
                                 onUpdatePreset={toolSettings.onUpdatePreset} onLoadPreset={toolSettings.onLoadPreset} onDeletePreset={toolSettings.onDeletePreset}
                                 activeGuide={guides.activeGuide} setActiveGuide={guides.onSetActiveGuide} isOrthogonalVisible={guides.isOrthogonalVisible}
                                 onToggleOrthogonal={guides.toggleOrthogonal} onExportClick={() => ui.setExportModalOpen(true)}
+                                onImportBackgroundClick={() => { setPendingBgFile(null); setIsBgImportModalOpen(true); }}
                                 objects={objects} libraryItems={library.libraryItems} backgroundDataUrl={ai.backgroundDataUrl} debugInfo={ai.debugInfo}
                                 strokeMode={strokeMode} setStrokeMode={setStrokeMode} strokeModifier={strokeModifier} setStrokeModifier={setStrokeModifier}
                                 isSolidBox={isSolidBox} setIsSolidBox={setIsSolidBox}
@@ -1639,6 +1795,9 @@ export function App() {
                     onClose={() => { setIsBgImportModalOpen(false); setPendingBgFile(null); }}
                     onResizeCanvas={() => confirmBackgroundImport('resize-canvas')}
                     onFitImage={(cropToFit) => confirmBackgroundImport('fit-image', cropToFit)}
+                    pendingFile={pendingBgFile}
+                    onFileSelected={(file) => setPendingBgFile(file)}
+                    libraryItems={library.libraryItems}
                 />
 
                 <AIPanel
@@ -1733,6 +1892,7 @@ export function App() {
 
                     <div className={activeView === 'render' ? 'flex flex-col h-full w-full relative' : 'hidden'}>
                         <ArchitecturalRenderView
+                            ref={archRenderRef}
                             onImportFromSketch={getSketchSnapshot}
                             isSidebarOpen={ui.isRightSidebarVisible}
                             onUndo={() => dispatch({ type: 'UNDO' })}
@@ -1744,6 +1904,19 @@ export function App() {
                             credits={credits}
                             deductCredit={deductCredit}
                             onSaveToLibrary={handleSaveItemToLibrary}
+                        />
+                    </div>
+
+                    <div className={activeView === 'free' ? 'flex flex-col h-full w-full relative' : 'hidden'}>
+                        <FreeModeView
+                            ref={freeModeRef}
+                            user={user}
+                            onImportFromSketch={getSketchSnapshot}
+                            lastRenderedImage={lastRenderedImage}
+                            onSaveToLibrary={handleSaveItemToLibrary}
+                            credits={credits}
+                            deductCredit={deductCredit}
+                            onInspectRequest={inspectAIRequest}
                         />
                     </div>
                 </main>
@@ -1772,6 +1945,8 @@ export function App() {
                                 onAddItemToScene={(id) => onDropOnCanvas({ type: 'library-item', id }, activeItemId, setSelectedItemIds)}
                                 onMoveItems={library.onMoveItems}
                                 onPublish={library.publishToPublicGallery}
+                                allowUpload={true} // Enable upload in sidebar as requested
+                                allowPublish={false} // Disable publish in sidebar items
                             />
                         </div>
                     </aside>
@@ -1787,7 +1962,16 @@ export function App() {
                 onConfirm={confirmInspector}
                 payload={inspectorPayload}
             />
-            <PublicGallery isOpen={ui.isPublicGalleryOpen} onClose={() => ui.setIsPublicGalleryOpen(false)} />
+            <BackgroundImportModal
+                isOpen={isBgImportModalOpen}
+                onClose={() => setIsBgImportModalOpen(false)}
+                onResizeCanvas={() => confirmBackgroundImport('resize-canvas')}
+                onFitImage={(cropToFit) => confirmBackgroundImport('fit-image', cropToFit)}
+                pendingFile={pendingBgFile}
+                onFileSelected={setPendingBgFile}
+                libraryItems={library.libraryItems}
+            />
+            <PublicGallery isOpen={ui.isPublicGalleryOpen} onClose={() => ui.setIsPublicGalleryOpen(false)} isAdmin={role === 'admin'} currentUser={user} />
         </div >
     );
 }
@@ -1800,12 +1984,17 @@ interface ProjectGalleryModalProps {
     isOpen: boolean; onClose: () => void; user: User | null; projects: Project[]; isLoading: boolean;
     onSave: (name: string) => Promise<void>; onLoad: (project: Project) => Promise<void>; onDelete: (project: Project) => Promise<void>;
     onSaveLocally: (name: string) => Promise<void>; onLoadFromFile: (file: File) => Promise<void>;
-    libraryItems: any[]; onAddLibraryItemToScene: (item: any) => void; onPublishLibraryItem: (item: any) => void; onDeleteLibraryItem: (id: string) => void;
+    libraryItems: any[]; onAddLibraryItemToScene: (item: any) => void; onPublishLibraryItem: (item: any) => void; onDeleteLibraryItem: (item: any) => void;
+    onImportImage: (file: File, parentId: string | null) => void;
+    onCreateFolder: (name: string, parentId: string | null) => void;
+    onEditItem: (id: string) => void;
+    onMoveItems: (itemIds: string[], targetParentId: string | null) => void;
 }
 
 const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({
     isOpen, onClose, user, projects, isLoading, onSave, onLoad, onDelete, onSaveLocally, onLoadFromFile,
-    libraryItems, onAddLibraryItemToScene, onPublishLibraryItem, onDeleteLibraryItem
+    libraryItems, onAddLibraryItemToScene, onPublishLibraryItem, onDeleteLibraryItem,
+    onImportImage, onCreateFolder, onEditItem, onMoveItems
 }) => {
     const [activeTab, setActiveTab] = useState<'projects' | 'library'>('projects');
     const [newProjectName, setNewProjectName] = useState('');
@@ -1825,7 +2014,7 @@ const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({
     const handleCancelSaveLocal = () => setIsSavingLocal(false);
     const handleSave = async () => { if (!newProjectName.trim()) { alert("Please enter a project name."); return; } setIsSaving(true); try { await onSave(newProjectName.trim()); setNewProjectName(''); } catch (error) { console.error("Failed to save project:", error); alert(`Error saving project: ${error instanceof Error ? error.message : String(error)}`); } finally { setIsSaving(false); } };
     const handleDeleteConfirm = async () => { if (deletingProject) { await onDelete(deletingProject); setDeletingProject(null); } };
-    const handleDeleteLibraryItemConfirm = async () => { if (deletingLibraryItem) { onDeleteLibraryItem(deletingLibraryItem.id); setDeletingLibraryItem(null); } };
+    const handleDeleteLibraryItemConfirm = async () => { if (deletingLibraryItem) { onDeleteLibraryItem(deletingLibraryItem); setDeletingLibraryItem(null); } };
 
     const handleFileLoadClick = () => fileInputRef.current?.click();
     const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files?.[0]) { await onLoadFromFile(e.target.files[0]); } if (e.target) e.target.value = ''; };
@@ -1888,30 +2077,26 @@ const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({
                             </div>
                         </>
                     ) : (
-                        <div className="flex-grow overflow-y-auto pr-2 custom-scrollbar">
-                            {libraryItems.length === 0 ? <div className="text-center text-theme-text-secondary py-16"> <p>Tu librería está vacía.</p> <p className="text-sm">Guarda elementos desde el lienzo o sube imágenes.</p> </div>
-                                : <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                    {libraryItems.map(item => (
-                                        <div key={item.id} className="group relative bg-theme-bg-tertiary rounded-lg overflow-hidden shadow-md hover:shadow-xl transition-all border border-theme-bg-tertiary/50">
-                                            <div className="aspect-square bg-white/5 flex items-center justify-center overflow-hidden p-2">
-                                                <img src={item.dataUrl} alt={item.name} className="w-full h-full object-contain" />
-                                            </div>
-                                            <div className="p-3"><p className="font-semibold text-sm truncate text-theme-text-primary">{item.name}</p></div>
-                                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 backdrop-blur-sm">
-                                                <button onClick={() => { onAddLibraryItemToScene(item); onClose(); }} className="px-4 py-2 rounded-md bg-green-600 hover:bg-green-500 text-white w-3/4 font-medium shadow-lg flex items-center justify-center gap-2"><ArrowUpIcon className="w-4 h-4" /> Añadir</button>
-                                                <button onClick={() => onPublishLibraryItem(item)} className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-500 text-white w-3/4 font-medium shadow-lg flex items-center justify-center gap-2"><GalleryIcon className="w-4 h-4" /> Publicar</button>
-                                                <button onClick={() => setDeletingLibraryItem(item)} className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-500 text-white w-3/4 font-medium shadow-lg flex items-center justify-center gap-2"><XIcon className="w-4 h-4" /> Eliminar</button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            }
+                        <div className="flex-grow overflow-hidden relative rounded-lg border border-theme-bg-tertiary">
+                            <Library
+                                user={user}
+                                items={libraryItems}
+                                onImportImage={onImportImage}
+                                onCreateFolder={onCreateFolder}
+                                onEditItem={onEditItem}
+                                onDeleteItem={onDeleteLibraryItem}
+                                onAddItemToScene={(id) => { onAddLibraryItemToScene({ id, type: 'library-item' }); onClose(); }}
+                                onMoveItems={onMoveItems}
+                                onPublish={onPublishLibraryItem}
+                                allowUpload={true}
+                                allowPublish={true}
+                                className="grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+                            />
                         </div>
                     )
                 )}
             </div>
             {deletingProject && <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"> <div className="bg-theme-bg-secondary rounded-lg p-6 shadow-xl border border-theme-bg-tertiary max-w-sm w-full mx-4"> <h3 className="text-lg font-bold text-theme-text-primary">Confirmar Eliminación</h3> <p className="my-4 text-theme-text-secondary">¿Estás seguro de que quieres eliminar el proyecto <span className="text-theme-text-primary font-bold">"{deletingProject.name}"</span>?<br />Esta acción no se puede deshacer.</p> <div className="flex justify-end gap-3"> <button onClick={() => setDeletingProject(null)} className="px-4 py-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary">Cancelar</button> <button onClick={handleDeleteConfirm} className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-500 text-white font-medium shadow-lg">Eliminar</button> </div> </div> </div>}
-            {deletingLibraryItem && <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"> <div className="bg-theme-bg-secondary rounded-lg p-6 shadow-xl border border-theme-bg-tertiary max-w-sm w-full mx-4"> <h3 className="text-lg font-bold text-theme-text-primary">Confirmar Eliminación</h3> <p className="my-4 text-theme-text-secondary">¿Estás seguro de que quieres eliminar <span className="text-theme-text-primary font-bold">"{deletingLibraryItem.name}"</span> de tu librería?</p> <div className="flex justify-end gap-3"> <button onClick={() => setDeletingLibraryItem(null)} className="px-4 py-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary">Cancelar</button> <button onClick={handleDeleteLibraryItemConfirm} className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-500 text-white font-medium shadow-lg">Eliminar</button> </div> </div> </div>}
         </div>
     );
 };
