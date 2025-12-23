@@ -188,6 +188,7 @@ export interface LibraryImage extends BaseLibraryItem {
   scaleFactor?: number; // px/mm
   tolerance?: number;
   scaleUnit?: ScaleUnit;
+  originalStoragePath?: string; // Path to original opaque image in Storage
 }
 
 export interface LibraryFolder extends BaseLibraryItem {

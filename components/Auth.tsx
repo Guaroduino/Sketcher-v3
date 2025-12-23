@@ -1,14 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { auth } from '../firebaseConfig';
 import { GoogleAuthProvider, signInWithPopup, signOut, User } from 'firebase/auth';
-import { GoogleIcon, LogOutIcon } from './icons';
+import { GoogleIcon, LogOutIcon, PlusIcon } from './icons'; // Assuming PlusIcon exists or I can use another icon or just text
+import { PurchaseCreditsModal } from './modals/PurchaseCreditsModal';
 
 interface AuthProps {
     user: User | null;
+    credits: number | null;
 }
 
-export const Auth: React.FC<AuthProps> = ({ user }) => {
+export const Auth: React.FC<AuthProps> = ({ user, credits }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
     const handleSignIn = async () => {
@@ -54,7 +57,22 @@ export const Auth: React.FC<AuthProps> = ({ user }) => {
     }
 
     return (
-        <div className="relative" ref={menuRef}>
+        <div className="relative flex items-center gap-3" ref={menuRef}>
+            {/* Purchase Credits Button */}
+            <button
+                onClick={() => setIsPurchaseModalOpen(true)}
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-theme-accent-primary/10 border border-theme-accent-primary/20 text-theme-accent-primary text-xs font-medium hover:bg-theme-accent-primary/20 transition-colors"
+                title="Comprar Créditos"
+            >
+                <span>Comprar</span>
+            </button>
+
+            {/* Credit Badge */}
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 text-amber-500 text-xs font-medium">
+                <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                <span>{credits !== null ? credits : '-'} Créditos</span>
+            </div>
+
             <button onClick={() => setIsMenuOpen(prev => !prev)} className="w-10 h-10 rounded-full border-2 border-theme-accent-primary overflow-hidden focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-accent-primary focus:ring-offset-theme-bg-primary">
                 <img src={user.photoURL || undefined} alt={user.displayName || 'User Avatar'} className="w-full h-full object-cover" />
             </button>
@@ -65,6 +83,15 @@ export const Auth: React.FC<AuthProps> = ({ user }) => {
                         <p className="text-xs text-theme-text-secondary truncate">{user.email}</p>
                     </div>
                     <button
+                        onClick={() => {
+                            setIsPurchaseModalOpen(true);
+                            setIsMenuOpen(false);
+                        }}
+                        className="w-full flex sm:hidden items-center gap-3 px-3 py-2 text-sm text-left text-theme-text-primary hover:bg-theme-bg-hover"
+                    >
+                        <span>Comprar Créditos</span>
+                    </button>
+                    <button
                         onClick={handleSignOut}
                         className="w-full flex items-center gap-3 px-3 py-2 text-sm text-left text-theme-text-primary hover:bg-theme-bg-hover"
                     >
@@ -73,6 +100,8 @@ export const Auth: React.FC<AuthProps> = ({ user }) => {
                     </button>
                 </div>
             )}
+
+            <PurchaseCreditsModal isOpen={isPurchaseModalOpen} onClose={() => setIsPurchaseModalOpen(false)} />
         </div>
     );
 };

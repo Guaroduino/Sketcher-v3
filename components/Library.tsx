@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
-import type { LibraryItem } from '../types';
+import type { LibraryItem, LibraryImage } from '../types';
 import { UploadIcon, CubeIcon, MagicWandIcon, TrashIcon, UserIcon, PlusIcon, FolderIcon, ChevronRightIcon, ArrowUpIcon, CheckIcon } from './icons';
 import { User } from 'firebase/auth';
 
@@ -12,9 +12,10 @@ interface LibraryProps {
   onDeleteItem: (item: LibraryItem) => void;
   onAddItemToScene: (id: string) => void;
   onMoveItems: (itemIds: string[], targetParentId: string | null) => void;
+  onPublish: (item: LibraryImage) => void;
 }
 
-export const Library: React.FC<LibraryProps> = React.memo(({ user, items, onImportImage, onCreateFolder, onEditItem, onDeleteItem, onAddItemToScene, onMoveItems }) => {
+export const Library: React.FC<LibraryProps> = React.memo(({ user, items, onImportImage, onCreateFolder, onEditItem, onDeleteItem, onAddItemToScene, onMoveItems, onPublish }) => {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -204,8 +205,18 @@ export const Library: React.FC<LibraryProps> = React.memo(({ user, items, onImpo
                     <TrashIcon className="w-4 h-4" />
                   </button>
 
+
+
                   {item.type === 'image' && (
                     <>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onPublish(item as LibraryImage); }}
+                        aria-label={`Publish ${item.name}`}
+                        className="absolute top-1 left-7 p-1 bg-theme-bg-primary/60 rounded-full text-theme-text-primary opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-500 z-10"
+                        title="Publicar en Galería"
+                      >
+                        <UploadIcon className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); onAddItemToScene(item.id); }}
                         aria-label={`Add ${item.name} to scene`}
@@ -252,6 +263,6 @@ export const Library: React.FC<LibraryProps> = React.memo(({ user, items, onImpo
           <span className="text-sm">Nueva Carpeta</span>
         </button>
       </div>
-    </div>
+    </div >
   );
 });

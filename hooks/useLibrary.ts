@@ -65,6 +65,7 @@ export function useLibrary(user: User | null) {
                             name: data.name,
                             type: 'image' as const,
                             storagePath: data.storagePath,
+                            originalStoragePath: data.originalStoragePath,
                             transparentColors: data.transparentColors || [],
                             scaleFactor: data.scaleFactor || 5,
                             tolerance: data.tolerance,
@@ -90,7 +91,7 @@ export function useLibrary(user: User | null) {
         }
     }, [user]);
 
-    const handleImportToLibrary = useCallback(async (file: File, parentId: string | null, options?: { scaleFactor?: number }) => {
+    const handleImportToLibrary = useCallback(async (file: File, parentId: string | null, options?: { scaleFactor?: number, transparentColors?: RgbColor[], tolerance?: number, originalFile?: File }) => {
         if (!user) {
             alert("Please log in to save items to your library.");
             return;
@@ -98,15 +99,32 @@ export function useLibrary(user: User | null) {
         const storagePath = `users/${user.uid}/library/${Date.now()}_${file.name}`;
         const storageRef = ref(storage, storagePath);
 
+        // Handle original file if provided
+        let originalStoragePath: string | undefined = undefined;
+        if (options?.originalFile) {
+            const origPath = `users/${user.uid}/library/${Date.now()}_original_${options.originalFile.name}`;
+            const origRef = ref(storage, origPath);
+            try {
+                await uploadBytes(origRef, options.originalFile);
+                originalStoragePath = origPath;
+            } catch (e) {
+                console.error("Error uploading original file:", e);
+                // Proceed even if original fails? Yes, better to have at least the processed one.
+            }
+        }
+
         try {
             await uploadBytes(storageRef, file);
             await addDoc(collection(db, `users/${user.uid}/libraryItems`), {
                 name: file.name.split('.').slice(0, -1).join('.') || 'Image',
                 storagePath: storagePath,
+                originalStoragePath: originalStoragePath || null,
                 createdAt: serverTimestamp(),
                 type: 'image',
                 parentId,
                 scaleFactor: options?.scaleFactor || 5, // Default to 5 if not provided
+                transparentColors: options?.transparentColors || [],
+                tolerance: options?.tolerance ?? null,
             });
         } catch (error) {
             console.error("Error uploading file to library:", error);
@@ -175,7 +193,17 @@ export function useLibrary(user: User | null) {
         if (!item || item.type !== 'image' || !item.dataUrl) return;
 
         try {
-            const response = await fetch(item.dataUrl);
+            // Prefer original image if available (allows reset)
+            let urlToLoad = item.dataUrl;
+            if (item.originalStoragePath) {
+                try {
+                    urlToLoad = await getDownloadURL(ref(storage, item.originalStoragePath));
+                } catch (e) {
+                    console.warn("Could not load original image, falling back to current.", e);
+                }
+            }
+
+            const response = await fetch(urlToLoad);
             const blob = await response.blob();
             const reader = new FileReader();
             reader.onloadend = () => {
@@ -254,6 +282,30 @@ export function useLibrary(user: User | null) {
 
     const handleCancelDeleteLibraryItem = () => setDeletingLibraryItem(null);
 
+    const publishToPublicGallery = useCallback(async (item: LibraryImage, title: string, description?: string) => {
+        if (!user || user.isAnonymous) {
+            alert("Debes iniciar sesión para publicar en la galería.");
+            return;
+        }
+
+        try {
+            await addDoc(collection(db, 'public_gallery'), {
+                originalLibraryId: item.id,
+                imageUrl: item.dataUrl,
+                title: title,
+                description: description || '',
+                authorId: user.uid,
+                authorName: user.displayName || 'Anonymous',
+                createdAt: serverTimestamp(),
+                likes: 0
+            });
+            alert("¡Imagen publicada en la galería!");
+        } catch (error) {
+            console.error("Error publishing to gallery:", error);
+            alert("Error al publicar.");
+        }
+    }, [user]);
+
     return {
         libraryItems,
         imageToEdit,
@@ -267,5 +319,6 @@ export function useLibrary(user: User | null) {
         onCancelDeleteLibraryItem: handleCancelDeleteLibraryItem,
         onCancelEditTransparency: () => setImageToEdit(null),
         onMoveItems: handleMoveItems,
+        publishToPublicGallery
     };
 }

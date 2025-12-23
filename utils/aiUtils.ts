@@ -51,7 +51,7 @@ export const prepareAIRequest = (
                 }
                 if (enhancementChromaKey && enhancementChromaKey !== 'none') {
                     const colorHex = enhancementChromaKey === 'green' ? '#00FF00' : '#0000FF';
-                    finalPrompt += `Importante: La imagen resultante DEBE tener un fondo de croma sólido y uniforme de color ${enhancementChromaKey} (${colorHex}). El sujeto principal no debe contener este color.`;
+                    finalPrompt += `Importante: La imagen resultante DEBE tener un fondo de croma sólido y uniforme de color ${enhancementChromaKey} (${colorHex}). El sujeto principal no debe contener este color. El objeto debe estar iluminado neutramente y NO debe reflejar el color del fondo ni tener contaminación lumínica (color spill) del croma en sus bordes o superficies. Para objetos transparentes o reflectantes (vidrio, metal, agua), los reflejos y refracciones DEBEN provenir de un entorno de estudio neutro imaginario (blanco/gris), IGNORANDO FÍSICAMENTE el color verde/azul del fondo para estos efectos. ¡CRÍTICO! Genera UNA SOLA IMAGEN integrada. NO generes collages, ni comparaciones "antes/después", ni pantallas dividida. Solo el objeto final sobre el fondo croma.`;
                 }
 
                 // No debug image for text only input, maybe we can add a placeholder?
@@ -125,7 +125,7 @@ export const prepareAIRequest = (
                 if (enhancementNegativePrompt && enhancementNegativePrompt.trim()) promptParts.push(`Asegúrate de evitar estrictamente lo siguiente: "${enhancementNegativePrompt}".`);
                 if (enhancementChromaKey && enhancementChromaKey !== 'none') {
                     const colorHex = enhancementChromaKey === 'green' ? '#00FF00' : '#0000FF';
-                    promptParts.push(`Importante: La imagen resultante DEBE tener un fondo de croma sólido y uniforme de color ${enhancementChromaKey} (${colorHex}). El sujeto principal no debe contener este color.`);
+                    promptParts.push(`Importante: La imagen resultante DEBE tener un fondo de croma sólido y uniforme de color ${enhancementChromaKey} (${colorHex}). El sujeto principal no debe contener este color. El objeto debe estar iluminado neutramente y NO debe reflejar el color del fondo ni tener contaminación lumínica (color spill) del croma en sus bordes o superficies. Para objetos transparentes o reflectantes (vidrio, metal, agua), los reflejos y refracciones DEBEN provenir de un entorno de estudio neutro imaginario (blanco/gris), IGNORANDO FÍSICAMENTE el color verde/azul del fondo para estos efectos. ¡CRÍTICO! Genera UNA SOLA IMAGEN integrada. NO generes collages, ni comparaciones "antes/después", ni pantallas dividida. Solo el objeto final sobre el fondo croma.`);
                 }
                 finalPrompt = promptParts.join(' ');
             }

@@ -26,6 +26,8 @@ import { QuickAccessBar } from './components/QuickAccessBar';
 import { ToolSelectorModal } from './components/modals/ToolSelectorModal';
 import { WorkspaceTemplatesPopover } from './components/WorkspaceTemplatesPopover';
 import { AIPanel } from './components/AIPanel';
+import { PublicGallery } from './components/PublicGallery';
+import { useCredits } from './hooks/useCredits';
 
 import { BackgroundImportModal } from './components/modals/BackgroundImportModal';
 import { ConfirmDeleteModal } from './components/modals/ConfirmDeleteModal';
@@ -61,10 +63,11 @@ function useAppUI() {
     const [showClearConfirm, setShowClearConfirm] = useState(false);
     const [isCanvasSizeModalOpen, setCanvasSizeModalOpen] = useState(false);
     const [isProjectGalleryOpen, setProjectGalleryOpen] = useState(false);
+    const [isPublicGalleryOpen, setIsPublicGalleryOpen] = useState(false);
     const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
     const [isRightSidebarVisible, setIsRightSidebarVisible] = useState(false);
     const [isLeftSidebarVisible, setIsLeftSidebarVisible] = useState(false);
-    const [isHeaderVisible, setIsHeaderVisible] = useState(false);
+    const [isHeaderVisible, setIsHeaderVisible] = useState(true);
     const [rightSidebarTopHeight, setRightSidebarTopHeight] = useState<number | undefined>(undefined);
     const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -200,6 +203,7 @@ function useAppUI() {
         showClearConfirm, setShowClearConfirm,
         isCanvasSizeModalOpen, setCanvasSizeModalOpen,
         isProjectGalleryOpen, setProjectGalleryOpen,
+        isPublicGalleryOpen, setIsPublicGalleryOpen,
         isResetConfirmOpen, setIsResetConfirmOpen,
         isRightSidebarVisible, setIsRightSidebarVisible,
         isLeftSidebarVisible, setIsLeftSidebarVisible,
@@ -472,10 +476,12 @@ function useProjectManager(
  */
 function useAI(
     dispatch: React.Dispatch<any>,
-    onImportToLibrary: (file: File, parentId: string | null, options?: { scaleFactor?: number }) => void,
+    onImportToLibrary: (file: File, parentId: string | null, options?: { scaleFactor?: number, transparentColors?: { r: number, g: number, b: number }[], tolerance?: number, originalFile?: File }) => void,
     handleSelectItem: (id: string | null) => void,
     setTool: (tool: Tool) => void,
     currentScaleFactor: number,
+    credits: number | null,
+    deductCredit: () => Promise<boolean>,
     inspectRequest?: (payload: { model: string; parts: any[]; config?: any }) => Promise<boolean>
 ) {
     const [isEnhancing, setIsEnhancing] = useState(false);
@@ -573,12 +579,12 @@ function useAI(
         }, 10);
     }, [getCompositeCanvas, getCombinedBbox]);
 
-    const processChromaKey = (image: HTMLImageElement): HTMLCanvasElement => {
+    const processChromaKey = (image: HTMLImageElement): { canvas: HTMLCanvasElement, transparentColors: { r: number, g: number, b: number }[], tolerance: number } => {
         const canvas = document.createElement('canvas');
         canvas.width = image.width;
         canvas.height = image.height;
         const ctx = canvas.getContext('2d');
-        if (!ctx) return canvas;
+        if (!ctx) return { canvas, transparentColors: [], tolerance: 0 };
 
         ctx.drawImage(image, 0, 0);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -598,6 +604,14 @@ function useAI(
             cornerColors.push({ r: data[i], g: data[i + 1], b: data[i + 2] });
         });
 
+        // De-duplicate corners colors very roughly to return unique colors for editor
+        const uniqueColors: { r: number, g: number, b: number }[] = [];
+        cornerColors.forEach(c => {
+            if (!uniqueColors.some(uc => Math.abs(uc.r - c.r) < 5 && Math.abs(uc.g - c.g) < 5 && Math.abs(uc.b - c.b) < 5)) {
+                uniqueColors.push(c);
+            }
+        });
+
         const tolerance = 60;
         const isMatch = (r: number, g: number, b: number, target: { r: number, g: number, b: number }) => {
             return Math.abs(r - target.r) < tolerance &&
@@ -615,7 +629,7 @@ function useAI(
         }
 
         ctx.putImageData(imageData, 0, 0);
-        return canvas;
+        return { canvas, transparentColors: uniqueColors, tolerance };
     };
 
     const handleUpdateDebugInfo = useCallback((
@@ -647,6 +661,18 @@ function useAI(
         if (!requestData) {
             setIsEnhancing(false);
             alert("No se pudo preparar la solicitud. Verifica los campos requeridos.");
+            return;
+        }
+
+        if (credits === null) {
+            setIsEnhancing(false);
+            alert("Debes iniciar sesión para usar la IA (2 créditos gratis).");
+            return;
+        }
+
+        if (credits <= 0) {
+            setIsEnhancing(false);
+            alert("No tienes suficientes créditos para usar la función de IA.");
             return;
         }
 
@@ -688,6 +714,10 @@ function useAI(
             }
 
             if (newImageBase64) {
+                // Deduct credit on successful generation
+                if (deductCredit) {
+                    deductCredit();
+                }
                 const img = new Image();
                 img.onload = async () => {
                     const newName = `IA: ${finalPrompt.substring(0, 20)}...`;
@@ -696,11 +726,22 @@ function useAI(
                     let finalImg = img;
                     let finalScaleFactor = newScaleFactor;
                     let processedDataUrl = `data:image/png;base64,${newImageBase64}`;
+                    let transparentColors: { r: number, g: number, b: number }[] = [];
+                    let tolerance: number | undefined = undefined;
+                    let originalFile: File | undefined = undefined;
 
                     // Auto-Chroma Processing
                     if (payload.enhancementChromaKey && payload.enhancementChromaKey !== 'none') {
-                        const processedCanvas = processChromaKey(img);
-                        processedDataUrl = processedCanvas.toDataURL('image/png');
+                        const result = processChromaKey(img);
+                        processedDataUrl = result.canvas.toDataURL('image/png');
+                        transparentColors = result.transparentColors;
+                        tolerance = result.tolerance;
+
+                        // Prepare original file
+                        const res = await fetch(`data:image/png;base64,${newImageBase64}`);
+                        const blob = await res.blob();
+                        originalFile = new File([blob], `${newName}_original.png`, { type: 'image/png' });
+
                         const processedImg = new Image();
                         await new Promise((resolve) => {
                             processedImg.onload = resolve;
@@ -751,7 +792,12 @@ function useAI(
                     // Note: Composition images might be large, but user might still want them in library.
                     if (payload.shouldAddToLibrary) {
                         fetch(processedDataUrl).then(res => res.blob()).then(blob => {
-                            if (blob) onImportToLibrary(new File([blob], `${newName}.png`, { type: 'image/png' }), null, { scaleFactor: finalScaleFactor });
+                            if (blob) onImportToLibrary(new File([blob], `${newName}.png`, { type: 'image/png' }), null, {
+                                scaleFactor: finalScaleFactor,
+                                transparentColors,
+                                tolerance,
+                                originalFile
+                            });
                         });
                     }
 
@@ -810,7 +856,7 @@ function useAI(
         } finally {
             setIsEnhancing(false);
         }
-    }, [dispatch, onImportToLibrary, handleSelectItem, setTool, getCompositeCanvas, getCombinedBbox, inspectRequest]);
+    }, [dispatch, onImportToLibrary, handleSelectItem, setTool, getCompositeCanvas, getCombinedBbox, inspectRequest, credits, deductCredit]);
 
     return {
         isEnhancing,
@@ -871,6 +917,30 @@ export function App() {
 
     const inspectAIRequest = useCallback((payload: { model: string; parts: any[]; config?: any }) => {
         return new Promise<boolean>((resolve) => {
+            // ONLY SHOW DEBUG MODAL FOR ADMINS
+            // We need to access 'role' here. Since 'role' comes from useCredits which is used below,
+            // we have a closure issue if useCredits is defined after.
+            // However, useCredits is called inside App component, but 'inspectAIRequest' is also defined inside App.
+            // We just need to ensure 'role' is available in the dependency array or accessible via ref if needed.
+            // Wait, inspectAIRequest is defined BEFORE useCredits call in the current file structure.
+            // We need to move useCredits call UP or use a Ref for the role to access it here without re-creating the function constantly
+            // OR just add 'role' to dependency array (which might re-create it often, but that's fine for this app).
+
+            // Actually, let's look at where useCredits is called. Line 919.
+            // inspectAIRequest is line 891.
+            // I should access 'role' from a Ref to avoid breaking changes or re-ordering too much code?
+            // Or just check it inside. But I can't check 'role' if it's not defined yet.
+            // BETTER PLAN: Move 'useCredits' call to top of App component (standard hook practice)
+            // or just rely on 'ai' which passes it?
+            // 'ai' hook uses 'inspectAIRequest' as a prop.
+
+            // Let's rely on a 'roleRef' that we verify.
+
+            if (roleRef.current !== 'admin') {
+                resolve(true);
+                return;
+            }
+
             setInspectorPayload(payload);
             setInspectorResolve(() => resolve);
         });
@@ -897,6 +967,10 @@ export function App() {
     const { getMinZoom, ...canvasView } = useCanvasView(mainAreaRef, canvasSize);
     const templates = useWorkspaceTemplates();
     const quickAccess = useQuickAccess();
+    const { credits, deductCredit, role } = useCredits(user);
+    // Keep a ref to role for the callback
+    const roleRef = useRef(role);
+    useEffect(() => { roleRef.current = role; }, [role]);
 
     const handleSelectItem = useCallback((id: string | null) => {
         setSelectedItemIds(id ? [id] : []);
@@ -905,7 +979,7 @@ export function App() {
         }
     }, [selection]);
 
-    const ai = useAI(dispatch, library.onImportToLibrary, handleSelectItem, setTool, scaleFactor, inspectAIRequest);
+    const ai = useAI(dispatch, library.onImportToLibrary, handleSelectItem, setTool, scaleFactor, credits, deductCredit, inspectAIRequest);
     const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
 
     const loadAllToolSettings = useCallback((settings: any) => {
@@ -1239,13 +1313,17 @@ export function App() {
     }, [dispatch]);
 
     const handleConfirmClear = useCallback(() => { dispatch({ type: 'CLEAR_CANVAS' }); ui.setShowClearConfirm(false); }, [dispatch, ui]);
-    const handleSaveItemToLibrary = useCallback((imageDataUrl: string, name: string) => {
-        fetch(imageDataUrl).then(res => res.blob()).then(blob => {
-            if (blob) {
-                const filename = name.endsWith('.png') ? name : `${name}.png`;
-                library.onImportToLibrary(new File([blob], filename, { type: 'image/png' }), null);
-            }
-        });
+    const handleSaveItemToLibrary = useCallback((fileOrUrl: string | File, name?: string) => {
+        if (fileOrUrl instanceof File) {
+            library.onImportToLibrary(fileOrUrl, null);
+        } else if (typeof fileOrUrl === 'string' && name) {
+            fetch(fileOrUrl).then(res => res.blob()).then(blob => {
+                if (blob) {
+                    const filename = name.endsWith('.png') ? name : `${name}.png`;
+                    library.onImportToLibrary(new File([blob], filename, { type: 'image/png' }), null);
+                }
+            });
+        }
     }, [library]);
 
     const handleCommitText = useCallback((textState: { position: Point; value: string; activeItemId: string; }) => {
@@ -1425,7 +1503,7 @@ export function App() {
                 v0.5.3-debug-render-fix
             </div>
             {/* Modals & Overlays */}
-            {ui.isExportModalOpen && <ExportModal isOpen={ui.isExportModalOpen} onClose={() => ui.setExportModalOpen(false)} drawableObjects={drawableObjects.filter((o): o is SketchObject => o.type === 'object')} canvasSize={canvasSize} />}
+            {ui.isExportModalOpen && <ExportModal isOpen={ui.isExportModalOpen} onClose={() => ui.setExportModalOpen(false)} drawableObjects={drawableObjects.filter((o): o is SketchObject => o.type === 'object')} canvasSize={canvasSize} onSaveToLibrary={handleSaveItemToLibrary} />}
             {ui.isSingleExportModalOpen && <SingleObjectExportModal isOpen={ui.isSingleExportModalOpen} onClose={() => ui.setSingleExportModalOpen(false)} item={activeItem as SketchObject} canvasSize={canvasSize} onSaveToLibrary={handleSaveItemToLibrary} />}
             {ui.deletingItemId && <ConfirmDeleteModal isOpen={!!ui.deletingItemId} onCancel={() => ui.setDeletingItemId(null)} onConfirm={handleConfirmDelete} itemName={itemToDelete?.name || ''} itemType={itemToDelete?.type === 'group' ? 'group' : 'object'} />}
             {library.deletingLibraryItem && <ConfirmDeleteLibraryItemModal isOpen={!!library.deletingLibraryItem} onCancel={library.onCancelDeleteLibraryItem} onConfirm={library.onConfirmDeleteLibraryItem} itemToDelete={library.deletingLibraryItem} />}
@@ -1446,6 +1524,10 @@ export function App() {
                 onDelete={projects.deleteProject}
                 onSaveLocally={(name) => projects.saveLocally(name, () => ({ currentState, guides, toolSettings: { ...toolSettings }, quickAccess: quickAccess.quickAccessSettings }))}
                 onLoadFromFile={projects.loadFromFile}
+                libraryItems={library.libraryItems}
+                onAddLibraryItemToScene={(item) => addItem(item.type, item.dataUrl)}
+                onPublishLibraryItem={(item) => library.publishToPublicGallery(item, item.name || 'Sin Título')}
+                onDeleteLibraryItem={library.onConfirmDeleteLibraryItem}
             />
 
             {/* Main Header */}
@@ -1455,7 +1537,11 @@ export function App() {
                         <h1 className="text-xl font-bold">Sketcher</h1>
                         <button onClick={() => ui.setProjectGalleryOpen(true)} className="flex items-center gap-2 p-2 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary border border-theme-bg-tertiary transition-colors text-sm">
                             <GalleryIcon className="w-5 h-5" />
-                            <span>Galería</span>
+                            <span>Proyectos</span>
+                        </button>
+                        <button onClick={() => ui.setIsPublicGalleryOpen(true)} className="flex items-center gap-2 p-2 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary border border-theme-bg-tertiary transition-colors text-sm">
+                            <SparklesIcon className="w-5 h-5 text-theme-accent-primary" />
+                            <span>Galería Pública</span>
                         </button>
                         <button ref={workspaceButtonRef} onClick={() => setWorkspacePopoverOpen(p => !p)} className="flex items-center gap-2 p-2 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary border border-theme-bg-tertiary transition-colors text-sm relative">
                             <BookmarkIcon className="w-5 h-5" />
@@ -1516,7 +1602,7 @@ export function App() {
                         <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary text-theme-text-secondary">
                             {theme === 'dark' ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
                         </button>
-                        <Auth user={user} />
+                        <Auth user={user} credits={credits} />
                     </div>
                 </header>
             )}
@@ -1655,6 +1741,9 @@ export function App() {
                             canRedo={canRedo}
                             onRenderComplete={setLastRenderedImage}
                             onInspectRequest={inspectAIRequest}
+                            credits={credits}
+                            deductCredit={deductCredit}
+                            onSaveToLibrary={handleSaveItemToLibrary}
                         />
                     </div>
                 </main>
@@ -1673,7 +1762,17 @@ export function App() {
                         </div>
                         <div onPointerDown={ui.handlePointerDownResize} className="flex-shrink-0 h-1.5 bg-theme-bg-secondary hover:bg-theme-accent-primary transition-colors cursor-ns-resize" />
                         <div className="flex-grow min-h-0">
-                            <Library user={user} items={library.libraryItems} onImportImage={library.onImportToLibrary} onCreateFolder={library.onCreateFolder} onEditItem={library.onEditTransparency} onDeleteItem={library.onDeleteLibraryItem} onAddItemToScene={(id) => onDropOnCanvas({ type: 'library-item', id }, activeItemId, setSelectedItemIds)} onMoveItems={library.onMoveItems} />
+                            <Library
+                                user={user}
+                                items={library.libraryItems}
+                                onImportImage={library.onImportToLibrary}
+                                onCreateFolder={library.onCreateFolder}
+                                onEditItem={library.onEditTransparency}
+                                onDeleteItem={library.onDeleteLibraryItem}
+                                onAddItemToScene={(id) => onDropOnCanvas({ type: 'library-item', id }, activeItemId, setSelectedItemIds)}
+                                onMoveItems={library.onMoveItems}
+                                onPublish={library.publishToPublicGallery}
+                            />
                         </div>
                     </aside>
                 )}
@@ -1688,6 +1787,7 @@ export function App() {
                 onConfirm={confirmInspector}
                 payload={inspectorPayload}
             />
+            <PublicGallery isOpen={ui.isPublicGalleryOpen} onClose={() => ui.setIsPublicGalleryOpen(false)} />
         </div >
     );
 }
@@ -1700,12 +1800,19 @@ interface ProjectGalleryModalProps {
     isOpen: boolean; onClose: () => void; user: User | null; projects: Project[]; isLoading: boolean;
     onSave: (name: string) => Promise<void>; onLoad: (project: Project) => Promise<void>; onDelete: (project: Project) => Promise<void>;
     onSaveLocally: (name: string) => Promise<void>; onLoadFromFile: (file: File) => Promise<void>;
+    libraryItems: any[]; onAddLibraryItemToScene: (item: any) => void; onPublishLibraryItem: (item: any) => void; onDeleteLibraryItem: (id: string) => void;
 }
 
-const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({ isOpen, onClose, user, projects, isLoading, onSave, onLoad, onDelete, onSaveLocally, onLoadFromFile }) => {
+const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({
+    isOpen, onClose, user, projects, isLoading, onSave, onLoad, onDelete, onSaveLocally, onLoadFromFile,
+    libraryItems, onAddLibraryItemToScene, onPublishLibraryItem, onDeleteLibraryItem
+}) => {
+    const [activeTab, setActiveTab] = useState<'projects' | 'library'>('projects');
     const [newProjectName, setNewProjectName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [deletingProject, setDeletingProject] = useState<Project | null>(null);
+    const [deletingLibraryItem, setDeletingLibraryItem] = useState<any | null>(null);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isSavingLocal, setIsSavingLocal] = useState(false);
     const [localFileName, setLocalFileName] = useState('mi-boceto');
@@ -1718,15 +1825,23 @@ const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({ isOpen, onClo
     const handleCancelSaveLocal = () => setIsSavingLocal(false);
     const handleSave = async () => { if (!newProjectName.trim()) { alert("Please enter a project name."); return; } setIsSaving(true); try { await onSave(newProjectName.trim()); setNewProjectName(''); } catch (error) { console.error("Failed to save project:", error); alert(`Error saving project: ${error instanceof Error ? error.message : String(error)}`); } finally { setIsSaving(false); } };
     const handleDeleteConfirm = async () => { if (deletingProject) { await onDelete(deletingProject); setDeletingProject(null); } };
+    const handleDeleteLibraryItemConfirm = async () => { if (deletingLibraryItem) { onDeleteLibraryItem(deletingLibraryItem.id); setDeletingLibraryItem(null); } };
+
     const handleFileLoadClick = () => fileInputRef.current?.click();
     const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files?.[0]) { await onLoadFromFile(e.target.files[0]); } if (e.target) e.target.value = ''; };
 
     if (!isOpen) return null;
     return (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-            <div className="bg-theme-bg-secondary text-theme-text-primary rounded-lg shadow-xl p-6 w-full max-w-4xl h-full max-h-[90vh] flex flex-col">
-                <div className="flex justify-between items-center mb-4 flex-shrink-0">
-                    <h2 className="text-2xl font-bold">Galería de Proyectos</h2>
+            <div className="bg-theme-bg-secondary text-theme-text-primary rounded-lg shadow-xl p-6 w-full max-w-5xl h-full max-h-[90vh] flex flex-col">
+                <div className="flex justify-between items-center mb-4 flex-shrink-0 border-b border-theme-bg-tertiary pb-4">
+                    <div className="flex items-center gap-6">
+                        <h2 className="text-2xl font-bold">Galería</h2>
+                        <div className="flex bg-theme-bg-tertiary rounded-lg p-1">
+                            <button onClick={() => setActiveTab('projects')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${activeTab === 'projects' ? 'bg-theme-bg-primary text-theme-text-primary shadow-sm' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}>Proyectos</button>
+                            <button onClick={() => setActiveTab('library')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${activeTab === 'library' ? 'bg-theme-bg-primary text-theme-text-primary shadow-sm' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}>Mi Librería</button>
+                        </div>
+                    </div>
                     {isSavingLocal ? (
                         <div className="flex items-center gap-2">
                             <input ref={localSaveInputRef} type="text" value={localFileName} onChange={(e) => setLocalFileName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmSaveLocal(); if (e.key === 'Escape') handleCancelSaveLocal(); }} placeholder="Nombre del archivo..." className="bg-theme-bg-secondary text-theme-text-primary text-sm rounded-md p-2 border border-theme-bg-tertiary focus:ring-1 focus:ring-theme-accent-primary focus:outline-none" />
@@ -1742,36 +1857,61 @@ const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({ isOpen, onClo
                         </div>
                     )}
                 </div>
-                {!user ? (<div className="flex-grow flex flex-col items-center justify-center text-center text-theme-text-secondary"> <UserIcon className="w-16 h-16 mb-4" /> <h3 className="text-xl font-bold">Por favor, inicie sesión</h3> <p>Inicie sesión para guardar y cargar sus proyectos en la nube.</p> </div>
-                ) : (<>
-                    <div className="bg-theme-bg-primary p-4 rounded-lg mb-4 flex-shrink-0">
-                        <h3 className="text-lg font-semibold mb-2">Guardar Lienzo Actual</h3>
-                        <div className="flex items-center gap-2">
-                            <input type="text" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="Nombre del nuevo proyecto..." className="flex-grow bg-theme-bg-secondary text-theme-text-primary text-sm rounded-md p-2 border border-theme-bg-tertiary focus:ring-1 focus:ring-theme-accent-primary focus:outline-none" disabled={isSaving} />
-                            <button onClick={handleSave} disabled={!newProjectName.trim() || isSaving || !user} className="px-4 py-2 rounded-md bg-theme-accent-primary hover:bg-theme-accent-hover text-white font-semibold disabled:bg-gray-500 disabled:cursor-not-allowed" title={!user ? "Inicie sesión para guardar en la nube" : ""}> {isSaving ? 'Guardando...' : 'Guardar en la Nube'} </button>
-                        </div>
-                    </div>
-                    <div className="flex-grow overflow-y-auto pr-2">
-                        {isLoading ? <div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-4 border-theme-accent-primary border-t-transparent rounded-full animate-spin"></div></div>
-                            : projects.length === 0 ? <div className="text-center text-theme-text-secondary py-16"> <p>No se encontraron proyectos guardados.</p> <p className="text-sm">¡Guarda tu lienzo actual para empezar!</p> </div>
+
+                {!user ? (<div className="flex-grow flex flex-col items-center justify-center text-center text-theme-text-secondary"> <UserIcon className="w-16 h-16 mb-4" /> <h3 className="text-xl font-bold">Por favor, inicie sesión</h3> <p>Inicie sesión para acceder a su galería en la nube.</p> </div>
+                ) : (
+                    activeTab === 'projects' ? (
+                        <>
+                            <div className="bg-theme-bg-primary p-4 rounded-lg mb-4 flex-shrink-0 border border-theme-bg-tertiary">
+                                <h3 className="text-lg font-semibold mb-2">Guardar Lienzo Actual en Proyectos</h3>
+                                <div className="flex items-center gap-2">
+                                    <input type="text" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="Nombre del nuevo proyecto..." className="flex-grow bg-theme-bg-secondary text-theme-text-primary text-sm rounded-md p-2 border border-theme-bg-tertiary focus:ring-1 focus:ring-theme-accent-primary focus:outline-none" disabled={isSaving} />
+                                    <button onClick={handleSave} disabled={!newProjectName.trim() || isSaving || !user} className="px-4 py-2 rounded-md bg-theme-accent-primary hover:bg-theme-accent-hover text-white font-semibold disabled:bg-gray-500 disabled:cursor-not-allowed"> {isSaving ? 'Guardando...' : 'Guardar Nuevo'} </button>
+                                </div>
+                            </div>
+                            <div className="flex-grow overflow-y-auto pr-2 custom-scrollbar">
+                                {isLoading ? <div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-4 border-theme-accent-primary border-t-transparent rounded-full animate-spin"></div></div>
+                                    : projects.length === 0 ? <div className="text-center text-theme-text-secondary py-16"> <p>No se encontraron proyectos guardados.</p> <p className="text-sm">¡Guarda tu lienzo actual para empezar!</p> </div>
+                                        : <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                            {projects.map(p => (
+                                                <div key={p.id} className="group relative bg-theme-bg-tertiary rounded-lg overflow-hidden shadow-md hover:shadow-xl transition-all border border-theme-bg-tertiary/50">
+                                                    <div className="aspect-video bg-white/5 flex items-center justify-center overflow-hidden"><img src={p.thumbnailUrl} alt={p.name} className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500" /></div>
+                                                    <div className="p-3"><p className="font-semibold text-sm truncate text-theme-text-primary">{p.name}</p></div>
+                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 backdrop-blur-sm">
+                                                        <button onClick={() => onLoad(p)} className="px-4 py-2 rounded-md bg-theme-accent-primary hover:bg-theme-accent-hover text-white w-3/4 font-medium shadow-lg">Cargar</button>
+                                                        <button onClick={() => setDeletingProject(p)} className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-500 text-white w-3/4 font-medium shadow-lg">Eliminar</button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                }
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex-grow overflow-y-auto pr-2 custom-scrollbar">
+                            {libraryItems.length === 0 ? <div className="text-center text-theme-text-secondary py-16"> <p>Tu librería está vacía.</p> <p className="text-sm">Guarda elementos desde el lienzo o sube imágenes.</p> </div>
                                 : <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                    {projects.map(p => (
-                                        <div key={p.id} className="group relative bg-theme-bg-tertiary rounded-lg overflow-hidden shadow-md">
-                                            <div className="aspect-video bg-white/10 flex items-center justify-center"><img src={p.thumbnailUrl} alt={p.name} className="w-full h-full object-cover" /></div>
-                                            <div className="p-2"><p className="font-semibold text-sm truncate">{p.name}</p></div>
-                                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                                                <button onClick={() => onLoad(p)} className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-500 text-white w-3/4">Cargar</button>
-                                                <button onClick={() => setDeletingProject(p)} className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-500 text-white w-3/4">Eliminar</button>
+                                    {libraryItems.map(item => (
+                                        <div key={item.id} className="group relative bg-theme-bg-tertiary rounded-lg overflow-hidden shadow-md hover:shadow-xl transition-all border border-theme-bg-tertiary/50">
+                                            <div className="aspect-square bg-white/5 flex items-center justify-center overflow-hidden p-2">
+                                                <img src={item.dataUrl} alt={item.name} className="w-full h-full object-contain" />
+                                            </div>
+                                            <div className="p-3"><p className="font-semibold text-sm truncate text-theme-text-primary">{item.name}</p></div>
+                                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 backdrop-blur-sm">
+                                                <button onClick={() => { onAddLibraryItemToScene(item); onClose(); }} className="px-4 py-2 rounded-md bg-green-600 hover:bg-green-500 text-white w-3/4 font-medium shadow-lg flex items-center justify-center gap-2"><ArrowUpIcon className="w-4 h-4" /> Añadir</button>
+                                                <button onClick={() => onPublishLibraryItem(item)} className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-500 text-white w-3/4 font-medium shadow-lg flex items-center justify-center gap-2"><GalleryIcon className="w-4 h-4" /> Publicar</button>
+                                                <button onClick={() => setDeletingLibraryItem(item)} className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-500 text-white w-3/4 font-medium shadow-lg flex items-center justify-center gap-2"><XIcon className="w-4 h-4" /> Eliminar</button>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
-                        }
-                    </div>
-                </>
+                            }
+                        </div>
+                    )
                 )}
             </div>
-            {deletingProject && <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"> <div className="bg-theme-bg-secondary rounded-lg p-6 shadow-xl"> <h3 className="text-lg font-bold">Confirmar Eliminación</h3> <p className="my-2 text-theme-text-secondary">¿Estás seguro de que quieres eliminar "{deletingProject.name}"? Esta acción no se puede deshacer.</p> <div className="flex justify-end gap-4 mt-4"> <button onClick={() => setDeletingProject(null)} className="px-4 py-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover">Cancelar</button> <button onClick={handleDeleteConfirm} className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-500 text-white">Eliminar</button> </div> </div> </div>}
+            {deletingProject && <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"> <div className="bg-theme-bg-secondary rounded-lg p-6 shadow-xl border border-theme-bg-tertiary max-w-sm w-full mx-4"> <h3 className="text-lg font-bold text-theme-text-primary">Confirmar Eliminación</h3> <p className="my-4 text-theme-text-secondary">¿Estás seguro de que quieres eliminar el proyecto <span className="text-theme-text-primary font-bold">"{deletingProject.name}"</span>?<br />Esta acción no se puede deshacer.</p> <div className="flex justify-end gap-3"> <button onClick={() => setDeletingProject(null)} className="px-4 py-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary">Cancelar</button> <button onClick={handleDeleteConfirm} className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-500 text-white font-medium shadow-lg">Eliminar</button> </div> </div> </div>}
+            {deletingLibraryItem && <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"> <div className="bg-theme-bg-secondary rounded-lg p-6 shadow-xl border border-theme-bg-tertiary max-w-sm w-full mx-4"> <h3 className="text-lg font-bold text-theme-text-primary">Confirmar Eliminación</h3> <p className="my-4 text-theme-text-secondary">¿Estás seguro de que quieres eliminar <span className="text-theme-text-primary font-bold">"{deletingLibraryItem.name}"</span> de tu librería?</p> <div className="flex justify-end gap-3"> <button onClick={() => setDeletingLibraryItem(null)} className="px-4 py-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary">Cancelar</button> <button onClick={handleDeleteLibraryItemConfirm} className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-500 text-white font-medium shadow-lg">Eliminar</button> </div> </div> </div>}
         </div>
     );
 };

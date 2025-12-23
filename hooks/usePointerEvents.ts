@@ -1335,6 +1335,55 @@ export function usePointerEvents({
             return;
         }
         if (currentAction.type === 'crop') {
+            const { startRect, startPoint, handle } = currentAction;
+            // Use rawPoint (or finalPoint if you want snap) instead of 'point'.
+            // Based on other tools using rawPoint for transforms, we use rawPoint here.
+            const dx = rawPoint.x - startPoint.x;
+            const dy = rawPoint.y - startPoint.y;
+
+            let newRect = { ...startRect };
+
+            if (handle === 'move') {
+                newRect.x = startRect.x + dx;
+                newRect.y = startRect.y + dy;
+            } else {
+                let newX = startRect.x;
+                let newY = startRect.y;
+                let newWidth = startRect.width;
+                let newHeight = startRect.height;
+                let newRight = newX + newWidth;
+                let newBottom = newY + newHeight;
+
+                if (handle.includes('l')) {
+                    newX = startRect.x + dx;
+                    newWidth = newRight - newX;
+                }
+                if (handle.includes('r')) {
+                    newWidth = startRect.width + dx;
+                }
+                if (handle.includes('t')) {
+                    newY = startRect.y + dy;
+                    newHeight = newBottom - newY;
+                }
+                if (handle.includes('b')) {
+                    newHeight = startRect.height + dy;
+                }
+
+                // Normalize rect (handle negative width/height)
+                if (newWidth < 0) {
+                    newX = newX + newWidth;
+                    newWidth = Math.abs(newWidth);
+                }
+                if (newHeight < 0) {
+                    newY = newY + newHeight;
+                    newHeight = Math.abs(newHeight);
+                }
+
+                newRect = { x: newX, y: newY, width: newWidth, height: newHeight };
+            }
+
+            setCropRect(newRect);
+            return;
         }
         if (currentAction.type === 'transform' && transformState) {
             const pointToUse = rawPoint;

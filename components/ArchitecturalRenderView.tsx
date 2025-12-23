@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { PhotoIcon, SparklesIcon, UploadIcon, UndoIcon, RedoIcon, SaveIcon, XIcon as CloseIcon, ZoomInIcon, ZoomOutIcon, MaximizeIcon, DownloadIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
+import { PhotoIcon, SparklesIcon, UploadIcon, UndoIcon, RedoIcon, SaveIcon, XIcon as CloseIcon, ZoomInIcon, ZoomOutIcon, MaximizeIcon, DownloadIcon, ChevronLeftIcon, ChevronRightIcon, FolderOpenIcon } from './icons';
 import { GoogleGenAI } from "@google/genai";
 import { buildArchitecturalPrompt, ArchitecturalRenderOptions } from '../utils/architecturalPromptBuilder';
 import { prepareVisualPromptingRequest, Region, buildVisualPrompt } from '../services/visualPromptingService';
@@ -17,6 +17,9 @@ interface ArchitecturalRenderViewProps {
     canRedo: boolean;
     onRenderComplete?: (dataUrl: string) => void;
     onInspectRequest?: (payload: { model: string; parts: any[]; config?: any }) => Promise<boolean>;
+    credits: number | null;
+    deductCredit?: () => Promise<boolean>;
+    onSaveToLibrary?: (file: File) => void;
 }
 
 type SceneType = 'exterior' | 'interior';
@@ -33,6 +36,9 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
     isSidebarOpen,
     onRenderComplete,
     onInspectRequest,
+    credits,
+    deductCredit,
+    onSaveToLibrary
 }) => {
     const [sceneType, setSceneType] = useState<SceneType>('exterior');
     const [inputImage, setInputImage] = useState<string | null>(null);
@@ -557,7 +563,6 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
                 updateResult(newResult);
                 pushToHistory(currentResult || currentInput, newResult);
             } else {
-                console.log("Full Response", response);
                 alert("La IA no generó una imagen.");
             }
 
@@ -577,6 +582,16 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
             return;
         }
 
+        if (credits === null) {
+            alert("Debes iniciar sesión para usar la IA (2 créditos gratis).");
+            return;
+        }
+
+        if (credits <= 0) {
+            alert("No tienes suficientes créditos para usar la función de IA.");
+            return;
+        }
+
         setIsGenerating(true);
         setResultImage(null);
         setShowOriginal(false);
@@ -584,14 +599,14 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
         try {
             const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
             const model = GEMINI_MODEL_ID;
-            console.log("Render View using model:", model);
+            // console.log("Render View using model:", model);
 
             // STRICT SEPARATION: User requested that Photorealistic flow NEVER mixes with Visual Prompting.
             // This function is triggered by the Right Sidebar (Architectural Config).
             // It acts STRICTLY as the "Classic" pipeline (Image + Prompt -> Image).
             // Visual Prompting (Regions/Drawings) is handled exclusively by handleProcessChanges in the Left Panel.
 
-            console.log("[Prompt Maestro] Sending Classic Prompt:\n", manualPrompt);
+            // console.log("[Prompt Maestro] Sending Classic Prompt:\n", manualPrompt);
 
             const parts: any[] = [];
             const inputBase64 = inputImage.split(',')[1];
@@ -623,6 +638,7 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
             }
 
             if (newImageBase64) {
+                if (deductCredit) await deductCredit();
                 const newResult = `data:image/png;base64,${newImageBase64}`;
                 updateResult(newResult);
                 pushToHistory(inputImage, newResult);
@@ -647,7 +663,7 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
             const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
             const model = GEMINI_MODEL_ID;
 
-            const prompt = "Upscale this architectural render to 4K resolution. Enhance fine details, sharpen textures, and improve overall clarity while maintaining the exact composition and style of the original image. Output as a high-fidelity photorealistic image.";
+            const prompt = "Upscale this architectural render to 4K resolution. Enhance fine details, sharpen textures, and improve overall clarity while maintaining the exact composition and Aspect Ratio of the original image. Output as a high-fidelity photorealistic image. Do not add black bars or change the framing.";
 
             const base64Data = resultImage.split(',')[1];
             // @ts-ignore
@@ -670,37 +686,26 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
                 updateResult(newResult);
                 pushToHistory(resultImage, newResult);
 
-                // Client-side 4K scaling and download (Matching Sketch behavior)
-                // NEW: respect original Aspect Ratio
+                // --- 4K Processing with Smart AR Correction ---
 
-                // load original aspect ratio asynchronously
-                let originalAR = canvasDimensions.width / canvasDimensions.height;
-                if (inputImageRef.current) {
-                    try {
-                        const detectedAR = await new Promise<number>((resolve) => {
-                            const i = new Image();
-                            i.onload = () => {
-                                if (i.naturalHeight > 0) resolve(i.naturalWidth / i.naturalHeight);
-                                else resolve(0);
-                            };
-                            i.onerror = () => resolve(0);
-                            i.src = inputImageRef.current!;
-                        });
-                        if (detectedAR > 0) originalAR = detectedAR;
-                    } catch (e) {
-                        console.warn("Failed to calculate original AR", e);
-                    }
-                }
+                // 1. Determine Original Aspect Ratio (from Canvas)
+                // We STRICTLY use the canvas dimensions to ensure WYSIWYG (What You See Is What You Get).
+                // If the user cropped the canvas, we want the 4K render to match that crop, not the original input file.
+                const originalAR = canvasDimensions.width / canvasDimensions.height;
 
                 const img = new Image();
                 img.onload = () => {
+
                     const MAX_DIM = 3840;
                     let targetWidth, targetHeight;
 
-                    if (originalAR > 1) {
+                    // 2. Calculate Target Dimensions (4K) based on ORIGINAL Aspect Ratio
+                    if (originalAR >= 1) {
+                        // Landscape/Square
                         targetWidth = MAX_DIM;
                         targetHeight = Math.round(MAX_DIM / originalAR);
                     } else {
+                        // Portrait
                         targetHeight = MAX_DIM;
                         targetWidth = Math.round(MAX_DIM * originalAR);
                     }
@@ -712,8 +717,34 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
                     if (ctx) {
                         ctx.imageSmoothingEnabled = true;
                         ctx.imageSmoothingQuality = 'high';
-                        // Draw stretched to restore correct AR
-                        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+                        // 3. Draw using "Object Fit: Cover" logic (Center Crop)
+                        // This ensures we fill the target dimensions (Original AR) without stretching the AI image.
+                        const aiAR = img.naturalWidth / img.naturalHeight;
+
+                        let renderX = 0;
+                        let renderY = 0;
+                        let renderW = targetWidth;
+                        let renderH = targetHeight;
+
+                        // If AI AR differs from Target AR, we need to calculate crop
+                        if (Math.abs(aiAR - originalAR) > 0.01) {
+                            // If AI is wider than Target -> Crop sides (Fit Height)
+                            if (aiAR > originalAR) {
+                                renderH = targetHeight;
+                                renderW = targetHeight * aiAR;
+                                renderX = (targetWidth - renderW) / 2; // Center horizontally
+                            }
+                            // If AI is taller than Target -> Crop top/bottom (Fit Width)
+                            else {
+                                renderW = targetWidth;
+                                renderH = targetWidth / aiAR;
+                                renderY = (targetHeight - renderH) / 2; // Center vertically
+                            }
+                        }
+
+                        // Draw!
+                        ctx.drawImage(img, renderX, renderY, renderW, renderH);
 
                         canvas.toBlob((blob) => {
                             if (blob) {
@@ -730,8 +761,6 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
                     }
                 };
                 img.src = newResult;
-                img.src = newResult;
-
             } else {
                 alert("La IA no pudo escalar la imagen.");
             }
@@ -745,6 +774,21 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
     };
 
 
+    const handleSaveToLibrary = async () => {
+        if (!resultImage || !onSaveToLibrary) return;
+
+        try {
+            const res = await fetch(resultImage);
+            const blob = await res.blob();
+            const file = new File([blob], `Render_${Date.now()}.png`, { type: 'image/png' });
+            onSaveToLibrary(file);
+            alert("Imagen guardada en la galería.");
+        } catch (error) {
+            console.error("Error saving to library:", error);
+            alert("Error al guardar en la galería.");
+        }
+    };
+
     // -- Options Configuration (Keep existing options arrays) --
     const timeOptions = [{ label: 'Mañana', value: 'morning' }, { label: 'Mediodía', value: 'noon' }, { label: 'Tarde', value: 'afternoon' }, { label: 'Hora Dorada', value: 'golden_hour' }, { label: 'Noche', value: 'night' }];
     const weatherOptions = [{ label: 'Soleado', value: 'sunny' }, { label: 'Nublado', value: 'overcast' }, { label: 'Lluvia', value: 'rainy' }, { label: 'Niebla', value: 'foggy' }];
@@ -755,10 +799,10 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
 
 
     return (
-        <div className="flex w-full h-full bg-[#1e1e1e] relative overflow-hidden">
+        <div className="flex w-full h-full bg-theme-bg-primary relative overflow-hidden">
 
             {/* NEW: Collapsible Left Panel (Configuration) */}
-            <aside className={`${isLeftPanelOpen ? 'w-64' : 'w-0'} bg-[#1e1e1e] border-r border-[#333] transition-all duration-300 flex-shrink-0 overflow-hidden`}>
+            <aside className={`${isLeftPanelOpen ? 'w-64' : 'w-0'} bg-theme-bg-secondary border-r border-theme-bg-tertiary transition-all duration-300 flex-shrink-0 overflow-hidden`}>
                 <VisualPromptingControls
                     regions={regions}
                     onDeleteRegion={handleDeleteRegion}
@@ -797,7 +841,7 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
             <div className="flex-grow flex flex-col h-full relative min-w-0">
 
                 {/* 1.1 Viewport (Image Area) */}
-                <div ref={viewportRef} className="flex-grow bg-black/20 relative overflow-hidden">
+                <div ref={viewportRef} className="flex-grow bg-theme-bg-primary relative overflow-hidden">
                     {/* Image Display Wrapper for Zoom/Pan */}
                     <div className="w-full h-full">
                         {inputImage ? (
@@ -824,7 +868,7 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
                                     <button onClick={handleImport} className="px-6 py-3 bg-theme-accent-primary hover:bg-theme-accent-secondary rounded-lg text-white font-bold shadow-lg shadow-theme-accent-primary/20 transition-all hover:scale-105 flex items-center gap-2">
                                         <UndoIcon className="w-5 h-5 rotate-180" /> Importar Sketch
                                     </button>
-                                    <label className="px-6 py-3 bg-theme-bg-secondary hover:bg-theme-bg-tertiary border border-theme-bg-tertiary rounded-lg text-white font-bold shadow-lg transition-all hover:scale-105 flex items-center gap-2 cursor-pointer">
+                                    <label className="px-6 py-3 bg-theme-bg-secondary hover:bg-theme-bg-tertiary border border-theme-bg-tertiary rounded-lg text-theme-text-primary font-bold shadow-lg transition-all hover:scale-105 flex items-center gap-2 cursor-pointer">
                                         <UploadIcon className="w-5 h-5" /> Subir Imagen
                                         <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
                                     </label>
@@ -834,17 +878,17 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
                     </div>
 
                     {/* Bottom Toolbar (Floating Navigation) */}
-                    <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex items-center gap-4 px-4 py-2 bg-[#121212]/90 backdrop-blur border border-theme-bg-tertiary rounded-full shadow-2xl z-20">
+                    <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex items-center gap-4 px-4 py-2 bg-theme-bg-secondary/95 backdrop-blur border border-theme-bg-tertiary rounded-full shadow-2xl z-20">
                         {/* Zoom Controls */}
                         <div className="flex items-center gap-1">
-                            <button onClick={() => setTransform(p => ({ ...p, zoom: p.zoom / 1.2 }))} className="p-1.5 hover:bg-theme-bg-hover rounded-full text-white transition-colors" title="Zoom Out"><ZoomOutIcon className="w-4 h-4" /></button>
-                            <button onClick={resetView} className="p-1.5 hover:bg-theme-bg-hover rounded-full text-white transition-colors" title="Reset View"><MaximizeIcon className="w-4 h-4" /></button>
-                            <button onClick={() => setTransform(p => ({ ...p, zoom: p.zoom * 1.2 }))} className="p-1.5 hover:bg-theme-bg-hover rounded-full text-white transition-colors" title="Zoom In"><ZoomInIcon className="w-4 h-4" /></button>
+                            <button onClick={() => setTransform(p => ({ ...p, zoom: p.zoom / 1.2 }))} className="p-1.5 hover:bg-theme-bg-hover rounded-full text-theme-text-primary transition-colors" title="Zoom Out"><ZoomOutIcon className="w-4 h-4" /></button>
+                            <button onClick={resetView} className="p-1.5 hover:bg-theme-bg-hover rounded-full text-theme-text-primary transition-colors" title="Reset View"><MaximizeIcon className="w-4 h-4" /></button>
+                            <button onClick={() => setTransform(p => ({ ...p, zoom: p.zoom * 1.2 }))} className="p-1.5 hover:bg-theme-bg-hover rounded-full text-theme-text-primary transition-colors" title="Zoom In"><ZoomInIcon className="w-4 h-4" /></button>
                         </div>
                         <div className="h-4 w-px bg-theme-bg-tertiary"></div>
 
                         {/* Toggle View */}
-                        <button onClick={() => setShowOriginal(!showOriginal)} disabled={!resultImage} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-theme-bg-tertiary hover:bg-theme-bg-hover text-xs font-bold text-white disabled:opacity-50 transition-colors">
+                        <button onClick={() => setShowOriginal(!showOriginal)} disabled={!resultImage} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-theme-bg-tertiary hover:bg-theme-bg-hover text-xs font-bold text-theme-text-primary disabled:opacity-50 transition-colors">
                             {showOriginal ? <SparklesIcon className="w-3 h-3 text-purple-400" /> : <PhotoIcon className="w-3 h-3" />}
                             {showOriginal ? "Ver Render" : "Ver Original"}
                         </button>
@@ -856,7 +900,7 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
                             <button
                                 onClick={handleLocalUndo}
                                 disabled={historyIndex < 0}
-                                className="p-1.5 hover:bg-theme-bg-hover rounded-full text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                className="p-1.5 hover:bg-theme-bg-hover rounded-full text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                                 title="Deshacer Generación"
                             >
                                 <UndoIcon className="w-4 h-4" />
@@ -864,7 +908,7 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
                             <button
                                 onClick={handleLocalRedo}
                                 disabled={historyIndex >= generationHistory.length - 1}
-                                className="p-1.5 hover:bg-theme-bg-hover rounded-full text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                className="p-1.5 hover:bg-theme-bg-hover rounded-full text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                                 title="Rehacer Generación"
                             >
                                 <RedoIcon className="w-4 h-4" />
@@ -881,11 +925,21 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
 
                         <div className="h-4 w-px bg-theme-bg-tertiary"></div>
 
+                        {/* Save to Gallery */}
+                        <button
+                            onClick={handleSaveToLibrary}
+                            disabled={!resultImage}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${resultImage ? 'bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary' : 'bg-transparent text-gray-500 cursor-not-allowed'}`}
+                        >
+                            <FolderOpenIcon className="w-3 h-3" /> Guardar
+                        </button>
+
+
                         {/* Download */}
                         <a
                             href={resultImage || '#'}
                             download={resultImage ? `Render_${Date.now()}.png` : undefined}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${resultImage ? 'bg-theme-bg-tertiary hover:bg-theme-bg-hover text-white' : 'bg-transparent text-gray-500 cursor-not-allowed'}`}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${resultImage ? 'bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary' : 'bg-transparent text-gray-500 cursor-not-allowed'}`}
                             onClick={(e) => !resultImage && e.preventDefault()}
                         >
                             <SaveIcon className="w-3 h-3" /> Descargar
@@ -910,150 +964,7 @@ export const ArchitecturalRenderView: React.FC<ArchitecturalRenderViewProps> = R
                 </div>
 
                 {/* 1.2 Footer (Prompt Editor & Payload Preview) */}
-                <div className="h-64 bg-theme-bg-secondary border-t border-theme-bg-tertiary p-0 z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.3)] grid grid-cols-2 divide-x divide-theme-bg-tertiary">
 
-                    {/* LEFT COLUMN: VISUAL PROMPTING FLOW (Make Changes) */}
-                    <div className="flex flex-col h-full overflow-hidden bg-[#1a1a1a]">
-                        <div className="p-2 border-b border-theme-bg-tertiary flex justify-between items-center bg-[#222]">
-                            <span className="text-[10px] font-bold text-theme-accent-primary uppercase tracking-wider flex items-center gap-2">
-                                <SparklesIcon className="w-3 h-3" />
-                                Flujo 1: Visual Prompting (Edición)
-                            </span>
-                            <span className="text-[9px] text-theme-text-tertiary">{regions.length} Regiones</span>
-                        </div>
-
-                        <div className="flex-grow p-3 flex flex-col gap-3 overflow-hidden">
-                            {/* Images Carousel */}
-                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-theme-bg-tertiary h-24 flex-shrink-0">
-                                {/* 1. VP Base Input */}
-                                <div className="min-w-[80px] w-[80px] border border-theme-bg-tertiary bg-black/40 rounded relative overflow-hidden flex items-center justify-center group flex-shrink-0">
-                                    {(resultImage || inputImage) ? (
-                                        <img src={resultImage || inputImage || undefined} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" />
-                                    ) : (
-                                        <span className="text-[8px] text-gray-600">N/A</span>
-                                    )}
-                                    <span className="absolute bottom-0 left-0 bg-black/60 text-[7px] text-white px-1 font-bold rounded-tr">INPUT</span>
-                                </div>
-
-                                {/* 2. VP Guide (Drawing Layer) */}
-                                {/* 2. VP Guide (Drawing Layer + Base + Regions) */}
-                                <div className="min-w-[80px] w-[80px] border border-theme-bg-tertiary bg-black/40 rounded relative overflow-hidden flex items-center justify-center group flex-shrink-0 border-dashed border-gray-600">
-                                    {lastGuideImage ? (
-                                        <img src={lastGuideImage} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="p-1 text-center opacity-50">
-                                            <span className="text-[7px] block">Guía</span>
-                                            <div className="w-4 h-4 bg-gray-500 rounded-full mx-auto my-1 opacity-50"></div>
-                                            <span className="text-[6px] block text-theme-text-tertiary">(Pendiente)</span>
-                                        </div>
-                                    )}
-                                    <span className="absolute bottom-0 left-0 bg-black/60 text-[7px] text-purple-400 px-1 font-bold rounded-tr">GUÍA</span>
-                                </div>
-
-                                {/* 3. Region Refs */}
-                                {regions.filter(r => r.referenceImage).map(r => (
-                                    <div key={r.id} className="min-w-[80px] w-[80px] border border-theme-bg-tertiary bg-black/40 rounded relative overflow-hidden flex items-center justify-center group flex-shrink-0">
-                                        <img src={r.referenceImage} className="w-full h-full object-cover" />
-                                        <span className="absolute top-0 right-0 bg-red-600 text-[8px] text-white px-1 font-bold rounded-bl shadow-sm">R{r.regionNumber}</span>
-                                        <span className="absolute bottom-0 left-0 bg-black/60 text-[7px] text-gray-300 px-1 font-bold rounded-tr">REF</span>
-                                    </div>
-                                ))}
-                                {regions.length === 0 && (
-                                    <div className="flex-shrink-0 text-[9px] text-gray-600 flex items-center px-2 italic">Sin regiones definidas</div>
-                                )}
-                            </div>
-
-                            {/* Shared Prompt Editor */}
-                            <div className="flex-grow flex flex-col min-h-0">
-                                <div className="flex justify-between items-center mb-1">
-                                    <label className="text-[9px] font-bold text-theme-text-tertiary uppercase">Prompt Estructurado Visual</label>
-                                    {isPromptManuallyEdited && (
-                                        <button onClick={() => setIsPromptManuallyEdited(false)} className="text-[8px] text-blue-400 hover:text-blue-300 font-bold">Reset Auto</button>
-                                    )}
-                                </div>
-                                <textarea
-                                    value={aiStructuredPrompt}
-                                    onChange={(e) => { setAiStructuredPrompt(e.target.value); setIsPromptManuallyEdited(true); }}
-                                    className={`flex-grow bg-[#111] rounded p-2 text-[10px] font-mono border outline-none resize-none transition-colors ${isPromptManuallyEdited ? 'border-blue-500/50 text-blue-100' : 'border-theme-bg-tertiary text-gray-400'}`}
-                                    placeholder="Prompt Visual..."
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* RIGHT COLUMN: PHOTOREALISTIC FLOW (Generate) */}
-                    <div className="flex flex-col h-full overflow-hidden bg-theme-bg-secondary">
-                        <div className="p-2 border-b border-theme-bg-tertiary flex justify-between items-center bg-[#252525]">
-                            <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider flex items-center gap-2">
-                                <SparklesIcon className="w-3 h-3 text-blue-400" />
-                                Flujo 2: Fotorealista (Generación)
-                            </span>
-
-                            <div className="flex gap-2">
-                                {/* Saved Prompts */}
-                                <div className="relative group">
-                                    <button className="text-[10px] bg-theme-bg-tertiary hover:bg-theme-bg-hover px-2 py-0.5 rounded text-theme-text-primary flex items-center gap-1 transition-colors">
-                                        <DownloadIcon className="w-3 h-3" /> Cargar
-                                    </button>
-                                    <div className="absolute bottom-full right-0 mb-1 w-64 bg-theme-bg-secondary border border-theme-bg-tertiary rounded shadow-xl hidden group-hover:block max-h-48 overflow-y-auto z-50">
-                                        {savedPrompts.map((p, i) => (
-                                            <div key={i} onClick={() => handleLoadPrompt(p)} className="p-2 text-[10px] hover:bg-theme-bg-hover cursor-pointer truncate border-b border-theme-bg-tertiary last:border-0 text-theme-text-secondary hover:text-white transition-colors">
-                                                {p.substring(0, 60)}...
-                                            </div>
-                                        ))}
-                                        {savedPrompts.length > 0 && <div onClick={handleClearSavedPrompts} className="p-2 text-[10px] text-red-400 hover:bg-red-900/20 cursor-pointer text-center transition-colors">Borrar Todo</div>}
-                                    </div>
-                                </div>
-                                <button onClick={handleSavePrompt} className="text-[10px] bg-theme-bg-tertiary hover:bg-theme-bg-hover px-2 py-0.5 rounded text-theme-text-primary flex items-center gap-1 transition-colors" title="Guardar">
-                                    <SaveIcon className="w-3 h-3" />
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="flex-grow p-3 flex flex-col gap-3 overflow-hidden">
-                            {/* Images Carousel */}
-                            <div className="flex gap-2 pb-2 h-24 flex-shrink-0 items-center">
-                                {/* 1. PR Base Input */}
-                                <div className="min-w-[80px] w-[80px] h-full border border-theme-bg-tertiary bg-black/40 rounded relative overflow-hidden flex items-center justify-center group flex-shrink-0">
-                                    {inputImage ? (
-                                        <img src={inputImage} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <span className="text-[8px] text-gray-600">Sin Input</span>
-                                    )}
-                                    <span className="absolute bottom-0 left-0 bg-black/60 text-[7px] text-white px-1 font-bold rounded-tr">INPUT</span>
-                                </div>
-
-                                {/* 2. PR Style Ref */}
-                                <div className={`min-w-[80px] w-[80px] h-full border border-theme-bg-tertiary rounded relative overflow-hidden flex items-center justify-center group flex-shrink-0 ${styleReferenceImage ? 'bg-black/40' : 'bg-transparent border-dashed'}`}>
-                                    {styleReferenceImage ? (
-                                        <img src={styleReferenceImage} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <span className="text-[8px] text-gray-600 text-center leading-tight">Sin Ref<br />Estilo</span>
-                                    )}
-                                    <span className="absolute bottom-0 left-0 bg-black/60 text-[7px] text-emerald-400 px-1 font-bold rounded-tr">ESTILO</span>
-                                </div>
-
-                                <span className="text-2xl text-theme-text-tertiary px-1 font-thin">+</span>
-
-                                <div className="flex-1 h-full bg-[#111] border border-theme-bg-tertiary rounded flex items-center justify-center text-[10px] text-theme-text-tertiary italic">
-                                    Prompt Textual
-                                </div>
-                            </div>
-
-                            {/* Editable Prompt */}
-                            <div className="flex-grow flex flex-col min-h-0">
-                                <label className="text-[9px] font-bold text-theme-text-secondary uppercase mb-1">Editor de Prompt</label>
-                                <textarea
-                                    value={manualPrompt}
-                                    onChange={(e) => setManualPrompt(e.target.value)}
-                                    className="w-full flex-grow bg-theme-bg-primary border border-theme-bg-tertiary rounded p-2 text-xs font-mono text-theme-text-tertiary focus:text-theme-text-primary focus:border-theme-accent-primary outline-none resize-none transition-colors leading-relaxed"
-                                    spellCheck={false}
-                                    placeholder="Describe tu visión arquitectónica..."
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             {/* 2. SIDEBAR (Fixed Width) */}

@@ -731,7 +731,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                 </button>
                             </div>
                         )}
-                        <AIPreviewPanel debugInfo={debugInfo} />
+                        {/* <AIPreviewPanel debugInfo={debugInfo} /> Removed as per user request */}
                     </div>
                 </div>
             </div>

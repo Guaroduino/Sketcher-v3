@@ -64,16 +64,16 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
     isPromptModified
 }) => {
     return (
-        <div className="flex flex-col h-full bg-[#1e1e1e] border-r border-[#333]">
+        <div className="flex flex-col h-full bg-theme-bg-secondary border-r border-theme-bg-tertiary">
             {/* Header & Tools */}
-            <div className="p-4 border-b border-[#333] space-y-4">
+            <div className="p-4 border-b border-theme-bg-tertiary space-y-4">
                 <div>
-                    <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-1">Herramientas</h2>
-                    <div className="text-[10px] text-gray-400">Selecciona una herramienta para editar.</div>
+                    <h2 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider mb-1">Herramientas</h2>
+                    <div className="text-[10px] text-theme-text-secondary">Selecciona una herramienta para editar.</div>
                 </div>
 
                 {/* Tools Grid */}
-                <div className="flex bg-[#111] p-1 rounded-lg gap-1">
+                <div className="flex bg-theme-bg-primary p-1 rounded-lg gap-1 border border-theme-bg-tertiary">
                     <ToolButton
                         active={activeTool === 'pan'}
                         onClick={() => onToolChange('pan')}
@@ -92,7 +92,7 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
                         icon={<EraserIcon className="w-4 h-4" />}
                         title="Borrador"
                     />
-                    <div className="w-px bg-[#333] mx-1"></div>
+                    <div className="w-px bg-theme-bg-tertiary mx-1"></div>
                     <ToolButton
                         active={activeTool === 'region'}
                         onClick={() => onToolChange('region')}
@@ -113,33 +113,33 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
             </div>
 
             {/* Global Instructions & Ref Image */}
-            <div className="px-4 py-2 border-b border-[#333] space-y-3">
+            <div className="px-4 py-2 border-b border-theme-bg-tertiary space-y-3">
                 {/* General Instructions */}
                 <div>
-                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 block">Instrucciones Generales</label>
+                    <label className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider mb-1 block">Instrucciones Generales</label>
                     <textarea
                         value={generalInstructions}
                         onChange={(e) => onGeneralInstructionsChange(e.target.value)}
                         placeholder="Ej: Estilo realista, iluminación suave..."
-                        className="w-full h-16 bg-[#111] text-xs text-white p-2 rounded border border-[#333] focus:border-blue-500 outline-none resize-none placeholder:text-gray-600"
+                        className="w-full h-16 bg-theme-bg-primary text-xs text-theme-text-primary p-2 rounded border border-theme-bg-tertiary focus:border-theme-accent-primary outline-none resize-none placeholder:text-theme-text-tertiary"
                     />
                 </div>
 
                 {/* Global Reference Image */}
                 <div>
-                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 flex justify-between">
+                    <label className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider mb-1 flex justify-between">
                         Ref. Visual Global
                         {referenceImage && <button onClick={() => onReferenceImageChange(null)} className="text-red-400 hover:text-red-300">Borrar</button>}
                     </label>
 
                     {referenceImage ? (
-                        <div className="relative h-24 w-full rounded border border-[#333] overflow-hidden group">
+                        <div className="relative h-24 w-full rounded border border-theme-bg-tertiary overflow-hidden group">
                             <img src={referenceImage} className="w-full h-full object-cover" />
                         </div>
                     ) : (
-                        <label className="flex flex-col items-center justify-center w-full h-16 bg-[#111] border border-dashed border-[#333] rounded hover:border-gray-500 cursor-pointer transition-colors">
-                            <UploadIcon className="w-5 h-5 text-gray-600 mb-1" />
-                            <span className="text-[9px] text-gray-500">Subir imagen de estilo</span>
+                        <label className="flex flex-col items-center justify-center w-full h-16 bg-theme-bg-primary border border-dashed border-theme-bg-tertiary rounded hover:border-theme-text-secondary cursor-pointer transition-colors">
+                            <UploadIcon className="w-5 h-5 text-theme-text-secondary mb-1" />
+                            <span className="text-[9px] text-theme-text-tertiary">Subir imagen de estilo</span>
                             <input
                                 type="file"
                                 accept="image/*"
@@ -160,11 +160,11 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
 
             {/* Contextual Settings (Brush) */}
             {activeTool === 'pen' && (
-                <div className="p-4 border-b border-[#333] bg-[#222]">
-                    <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-3">Ajustes de Lápiz</h3>
+                <div className="p-4 border-b border-theme-bg-tertiary bg-theme-bg-tertiary/50">
+                    <h3 className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider mb-3">Ajustes de Lápiz</h3>
                     <div className="space-y-4">
                         <div>
-                            <div className="flex justify-between text-[10px] text-gray-400 mb-1">
+                            <div className="flex justify-between text-[10px] text-theme-text-secondary mb-1">
                                 <span>Tamaño</span>
                                 <span>{brushSize}px</span>
                             </div>
@@ -173,17 +173,17 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
                                 min="1" max="50"
                                 value={brushSize}
                                 onChange={(e) => onBrushSizeChange(parseInt(e.target.value))}
-                                className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                                className="w-full h-1 bg-theme-bg-hover rounded-lg appearance-none cursor-pointer accent-theme-accent-primary"
                             />
                         </div>
                         <div>
-                            <div className="text-[10px] text-gray-400 mb-1">Color</div>
+                            <div className="text-[10px] text-theme-text-secondary mb-1">Color</div>
                             <div className="flex gap-2">
                                 {['#FF0000', '#00FF00', '#0000FF', '#FFFFFF', '#000000'].map(c => (
                                     <button
                                         key={c}
                                         onClick={() => onBrushColorChange(c)}
-                                        className={`w-6 h-6 rounded-full border-2 ${brushColor === c ? 'border-white scale-110' : 'border-transparent'}`}
+                                        className={`w-6 h-6 rounded-full border-2 ${brushColor === c ? 'border-theme-text-primary scale-110' : 'border-transparent'}`}
                                         style={{ backgroundColor: c }}
                                     />
                                 ))}
@@ -196,28 +196,28 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
             {/* Regions List */}
             <div className="flex-grow overflow-y-auto p-4">
                 <div className="flex justify-between items-center mb-2">
-                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Regiones Activas</label>
-                    <span className="bg-gray-800 text-xs px-1.5 rounded text-gray-400">{regions.length}</span>
+                    <label className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider">Regiones Activas</label>
+                    <span className="bg-theme-bg-tertiary text-xs px-1.5 rounded text-theme-text-secondary">{regions.length}</span>
                 </div>
 
                 <div className="space-y-3">
                     {regions.length === 0 ? (
-                        <div className="text-center py-8 opacity-30 text-xs">
+                        <div className="text-center py-8 opacity-30 text-xs text-theme-text-primary">
                             <SquareIcon className="w-8 h-8 mx-auto mb-2" />
                             No hay regiones definidas.
                             <br />Usa la herramienta Región en la barra lateral.
                         </div>
                     ) : (
                         regions.map(region => (
-                            <div key={region.id} className="bg-[#2a2a2a] rounded p-2 border border-[#333] group hover:border-[#444] transition-colors">
+                            <div key={region.id} className="bg-theme-bg-primary rounded p-2 border border-theme-bg-tertiary group hover:border-theme-bg-hover transition-colors">
                                 <div className="flex justify-between items-center mb-1">
                                     <div className="flex items-center gap-2">
                                         <span className="text-xs font-bold text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded">R{region.regionNumber}</span>
-                                        <span className="text-[10px] text-gray-500 uppercase">{region.type === 'polygon' ? 'Polígono' : 'Rectángulo'}</span>
+                                        <span className="text-[10px] text-theme-text-secondary uppercase">{region.type === 'polygon' ? 'Polígono' : 'Rectángulo'}</span>
                                     </div>
                                     <button
                                         onClick={() => onDeleteRegion(region.id)}
-                                        className="text-gray-600 hover:text-red-400 p-1 rounded transition-colors"
+                                        className="text-theme-text-secondary hover:text-red-400 p-1 rounded transition-colors"
                                     >
                                         <TrashIcon className="w-3 h-3" />
                                     </button>
@@ -227,14 +227,14 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
                                     value={region.prompt}
                                     onChange={(e) => onUpdateRegionPrompt(region.id, e.target.value)}
                                     placeholder="¿Qué debe haber aquí?"
-                                    className="w-full bg-[#1a1a1a] text-xs text-white p-2 rounded border border-transparent focus:border-blue-500 outline-none resize-none h-16 placeholder:text-gray-600 mb-2"
+                                    className="w-full bg-theme-bg-secondary text-xs text-theme-text-primary p-2 rounded border border-transparent focus:border-theme-accent-primary outline-none resize-none h-16 placeholder:text-theme-text-tertiary mb-2"
                                 />
 
                                 {/* Region Reference Image Upload */}
                                 <div className="flex items-center gap-2">
                                     {region.referenceImage ? (
                                         <div className="relative group/img">
-                                            <img src={region.referenceImage} alt="Ref" className="w-10 h-10 object-cover rounded border border-gray-600" />
+                                            <img src={region.referenceImage} alt="Ref" className="w-10 h-10 object-cover rounded border border-theme-bg-tertiary" />
                                             <button
                                                 onClick={() => onUpdateRegionImage(region.id, null)}
                                                 className="absolute -top-1 -right-1 bg-red-600 rounded-full p-0.5 text-white opacity-0 group-hover/img:opacity-100 transition-opacity"
@@ -243,8 +243,8 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
                                             </button>
                                         </div>
                                     ) : (
-                                        <label className="flex items-center justify-center w-10 h-10 bg-[#1a1a1a] border border-dashed border-gray-600 rounded hover:border-gray-400 cursor-pointer transition-colors" title="Subir imagen de referencia">
-                                            <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <label className="flex items-center justify-center w-10 h-10 bg-theme-bg-secondary border border-dashed border-theme-bg-tertiary rounded hover:border-theme-text-secondary cursor-pointer transition-colors" title="Subir imagen de referencia">
+                                            <svg className="w-4 h-4 text-theme-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                             </svg>
                                             <input
@@ -264,7 +264,7 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
                                             />
                                         </label>
                                     )}
-                                    <span className="text-[10px] text-gray-500 italic">
+                                    <span className="text-[10px] text-theme-text-secondary italic">
                                         {region.referenceImage ? "Imagen cargada" : "Añadir ref visual (opcional)"}
                                     </span>
                                 </div>
@@ -275,7 +275,7 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
             </div>
 
             {/* AI Structured Prompt Editor (Advanced) */}
-            <div className="p-4 border-t border-[#333] bg-[#1a1a1a] space-y-2">
+            <div className="p-4 border-t border-theme-bg-tertiary bg-theme-bg-secondary space-y-2">
                 <div className="flex justify-between items-center">
                     <label className="text-[10px] font-bold text-theme-accent-primary uppercase tracking-wider">Prompt Estructurado (AI)</label>
                     {isPromptModified && (
@@ -293,15 +293,15 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
                         value={structuredPrompt}
                         onChange={(e) => onStructuredPromptChange(e.target.value)}
                         placeholder="El prompt estructurado se generará aquí..."
-                        className={`w-full h-40 bg-[#000] text-[10px] font-mono p-2 rounded border transition-colors outline-none resize-none leading-relaxed ${isPromptModified ? 'border-blue-500/50 text-blue-100' : 'border-[#333] text-gray-400'}`}
+                        className={`w-full h-40 bg-theme-bg-primary text-[10px] font-mono p-2 rounded border transition-colors outline-none resize-none leading-relaxed ${isPromptModified ? 'border-theme-accent-primary/50 text-theme-accent-primary' : 'border-theme-bg-tertiary text-theme-text-secondary'}`}
                     />
                     {!isPromptModified && (
                         <div className="absolute top-2 right-2 opacity-0 group-hover/prompt:opacity-100 transition-opacity pointer-events-none">
-                            <span className="bg-[#222] text-[8px] px-1 py-0.5 rounded border border-[#444] text-gray-400">Auto-Generado</span>
+                            <span className="bg-theme-bg-tertiary text-[8px] px-1 py-0.5 rounded border border-theme-bg-hover text-theme-text-secondary">Auto-Generado</span>
                         </div>
                     )}
                 </div>
-                <p className="text-[8px] text-gray-500 italic leading-tight">
+                <p className="text-[8px] text-theme-text-tertiary italic leading-tight">
                     {isPromptModified
                         ? "Has editado manualmente el prompt. Se usará exactamente este texto."
                         : "Este es el objeto que se envía a Gemini. Haz clic para personalizar."}
@@ -309,7 +309,7 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
             </div>
 
             {/* Footer Action Button */}
-            <div className="p-4 border-t border-[#333] bg-[#1e1e1e]">
+            <div className="p-4 border-t border-theme-bg-tertiary bg-theme-bg-secondary">
                 <button
                     onClick={onProcessChanges}
                     disabled={isGenerating}
@@ -332,8 +332,8 @@ const ToolButton: React.FC<{ active: boolean, onClick: () => void, icon: React.R
         onClick={onClick}
         title={title}
         className={`flex-1 aspect-square rounded flex items-center justify-center transition-all ${active
-            ? 'bg-blue-600 text-white shadow-md'
-            : 'text-gray-400 hover:bg-[#333] hover:text-gray-200'
+            ? 'bg-theme-accent-primary text-white shadow-md'
+            : 'text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary'
             }`}
     >
         {icon}
