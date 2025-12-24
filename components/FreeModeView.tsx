@@ -9,6 +9,7 @@ import { User } from 'firebase/auth';
 import type { LibraryItem } from '../types';
 import { AttachmentImportModal } from './modals/AttachmentImportModal';
 import { ImageViewerModal } from './modals/ImageViewerModal';
+import { GuideChatSidebar } from './GuideChatSidebar';
 
 interface Message {
     id: string;
@@ -31,10 +32,10 @@ interface FreeModeViewProps {
     onImportFromSketch: () => string | null;
     lastRenderedImage: string | null;
     onSaveToLibrary: (file: File) => void;
-    credits: number | null;
     deductCredit?: () => Promise<boolean>;
     onInspectRequest?: (payload: { model: string; parts: any[]; config?: any }) => Promise<boolean>;
     libraryItems: LibraryItem[];
+    selectedModel: string;
 }
 
 export interface FreeModeViewHandle {
@@ -46,10 +47,10 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
     onImportFromSketch,
     lastRenderedImage,
     onSaveToLibrary,
-    credits,
     deductCredit,
+    libraryItems = [],
     onInspectRequest,
-    libraryItems = []
+    selectedModel
 }, ref) => {
     const [messages, setMessages] = useState<Message[]>([
         { id: 'welcome', role: 'model', content: 'Hola! Soy tu asistente creativo visual. Escribe un prompt (y opcionalmente adjunta imágenes) y generaré una nueva imagen para ti.', timestamp: Date.now() }
@@ -67,6 +68,7 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
 
     // Persistence State
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isGuideSidebarOpen, setIsGuideSidebarOpen] = useState(false);
     const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
     const [currentPromptId, setCurrentPromptId] = useState<string | null>(null);
 
@@ -186,17 +188,32 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
                     }
                 });
             }
+
             // Add text prompt
             if (newUserMessage.content) {
                 parts.push({ text: newUserMessage.content });
             }
 
-            const model = GEMINI_MODEL_ID;
+            const model = selectedModel || GEMINI_MODEL_ID;
+            // Config specific for Image Generation models
             const config = { responseModalities: ["IMAGE"] };
             const contents = { parts };
 
             // Inspector Check
             if (onInspectRequest) {
+                // Prepend system note about image labels if referencing is needed
+                const systemNote = newUserMessage.attachments && newUserMessage.attachments.length > 0
+                    ? `[System Note: The user has attached ${newUserMessage.attachments.length} images. Use the label 'Img {n}' (e.g., Img 1, Img 2) to refer to specific images in your response. The index corresponds to the order of attachments.]\n\n`
+                    : '';
+
+                // Inject note into text part if exists, or create new text part
+                const textPartIndex = parts.findIndex(p => p.text);
+                if (textPartIndex !== -1) {
+                    parts[textPartIndex].text = systemNote + parts[textPartIndex].text;
+                } else if (systemNote) {
+                    parts.push({ text: systemNote });
+                }
+
                 const confirmed = await onInspectRequest({ model, parts: contents.parts, config });
                 if (!confirmed) {
                     setIsGenerating(false);
@@ -288,30 +305,28 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
                 onClose={() => setViewingImage(null)}
             />
 
-            {/* Saved Prompts Sidebar */}
-            <div className={`absolute top-0 right-0 h-full bg-theme-bg-primary border-l border-theme-bg-tertiary transition-transform duration-300 z-10 w-64 ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-                <div className="flex items-center justify-between p-4 border-b border-theme-bg-tertiary">
-                    <h3 className="font-bold">Guardados</h3>
-                    <button onClick={() => setIsSidebarOpen(false)}><XIcon className="w-5 h-5" /></button>
-                </div>
-                <div className="overflow-y-auto h-[calc(100%-4rem)] p-2 space-y-2">
-                    {savedPrompts.map(p => (
-                        <div key={p.id} onClick={() => handleLoadPrompt(p)} className="p-3 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary cursor-pointer group relative">
-                            <p className="font-medium text-sm truncate pr-6">{p.title}</p>
-                            <span className="text-[10px] text-theme-text-secondary">{p.updatedAt?.toDate().toLocaleDateString()}</span>
-                            <button onClick={(e) => handleDeletePrompt(e, p.id)} className="absolute top-2 right-2 text-red-500 opacity-0 group-hover:opacity-100 hover:text-red-600">
-                                <TrashIcon className="w-4 h-4" />
-                            </button>
-                        </div>
-                    ))}
-                    {savedPrompts.length === 0 && <p className="text-center text-theme-text-secondary text-sm p-4">No hay chats guardados.</p>}
-                </div>
-            </div>
-
-            <div className="flex flex-col flex-grow h-full w-full relative">
+            {/* Main Chat Area */}
+            <div className="flex flex-col flex-grow h-full w-full relative min-w-0">
                 {/* Header Controls */}
                 <div className="absolute top-4 right-4 z-0 flex gap-2">
-                    <button onClick={() => setIsSidebarOpen(true)} className="p-2 bg-theme-bg-tertiary rounded-full hover:bg-theme-bg-primary shadow-sm" title="Abrir guardados">
+                    <button
+                        onClick={() => {
+                            setIsGuideSidebarOpen(!isGuideSidebarOpen);
+                            setIsSidebarOpen(false);
+                        }}
+                        className={`p-2 rounded-full shadow-sm transition-colors ${isGuideSidebarOpen ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-primary'}`}
+                        title="Asistente AI"
+                    >
+                        <SparklesIcon className="w-5 h-5" />
+                    </button>
+                    <button
+                        onClick={() => {
+                            setIsSidebarOpen(!isSidebarOpen);
+                            setIsGuideSidebarOpen(false);
+                        }}
+                        className={`p-2 rounded-full shadow-sm transition-colors ${isSidebarOpen ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary hover:bg-theme-bg-primary'}`}
+                        title="Abrir guardados"
+                    >
                         <FolderIcon className="w-5 h-5" />
                     </button>
                     <button onClick={handleSavePrompt} className="p-2 bg-theme-bg-tertiary rounded-full hover:bg-theme-bg-primary shadow-sm" title="Guardar conversación actual">
@@ -335,6 +350,9 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
                                                     onDoubleClick={() => setViewingImage(att)}
                                                     title="Doble click para ampliar"
                                                 />
+                                                <span className="absolute top-1 left-1 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md pointer-events-none">
+                                                    Img {idx + 1}
+                                                </span>
                                                 {msg.role === 'model' && (
                                                     <button
                                                         onClick={() => handleSaveImageToLibrary(att)}
@@ -378,6 +396,9 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
                                         className="h-16 w-16 object-cover rounded-md border border-theme-bg-tertiary cursor-pointer"
                                         onClick={() => setViewingImage(att)}
                                     />
+                                    <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[9px] font-bold px-1 py-0.5 rounded pointer-events-none">
+                                        Img {idx + 1}
+                                    </span>
                                     <button
                                         onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))}
                                         className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -435,6 +456,31 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
                     </div>
                 </div>
             </div>
+            {/* Saved Prompts Sidebar (Docked) */}
+            <div className={`h-full bg-theme-bg-primary border-l border-theme-bg-tertiary transition-[width] duration-300 flex-shrink-0 z-10 flex flex-col overflow-hidden ${isSidebarOpen ? 'w-64' : 'w-0'}`}>
+                <div className="flex items-center justify-between p-4 border-b border-theme-bg-tertiary w-64">
+                    <h3 className="font-bold">Guardados</h3>
+                    <button onClick={() => setIsSidebarOpen(false)}><XIcon className="w-5 h-5" /></button>
+                </div>
+                <div className="overflow-y-auto h-[calc(100%-4rem)] p-2 space-y-2 w-64">
+                    {savedPrompts.map(p => (
+                        <div key={p.id} onClick={() => handleLoadPrompt(p)} className="p-3 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary cursor-pointer group relative">
+                            <p className="font-medium text-sm truncate pr-6">{p.title}</p>
+                            <span className="text-[10px] text-theme-text-secondary">{p.updatedAt?.toDate().toLocaleDateString()}</span>
+                            <button onClick={(e) => handleDeletePrompt(e, p.id)} className="absolute top-2 right-2 text-red-500 opacity-0 group-hover:opacity-100 hover:text-red-600">
+                                <TrashIcon className="w-4 h-4" />
+                            </button>
+                        </div>
+                    ))}
+                    {savedPrompts.length === 0 && <p className="text-center text-theme-text-secondary text-sm p-4">No hay chats guardados.</p>}
+                </div>
+            </div>
+
+            <GuideChatSidebar
+                isOpen={isGuideSidebarOpen}
+                onClose={() => setIsGuideSidebarOpen(false)}
+                apiKey={import.meta.env.VITE_GEMINI_API_KEY}
+            />
         </div>
     );
 });

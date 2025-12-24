@@ -187,7 +187,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = React.memo(({
   return (
     // Wrapper div handles positioning and transform (centering)
     // It creates a containing block for fixed/absolute children, but allows overflow.
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center max-w-[95vw]">
+    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center max-w-[95vw]">
 
       {/* Grid Settings Menu - Rendered OUTSIDE the overflow container */}
       {isGridSettingsOpen && gridGuide && (

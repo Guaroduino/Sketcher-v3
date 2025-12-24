@@ -1,177 +1,230 @@
-export type SceneType = 'exterior' | 'interior';
+export type SceneType = 'exterior' | 'interior' | 'object_interior' | 'object_exterior' | 'studio' | 'automotive';
+export type RenderStyleMode = 'photorealistic' | 'watercolor' | 'colored_pencil' | 'graphite' | 'ink_marker' | 'charcoal' | 'digital_painting' | '3d_cartoon';
 
 export interface ArchitecturalRenderOptions {
     sceneType: SceneType;
+    renderStyle: RenderStyleMode;
+
     // Exterior specific
     timeOfDay?: string; // 'morning', 'noon', 'afternoon', 'golden_hour', 'night'
     weather?: string;   // 'sunny', 'overcast', 'rainy', 'foggy'
+
     // Interior specific
-    roomType?: string;  // 'kitchen', 'living_room', 'bedroom', etc.
-    lighting?: string;  // 'natural', 'warm_artificial', 'moody'
-    // Common
-    archStyle: string;  // 'modern', 'brutalist', 'mediterranean', 'industrial', 'scandinavian', etc.
-    creativeFreedom: number; // 0-200
+    roomType?: string;  // 'living_room', 'kitchen', etc.
+    lighting?: string;  // 'natural', 'warm_artificial', etc.
+
+    // Studio specific
+    studioLighting?: string; // 'softbox', 'rim_light', etc.
+    studioBackground?: string; // 'infinity_white', 'concrete', etc.
+    studioShot?: string; // NEW: 'close_up', 'full_shot', 'knolling'
+
+    // Automotive specific
+    carAngle?: string;
+    carEnvironment?: string;
+    carColor?: string; // NEW: Paint color/finish
+
+    // Object Focus specific
+    objectMaterial?: string;
+    objectDoF?: string;
+    objectContext?: string; // NEW: 'table_top', 'outdoor_blur'
+
+    // Common Content
+    archStyle: string;  // Describes the SUBJECT's style (Modern, Minimalist), NOT the art technique
+    creativeFreedom: number;
     additionalPrompt?: string;
     hasStyleReference?: boolean;
 }
 
 const getRoleDefinition = () =>
-    "ROLE: You are an expert Architectural Photographer. TASK: Convert the input Mixed-Media Composite Layout into a photorealistic 8k architectural photograph.";
+    "ROLE: You are an expert Visual Artist and Photographer. TASK: Convert the input Mixed-Media Composite Layout into a final visual realization based on the requested style.";
 
 const getInputAnalysisAndRules = () => `
-INPUT ANALYSIS (CRITICAL): The input image is a concept collage. It contains two types of data:
-1. Linear Structure: Represents the fixed architecture (walls, windows, roof).
-2. Loose Shapes/Stickers/Colors: Represent volumes of entourage (vegetation, trees, people, cars, furniture).
+INPUT ANALYSIS: The input is a concept collage/sketch.
+RULES:
+1. GEOMETRY: Retain the structural forms and perspective of the input.
+2. MATERIALIZATION: Convert loose shapes/blobs into the materials implied by the prompt context.
+`;
 
-PROCESSING RULES:
-- ARCHITECTURAL LAYER (STRICT): You must retain the exact perspective and geometry of the linear structural elements. Do not move walls or change the building design.
-- ENTOURAGE LAYER (INTERPRETIVE): You must materialize all loose shapes, colored blobs, or pasted elements into realistic physical objects based on their context.
-  * Example: A green shape on the lawn = A realistic tree or bush.
-  * Example: A boxy shape on the driveway = A realistic car.
-  * Example: Vertical shapes on paths = People.
-
-OBJECTIVE: Do NOT clean up or remove the "messy" elements. Instead, transform them into high-fidelity textures and objects that match the lighting of the scene. The final image must look cohesive, as if taken by a single camera.`;
-
-const getCreativityInstruction = (level: number): string => {
-    if (level <= 50) {
-        return "MODE: FAITHFUL ARCHITECTURAL REALIZATION (STRICT). \nGeometry is the absolute priority. Do NOT invent new structure.";
-    } else if (level <= 100) {
-        return "MODE: BALANCED ENHANCEMENT. Refine textures and add secondary details while staying true to structural lines.";
-    } else if (level <= 150) {
-        return "MODE: CREATIVE INTERPRETATION. You have freedom to optimize structural proportions and modernize the aesthetic.";
-    } else {
-        return "MODE: CONCEPTUAL REIMAGINING. Prioritize visual impact and mood over literal translation of the rough lines.";
+const getRenderStyleInstruction = (style: RenderStyleMode): string => {
+    switch (style) {
+        case 'watercolor': return "STYLE MODE: WATERCOLOR PAINTING. Medium: Transparent watercolor on textured paper. Technique: Wet-on-wet washes, expressive edge bleeding, artistic abstraction. NOT A PHOTO.";
+        case 'colored_pencil': return "STYLE MODE: COLORED PENCIL SKETCH. Medium: Prismacolor pencils on grain paper. Technique: Visible cross-hatching, vibrant wax layering, hand-drawn aesthetic.";
+        case 'graphite': return "STYLE MODE: GRAPHITE PENCIL DRAWING. Medium: HB/2B/4B Graphite. Technique: Smooth shading, sharp details, monochrome gray scale. Technical architectural sketch.";
+        case 'ink_marker': return "STYLE MODE: ALCOHOL MARKER RENDERING. Medium: Copic Markers. Technique: Bold colors, strong outlines, felt-tip stroke texture. Architectural presentation style.";
+        case 'charcoal': return "STYLE MODE: CHARCOAL DRAWING. Medium: Willow Charcoal. Technique: Smudged shadows, high contrast, dramatic lighting, rich blacks.";
+        case 'digital_painting': return "STYLE MODE: DIGITAL CONCEPT ART. Technique: Clean edges, painterly lighting, matte painting aesthetic. Artstation style.";
+        case '3d_cartoon': return "STYLE MODE: 3D CARTOON RENDER. Texture: Smooth plastic/clay surfaces, exaggerated soft lighting, Pixar/Disney aesthetic.";
+        case 'photorealistic':
+        default: return "STYLE MODE: PHOTOREALISTIC RENDERING. Quality: Professional architectural photography, 8k resolution, highly detailed, sharp focus, natural lighting, realistic textures and materials, cinematic composition.";
     }
 };
 
 const getExteriorPrompts = (options: ArchitecturalRenderOptions): string => {
-    let prompt = "";
-
-    // Time of Day
+    let prompt = "SCENE: EXTERIOR ARCHITECTURE.\n";
+    // Time
     const shadowMap: Record<string, string> = {
-        'morning': "LIGHTING: Morning sun (low angle, cool temps, long soft shadows). Fresh atmosphere.",
-        'noon': "LIGHTING: High Noon (harsh top-down shadows, high contrast, vibrant colors).",
-        'afternoon': "LIGHTING: Afternoon (warm sun, defined shadows, rich depth).",
-        'golden_hour': "LIGHTING: GOLDEN HOUR (Magic hour, warm orange glow, rim lighting, dramatic shadows).",
-        'night': "LIGHTING: NIGHT PHOTOGRAPHY (Blue hour sky, artificial interior lights glowing warm, exterior accent lighting)."
+        'morning': "LIGHT: Morning sun, low angle, long shadows.",
+        'noon': "LIGHT: High noon, harsh shadows.",
+        'afternoon': "LIGHT: Golden afternoon sun.",
+        'golden_hour': "LIGHT: Golden Hour, warm glow, rim light.",
+        'night': "LIGHT: Night shot, artificial building lights, blue hour sky."
     };
-    if (options.timeOfDay && shadowMap[options.timeOfDay]) {
-        prompt += `${shadowMap[options.timeOfDay]} `;
-    }
+    if (options.timeOfDay) prompt += (shadowMap[options.timeOfDay] || "") + " ";
 
     // Weather
     const weatherMap: Record<string, string> = {
         'sunny': "WEATHER: Clear blue sky.",
-        'overcast': "WEATHER: Overcast/Cloudy (Soft diffuse light, no hard shadows, even exposure).",
-        'rainy': "WEATHER: Rainy (Wet pavement reflections, droplets, moody atmosphere).",
-        'foggy': "WEATHER: Foggy/Mist (Atmospheric depth, reduced background contrast, dreamy)."
+        'overcast': "WEATHER: Overcast, soft diffuse light.",
+        'rainy': "WEATHER: Rainy, wet surfaces, reflections.",
+        'foggy': "WEATHER: Foggy, atmospheric mist."
     };
-    if (options.weather && weatherMap[options.weather]) {
-        prompt += `${weatherMap[options.weather]} `;
-    }
-
-    // Comprehensive Style Dictionary
-    const styleDescriptors: Record<string, string> = {
-        'modern': "STYLE: Modern Minimalist. Materials: Concrete, Glass, Black Steel.",
-        'mid_century_modern': "STYLE: Mid-Century Modern. Materials: Walnut wood, stone, glass walls.",
-        'contemporary': "STYLE: Contemporary. Materials: Mixed cladding, sustainable green walls, metal panels.",
-        'cape_cod': "STYLE: Cape Cod. Materials: Weathered shingles, white trim, classic brick.",
-        'craftsman': "STYLE: Craftsman. Materials: Handcrafted wood, stone columns, earthy tones.",
-        'victorian': "STYLE: Victorian. Materials: Ornamental wood, colorful paint, slate roof.",
-        'colonial': "STYLE: Colonial. Materials: Red brick, white columns, symmetry.",
-        'ranch': "STYLE: Ranch. Materials: Brick veneer, horizontal lines, low profile.",
-        'farmhouse': "STYLE: Modern Farmhouse. Materials: White board-and-batten, black window frames, metal roof.",
-        'brazilian_modernism': "STYLE: Brazilian Modernism. Materials: Raw concrete, tropical wood, vegetation integration.",
-        'mediterranean': "STYLE: Mediterranean. Materials: Stucco, terracotta tiles, arches.",
-        'brutalist': "STYLE: Brutalist. Materials: Raw concrete (beton brut), heavy massing.",
-        'futuristic': "STYLE: Futuristic. Materials: Curved white panels, LED lines, parametric glass.",
-        'cinematic': "STYLE: Cinematic/Dramatic. Focus on mood and storytelling lighting."
-    };
-
-    const styleDesc = styleDescriptors[options.archStyle] || `STYLE: ${options.archStyle}`;
-    prompt += `\n${styleDesc}\n`;
+    if (options.weather) prompt += (weatherMap[options.weather] || "") + " ";
 
     return prompt;
 };
 
 const getInteriorPrompts = (options: ArchitecturalRenderOptions): string => {
-    let prompt = "";
+    let prompt = "SCENE: INTERIOR DESIGN.\n";
 
-    // 1. ROOM TYPE (Context)
-    const roomTypeDescriptors: Record<string, string> = {
-        'living_room': "CONTEXT: High-end Living Room. Furniture: Designer sofa, coffee table, rug.",
-        'kitchen': "CONTEXT: Gourmet Kitchen. Surfaces: Marble countertops, stainless steel appliances.",
-        'bedroom': "CONTEXT: Luxury Master Bedroom. Texture: Soft linens, plush carpet.",
-        'bathroom': "CONTEXT: Spa Bathroom. Materials: Stone tile, glass, premium fixtures.",
-        'office': "CONTEXT: Modern Office. Furniture: Ergonomic desk, shelving, tech.",
-        'classroom': "CONTEXT: Modern Classroom/Education space.",
-        'laboratory': "CONTEXT: Clean Science Lab.",
-        'workshop': "CONTEXT: Industrial Workshop.",
-        'gym': "CONTEXT: Fitness Center / Gym.",
-        'hotel_room': "CONTEXT: Boutique Hotel Room.",
-        'retail_store': "CONTEXT: High-end Retail Store.",
-        'restaurant': "CONTEXT: Fine Dining Restaurant.",
-        'lobby': "CONTEXT: Corporate Lobby.",
-        'mall_hallway': "CONTEXT: Shopping Mall Corridor."
+    // Room
+    const roomMap: Record<string, string> = {
+        'living_room': "ROOM: Living Room.", 'kitchen': "ROOM: Kitchen.", 'bedroom': "ROOM: Bedroom.",
+        'bathroom': "ROOM: Bathroom.", 'office': "ROOM: Office.", 'retail_store': "ROOM: Retail Store."
     };
-    prompt += (roomTypeDescriptors[options.roomType || ''] || `CONTEXT: ${options.roomType}`) + " ";
+    prompt += (roomMap[options.roomType || ''] || `ROOM: ${options.roomType}`) + " ";
 
-    // 2. LIGHTING TYPE
-    const lightingMap: Record<string, string> = {
-        'natural': "LIGHTING: Soft Natural Daylight (Global Illumination).",
-        'natural_morning': "LIGHTING: Morning Sun beams.",
-        'natural_afternoon': "LIGHTING: Warm Afternoon Sun.",
-        'warm_artificial': "LIGHTING: Warm Interior Lights (3000K). Cozy atmosphere.",
-        'neutral_artificial': "LIGHTING: Neutral/Bright Lights (4000K).",
-        'cold_artificial': "LIGHTING: Cool/Work Lights (5000K).",
-        'studio': "LIGHTING: Professional Studio Lighting.",
-        'moody': "LIGHTING: Low-key Moody Lighting. Dramatic shadows."
+    // Lighting
+    const lightMap: Record<string, string> = {
+        'natural': "LIGHT: Natural daylight.", 'warm_artificial': "LIGHT: Warm indoor lighting (3000K).",
+        'moody': "LIGHT: Dark, moody, dramatic shadows."
     };
-    if (options.lighting && lightingMap[options.lighting]) {
-        prompt += `${lightingMap[options.lighting]} `;
-    }
-
-    // 3. INTERIOR STYLE
-    prompt += `\nINTERIOR STYLE: ${options.archStyle.toUpperCase().replace('_', ' ')}. Apply generic characteristics of this style.`;
+    if (options.lighting) prompt += (lightMap[options.lighting] || "") + " ";
 
     return prompt;
 };
 
+const getStudioPrompts = (options: ArchitecturalRenderOptions): string => {
+    let prompt = "SCENE: STUDIO PRODUCT PHOTOGRAPHY.\n";
+
+    // Shot Type (NEW)
+    const shotMap: Record<string, string> = {
+        'close_up': "SHOT: Macro Close-up detail.",
+        'full_shot': "SHOT: Full product view.",
+        'knolling': "SHOT: Knolling layout (top-down flat lay)."
+    };
+    if (options.studioShot) prompt += (shotMap[options.studioShot] || "") + " ";
+
+    // Lighting
+    const lightMap: Record<string, string> = {
+        'softbox': "LIGHT: Large Softbox (soft shadows).",
+        'rim_light': "LIGHT: Rim Lighting (silhouette edge).",
+        'hard_key': "LIGHT: Hard Key Light (dramatic contrast).",
+        'dramatic': "LIGHT: Chiaroscuro high contrast."
+    };
+    if (options.studioLighting) prompt += (lightMap[options.studioLighting] || "") + " ";
+
+    // Background
+    const bgMap: Record<string, string> = {
+        'infinity_white': "BG: Pure White Cyclorama.",
+        'infinity_black': "BG: Deep Black Void.",
+        'concrete': "BG: Industrial Concrete texture.",
+        'colored_gel': "BG: Vibrant Colored Gel lighting."
+    };
+    if (options.studioBackground) prompt += (bgMap[options.studioBackground] || "") + " ";
+
+    return prompt;
+};
+
+const getAutomotivePrompts = (options: ArchitecturalRenderOptions): string => {
+    let prompt = "SCENE: AUTOMOTIVE VISUALIZATION.\n";
+
+    // Color (NEW)
+    if (options.carColor && options.carColor !== 'none') {
+        prompt += `PAINT: ${options.carColor.replace('_', ' ')} finish. `;
+    }
+
+    // Angle
+    const angleMap: Record<string, string> = {
+        'front_three_quarter': "ANGLE: Front 3/4 view.", 'side_profile': "ANGLE: Side profile.",
+        'rear': "ANGLE: Rear view.", 'low_angle_hero': "ANGLE: Low angle hero shot."
+    };
+    if (options.carAngle) prompt += (angleMap[options.carAngle] || "") + " ";
+
+    // Env
+    const envMap: Record<string, string> = {
+        'studio': "ENV: Clean Studio.", 'city_street': "ENV: City Street at Night.",
+        'raceway': "ENV: Race Track.", 'nature_scenic': "ENV: Scenic Nature Road."
+    };
+    if (options.carEnvironment) prompt += (envMap[options.carEnvironment] || "") + " ";
+
+    return prompt;
+};
+
+const getObjectPrompts = (options: ArchitecturalRenderOptions, type: 'interior' | 'exterior'): string => {
+    let prompt = `SCENE: OBJECT CLOSE-UP (${type.toUpperCase()}).\n`;
+
+    // Context (NEW)
+    if (options.objectContext === 'table_top') prompt += "CONTEXT: Table-top setup. ";
+    if (options.objectContext === 'outdoor_blur') prompt += "CONTEXT: Outdoor environment with bokeh blur. ";
+
+    // Material
+    const matMap: Record<string, string> = {
+        'matte_plastic': "MAT: Matte Plastic.", 'brushed_metal': "MAT: Brushed Metal.",
+        'glass': "MAT: Glass.", 'wood': "MAT: Wood.", 'ceramic': "MAT: Ceramic."
+    };
+    if (options.objectMaterial) prompt += (matMap[options.objectMaterial] || "") + " ";
+
+    // DoF
+    const dofMap: Record<string, string> = {
+        'macro_focus': "LENS: Macro focus.", 'shallow_depth_of_field': "LENS: Shallow DoF (f/1.8).",
+        'wide_focus': "LENS: Deep focus (f/11)."
+    };
+    if (options.objectDoF) prompt += (dofMap[options.objectDoF] || "") + " ";
+
+    return prompt;
+};
+
+
 export const buildArchitecturalPrompt = (options: ArchitecturalRenderOptions): string => {
     let promptParts: string[] = [];
 
-    // 1. Role (Photographer)
+    // 1. Role
     promptParts.push(getRoleDefinition());
 
-    // 2. Input Analysis & Processing Rules (Mixed-Media Logic)
-    promptParts.push(getInputAnalysisAndRules());
+    // 2. Render Style (Technique) - PRIMARY INSTRUCTION
+    promptParts.push(getRenderStyleInstruction(options.renderStyle));
 
-    // 3. Dynamic Creativity Level
-    promptParts.push(getCreativityInstruction(options.creativeFreedom));
+    // 3. Scene Content (Subject matter)
+    if (options.sceneType === 'exterior') promptParts.push(getExteriorPrompts(options));
+    else if (options.sceneType === 'interior') promptParts.push(getInteriorPrompts(options));
+    else if (options.sceneType === 'studio') promptParts.push(getStudioPrompts(options));
+    else if (options.sceneType === 'automotive') promptParts.push(getAutomotivePrompts(options));
+    else if (options.sceneType === 'object_interior') promptParts.push(getObjectPrompts(options, 'interior'));
+    else if (options.sceneType === 'object_exterior') promptParts.push(getObjectPrompts(options, 'exterior'));
 
-    // 4. Dynamic Scene Details (Style, Weather, Light)
-    if (options.sceneType === 'exterior') {
-        promptParts.push("SCENE CONTEXT (EXTERIOR):");
-        promptParts.push(getExteriorPrompts(options));
-    } else {
-        promptParts.push("SCENE CONTEXT (INTERIOR):");
-        promptParts.push(getInteriorPrompts(options));
+    // 4. Architectural/Subject Style (Content description)
+    // This is distinct from Render Style. E.g "Modern" house painted in "Watercolor"
+    if (options.archStyle && options.archStyle !== 'none') {
+        promptParts.push(`SUBJECT STYLE: ${options.archStyle.replace(/_/g, ' ').toUpperCase()}. Apply the physical characteristics of this design style to the subject.`);
     }
 
-    // 5. User Additional Prompt
-    if (options.additionalPrompt && options.additionalPrompt.trim().length > 0) {
-        promptParts.push("ADDITIONAL USER DETAILS (High Priority):");
-        promptParts.push(options.additionalPrompt);
+    // 5. Additional User Prompt
+    if (options.additionalPrompt?.trim()) {
+        promptParts.push("ADDITIONAL USER DETAILS:\n" + options.additionalPrompt);
     }
 
-    // 6. Style Reference
+    // 6. Style Reference Guide
     if (options.hasStyleReference) {
-        promptParts.push("STYLE REFERENCE INSTRUCTION:");
-        promptParts.push("A reference image is attached. CAPTURE the exact mood, color grading, and material quality of that reference image and apply it to the sketch geometry.");
+        promptParts.push("REFERENCE IMAGE: A style reference image is attached. Mimic the color palette, lighting mood, and texture execution of this reference exactly.");
     }
 
-    // 7. Negative Prompt (Updated)
-    promptParts.push("NEGATIVE PROMPT: Abstract, cartoon, illustration, drawing, blurred, low quality, disappearing objects, empty lawn. Do NOT output a drawing or painting. NO structural AI hallucinations.");
+    // 7. Negative Prompt (Dynamic based on Render Style)
+    if (options.renderStyle === 'photorealistic') {
+        promptParts.push("NEGATIVE PROMPT: Sketch, painting, drawing, cartoon, illustration, blueprint, abstract, low quality, blurry, distorted.");
+    } else {
+        // If artistic, we don't want it to look like a photo
+        promptParts.push("NEGATIVE PROMPT: Photorealistic, 3d render, photograph, shiny 3d, plastic looking. Do NOT make it look like a photo. Keep the artistic medium texture.");
+    }
 
     return promptParts.join("\n\n");
 };

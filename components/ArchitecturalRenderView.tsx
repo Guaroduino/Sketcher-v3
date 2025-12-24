@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { PhotoIcon, SparklesIcon, UploadIcon, UndoIcon, RedoIcon, SaveIcon, XIcon as CloseIcon, ZoomInIcon, ZoomOutIcon, MaximizeIcon, DownloadIcon, ChevronLeftIcon, ChevronRightIcon, FolderOpenIcon } from './icons';
 import { GoogleGenAI } from "@google/genai";
-import { buildArchitecturalPrompt, ArchitecturalRenderOptions } from '../utils/architecturalPromptBuilder';
+import { buildArchitecturalPrompt, ArchitecturalRenderOptions, SceneType, RenderStyleMode } from '../utils/architecturalPromptBuilder';
 import { prepareVisualPromptingRequest, Region, buildVisualPrompt } from '../services/visualPromptingService';
 import { LayeredCanvas, LayeredCanvasRef } from './visual-prompting/LayeredCanvas';
 import { VisualPromptingControls } from './visual-prompting/VisualPromptingControls';
@@ -20,9 +20,11 @@ interface ArchitecturalRenderViewProps {
     credits: number | null;
     deductCredit?: () => Promise<boolean>;
     onSaveToLibrary?: (file: File) => void;
+    // New: Model Selection
+    selectedModel: string;
 }
 
-type SceneType = 'exterior' | 'interior';
+
 
 const XIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -85,7 +87,8 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
     onInspectRequest,
     credits,
     deductCredit,
-    onSaveToLibrary
+    onSaveToLibrary,
+    selectedModel
 }, ref) => {
     const [sceneType, setSceneType] = useState<SceneType>('exterior');
     const [inputImage, setInputImage] = useState<string | null>(null);
@@ -164,11 +167,27 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
     }, [isSidebarOpen]);
 
     // -- Form State --
+    const [renderStyle, setRenderStyle] = useState<RenderStyleMode>('photorealistic'); // NEW: Global Render Style
+
+    // Exterior/Interior States
     const [timeOfDay, setTimeOfDay] = useState('noon');
     const [weather, setWeather] = useState('sunny');
-    const [archStyle, setArchStyle] = useState('modern');
-    const [roomType, setRoomType] = useState('living_room'); // For interior
-    const [lighting, setLighting] = useState('natural'); // For interior
+    const [archStyle, setArchStyle] = useState('modern'); // Now purely "Subject Style"
+    const [roomType, setRoomType] = useState('living_room');
+    const [lighting, setLighting] = useState('natural');
+
+    // New Scene States
+    const [studioLighting, setStudioLighting] = useState('softbox');
+    const [studioBackground, setStudioBackground] = useState('infinity_white');
+    const [studioShot, setStudioShot] = useState('full_shot'); // NEW
+
+    const [carAngle, setCarAngle] = useState('front_three_quarter');
+    const [carEnvironment, setCarEnvironment] = useState('studio');
+    const [carColor, setCarColor] = useState('none'); // NEW
+
+    const [objectMaterial, setObjectMaterial] = useState('matte_plastic');
+    const [objectDoF, setObjectDoF] = useState('macro_focus');
+    const [objectContext, setObjectContext] = useState('table_top'); // NEW
 
     // Creativity now 0-200
     const [creativeFreedom, setCreativeFreedom] = useState(50);
@@ -363,19 +382,24 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
     }, []);
 
     // Update Manual Prompt when options change
+    // Update Manual Prompt when options change
     useEffect(() => {
         const renderOptions: ArchitecturalRenderOptions = {
             sceneType,
+            renderStyle, // Pass new render style
             creativeFreedom,
             additionalPrompt,
             archStyle,
             hasStyleReference: !!styleReferenceImage,
             ...(sceneType === 'exterior' && { timeOfDay, weather }),
             ...(sceneType === 'interior' && { roomType, lighting }),
+            ...(sceneType === 'studio' && { studioLighting, studioBackground, studioShot }),
+            ...(sceneType === 'automotive' && { carAngle, carEnvironment, carColor }),
+            ...((sceneType === 'object_interior' || sceneType === 'object_exterior') && { objectMaterial, objectDoF, objectContext }),
         };
         const generatedPrompt = buildArchitecturalPrompt(renderOptions);
         setManualPrompt(generatedPrompt);
-    }, [sceneType, creativeFreedom, additionalPrompt, archStyle, timeOfDay, weather, roomType, lighting, styleReferenceImage]);
+    }, [sceneType, renderStyle, creativeFreedom, additionalPrompt, archStyle, timeOfDay, weather, roomType, lighting, styleReferenceImage, studioLighting, studioBackground, studioShot, carAngle, carEnvironment, carColor, objectMaterial, objectDoF, objectContext]);
 
     // Sync Refs
     useEffect(() => {
@@ -599,7 +623,7 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
 
             // @ts-ignore
             const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
-            const model = GEMINI_MODEL_ID;
+            const model = selectedModel || GEMINI_MODEL_ID;
             const config = { responseModalities: ["IMAGE"] };
 
             if (onInspectRequest) {
@@ -657,7 +681,7 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
 
         try {
             const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
-            const model = GEMINI_MODEL_ID;
+            const model = selectedModel || GEMINI_MODEL_ID;
             // console.log("Render View using model:", model);
 
             // STRICT SEPARATION: User requested that Photorealistic flow NEVER mixes with Visual Prompting.
@@ -848,13 +872,77 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
         }
     };
 
-    // -- Options Configuration (Keep existing options arrays) --
+    // -- Options Configuration --
+    // -- Options Configuration --
     const timeOptions = [{ label: 'Mañana', value: 'morning' }, { label: 'Mediodía', value: 'noon' }, { label: 'Tarde', value: 'afternoon' }, { label: 'Hora Dorada', value: 'golden_hour' }, { label: 'Noche', value: 'night' }];
     const weatherOptions = [{ label: 'Soleado', value: 'sunny' }, { label: 'Nublado', value: 'overcast' }, { label: 'Lluvia', value: 'rainy' }, { label: 'Niebla', value: 'foggy' }];
-    const extStyleOptions = [{ label: 'Moderno', value: 'modern' }, { label: 'Moderno Mid-Century', value: 'mid_century_modern' }, { label: 'Contemporáneo', value: 'contemporary' }, { label: 'Cape Cod', value: 'cape_cod' }, { label: 'Craftsman (Artesano)', value: 'craftsman' }, { label: 'Victoriano', value: 'victorian' }, { label: 'Colonial', value: 'colonial' }, { label: 'Rancho', value: 'ranch' }, { label: 'Farmhouse', value: 'farmhouse' }, { label: 'Modernismo Brasileño', value: 'brazilian_modernism' }, { label: 'Mediterráneo', value: 'mediterranean' }, { label: 'Brutalista', value: 'brutalist' }, { label: 'Futurista', value: 'futuristic' }, { label: 'Cinematográfico', value: 'cinematic' }];
+
+    // Scene Type Options
+    const sceneTypeOptions = [
+        { label: 'Exterior Arquitectónico', value: 'exterior' },
+        { label: 'Interior Arquitectónico', value: 'interior' },
+        { label: 'Objeto (Interior)', value: 'object_interior' },
+        { label: 'Objeto (Exterior)', value: 'object_exterior' },
+        { label: 'Fotografía de Estudio', value: 'studio' },
+        { label: 'Automotriz', value: 'automotive' },
+    ];
+
+    // Render Style Options (Technique)
+    const renderStyleOptions = [
+        { label: 'Fotorealista', value: 'photorealistic' },
+        { label: 'Acuarela', value: 'watercolor' },
+        { label: 'Lápiz de Color', value: 'colored_pencil' },
+        { label: 'Grafito', value: 'graphite' },
+        { label: 'Marcador', value: 'ink_marker' },
+        { label: 'Carboncillo', value: 'charcoal' },
+        { label: 'Pintura Digital', value: 'digital_painting' },
+        { label: 'Cartoon 3D', value: '3d_cartoon' }
+    ];
+
+    // Architectural/Subject Options (Removed Artistic Styles)
+    const archStyleOptions = [
+        { label: 'Ninguno / Genérico', value: 'none' },
+        { label: 'Moderno', value: 'modern' },
+        { label: 'Moderno Mid-Century', value: 'mid_century_modern' },
+        { label: 'Contemporáneo', value: 'contemporary' },
+        { label: 'Minimalista', value: 'minimalist' },
+        { label: 'Escandinavo', value: 'scandinavian' },
+        { label: 'Industrial & Loft', value: 'industrial_loft' },
+        { label: 'Lujo & Clásico', value: 'luxury_classic' },
+        { label: 'Bohemio', value: 'bohemian' },
+        { label: 'Farmhouse', value: 'farmhouse' },
+        { label: 'Biofílico', value: 'biophilic' },
+        { label: 'Art Deco', value: 'art_deco' },
+        { label: 'Rústico Cozy', value: 'cozy_rustic' },
+        { label: 'Tradicional', value: 'traditional' },
+        { label: 'Costero', value: 'coastal' },
+        { label: 'Cape Cod', value: 'cape_cod' },
+        { label: 'Craftsman', value: 'craftsman' },
+        { label: 'Victoriano', value: 'victorian' },
+        { label: 'Colonial', value: 'colonial' },
+        { label: 'Rancho', value: 'ranch' },
+        { label: 'Modernismo Brasileño', value: 'brazilian_modernism' },
+        { label: 'Mediterráneo', value: 'mediterranean' },
+        { label: 'Brutalista', value: 'brutalist' },
+        { label: 'Futurista', value: 'futuristic' },
+        { label: 'Cinematográfico', value: 'cinematic' }
+    ];
+
     const roomOptions = [{ label: 'Sala', value: 'living_room' }, { label: 'Cocina', value: 'kitchen' }, { label: 'Dormitorio', value: 'bedroom' }, { label: 'Baño', value: 'bathroom' }, { label: 'Oficina', value: 'office' }, { label: 'Aula', value: 'classroom' }, { label: 'Laboratorio', value: 'laboratory' }, { label: 'Taller', value: 'workshop' }, { label: 'Gym', value: 'gym' }, { label: 'Hotel', value: 'hotel_room' }, { label: 'Retail', value: 'retail_store' }, { label: 'Restaurante', value: 'restaurant' }, { label: 'Lobby', value: 'lobby' }, { label: 'Mall', value: 'mall_hallway' }];
     const lightingOptions = [{ label: 'Natural', value: 'natural' }, { label: 'Natural (Mañana)', value: 'natural_morning' }, { label: 'Natural (Tarde)', value: 'natural_afternoon' }, { label: 'Cálida (3000K)', value: 'warm_artificial' }, { label: 'Neutra (4000K)', value: 'neutral_artificial' }, { label: 'Fría (5000K)', value: 'cold_artificial' }, { label: 'Studio', value: 'studio' }, { label: 'Moody (Dramático)', value: 'moody' }];
-    const intStyleOptions = [{ label: 'Minimalista', value: 'minimalist' }, { label: 'Escandinavo', value: 'scandinavian' }, { label: 'Industrial & Loft', value: 'industrial_loft' }, { label: 'Lujo & Clásico', value: 'luxury_classic' }, { label: 'Bohemio', value: 'bohemian' }, { label: 'Moderno Mid-Century', value: 'mid_century_modern' }, { label: 'Farmhouse', value: 'farmhouse' }, { label: 'Biofílico', value: 'biophilic' }, { label: 'Art Deco', value: 'art_deco' }, { label: 'Rústico Cozy', value: 'cozy_rustic' }, { label: 'Tradicional', value: 'traditional' }, { label: 'Costero', value: 'coastal' }, { label: 'Moderno', value: 'modern' }];
+
+    // New Options
+    const studioLightOptions = [{ label: 'Softbox (Suave)', value: 'softbox' }, { label: 'Rim Light (Silueta)', value: 'rim_light' }, { label: 'Luz Dura (Hard Key)', value: 'hard_key' }, { label: 'Dramático', value: 'dramatic' }];
+    const studioBgOptions = [{ label: 'Infinito Blanco', value: 'infinity_white' }, { label: 'Infinito Negro', value: 'infinity_black' }, { label: 'Concreto', value: 'concrete' }, { label: 'Gel Color', value: 'colored_gel' }];
+    const studioShotOptions = [{ label: 'Plano Medio', value: 'full_shot' }, { label: 'Primer Plano (Macro)', value: 'close_up' }, { label: 'Knolling (Top Down)', value: 'knolling' }];
+
+    const carAngleOptions = [{ label: 'Frente 3/4', value: 'front_three_quarter' }, { label: 'Perfil Lateral', value: 'side_profile' }, { label: 'Trasera', value: 'rear' }, { label: 'Contrapicado (Hero)', value: 'low_angle_hero' }];
+    const carEnvOptions = [{ label: 'Estudio Limpio', value: 'studio' }, { label: 'Calle Ciudad', value: 'city_street' }, { label: 'Pista Carreras', value: 'raceway' }, { label: 'Naturaleza', value: 'nature_scenic' }];
+    const carColorOptions = [{ label: 'Original', value: 'none' }, { label: 'Rojo Ferrari', value: 'rosso_corsa' }, { label: 'Plata Metálico', value: 'silver_metallic' }, { label: 'Negro Mate', value: 'matte_black' }, { label: 'Blanco Perla', value: 'pearl_white' }, { label: 'Azul Midnight', value: 'midnight_blue' }];
+
+    const objMatOptions = [{ label: 'Plástico Mate', value: 'matte_plastic' }, { label: 'Metal Cepillado', value: 'brushed_metal' }, { label: 'Vidrio', value: 'glass' }, { label: 'Cerámica', value: 'ceramic' }, { label: 'Madera Fina', value: 'wood' }];
+    const objDofOptions = [{ label: 'Macro (Bokeh)', value: 'macro_focus' }, { label: 'Retrato (f/1.8)', value: 'shallow_depth_of_field' }, { label: 'Todo en Foco', value: 'wide_focus' }];
+    const objContextOptions = [{ label: 'Mesa de Estudio', value: 'table_top' }, { label: 'Exterior Desenfocado', value: 'outdoor_blur' }];
 
 
     return (
@@ -937,17 +1025,18 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                     </div>
 
                     {/* Bottom Toolbar (Floating Navigation) */}
-                    <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex items-center gap-4 px-4 py-2 bg-theme-bg-secondary/95 backdrop-blur border border-theme-bg-tertiary rounded-full shadow-2xl z-20">
+                    {/* Bottom Toolbar (Floating Navigation) */}
+                    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-1 p-1 bg-theme-bg-primary/80 backdrop-blur-sm rounded-lg shadow-lg z-20">
                         {/* Zoom Controls */}
                         <div className="flex items-center gap-1">
-                            <button onClick={() => setTransform(p => ({ ...p, zoom: p.zoom / 1.2 }))} className="p-1.5 hover:bg-theme-bg-hover rounded-full text-theme-text-primary transition-colors" title="Zoom Out"><ZoomOutIcon className="w-4 h-4" /></button>
-                            <button onClick={resetView} className="p-1.5 hover:bg-theme-bg-hover rounded-full text-theme-text-primary transition-colors" title="Reset View"><MaximizeIcon className="w-4 h-4" /></button>
-                            <button onClick={() => setTransform(p => ({ ...p, zoom: p.zoom * 1.2 }))} className="p-1.5 hover:bg-theme-bg-hover rounded-full text-theme-text-primary transition-colors" title="Zoom In"><ZoomInIcon className="w-4 h-4" /></button>
+                            <button onClick={() => setTransform(p => ({ ...p, zoom: p.zoom / 1.2 }))} className="p-1.5 hover:bg-theme-bg-hover rounded-md text-theme-text-primary transition-colors" title="Zoom Out"><ZoomOutIcon className="w-4 h-4" /></button>
+                            <button onClick={resetView} className="p-1.5 hover:bg-theme-bg-hover rounded-md text-theme-text-primary transition-colors" title="Reset View"><MaximizeIcon className="w-4 h-4" /></button>
+                            <button onClick={() => setTransform(p => ({ ...p, zoom: p.zoom * 1.2 }))} className="p-1.5 hover:bg-theme-bg-hover rounded-md text-theme-text-primary transition-colors" title="Zoom In"><ZoomInIcon className="w-4 h-4" /></button>
                         </div>
                         <div className="h-4 w-px bg-theme-bg-tertiary"></div>
 
                         {/* Toggle View */}
-                        <button onClick={() => setShowOriginal(!showOriginal)} disabled={!resultImage} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-theme-bg-tertiary hover:bg-theme-bg-hover text-xs font-bold text-theme-text-primary disabled:opacity-50 transition-colors">
+                        <button onClick={() => setShowOriginal(!showOriginal)} disabled={!resultImage} className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover text-xs font-bold text-theme-text-primary disabled:opacity-50 transition-colors">
                             {showOriginal ? <SparklesIcon className="w-3 h-3 text-purple-400" /> : <PhotoIcon className="w-3 h-3" />}
                             {showOriginal ? "Ver Render" : "Ver Original"}
                         </button>
@@ -959,7 +1048,7 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                             <button
                                 onClick={handleLocalUndo}
                                 disabled={historyIndex < 0}
-                                className="p-1.5 hover:bg-theme-bg-hover rounded-full text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                className="p-1.5 hover:bg-theme-bg-hover rounded-md text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                                 title="Deshacer Generación"
                             >
                                 <UndoIcon className="w-4 h-4" />
@@ -967,7 +1056,7 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                             <button
                                 onClick={handleLocalRedo}
                                 disabled={historyIndex >= generationHistory.length - 1}
-                                className="p-1.5 hover:bg-theme-bg-hover rounded-full text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                className="p-1.5 hover:bg-theme-bg-hover rounded-md text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                                 title="Rehacer Generación"
                             >
                                 <RedoIcon className="w-4 h-4" />
@@ -977,7 +1066,7 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                         <div className="h-4 w-px bg-theme-bg-tertiary"></div>
 
                         {/* Upscale */}
-                        <button onClick={handleUpscale} disabled={!resultImage || isUpscaling} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-xs font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                        <button onClick={handleUpscale} disabled={!resultImage || isUpscaling} className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-xs font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all">
                             {isUpscaling ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <SparklesIcon className="w-3 h-3" />}
                             4K
                         </button>
@@ -988,7 +1077,7 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                         <button
                             onClick={handleSaveToLibrary}
                             disabled={!resultImage}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${resultImage ? 'bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary' : 'bg-transparent text-gray-500 cursor-not-allowed'}`}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${resultImage ? 'bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary' : 'bg-transparent text-gray-500 cursor-not-allowed'}`}
                         >
                             <FolderOpenIcon className="w-3 h-3" /> Guardar
                         </button>
@@ -998,14 +1087,14 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                         <a
                             href={resultImage || '#'}
                             download={resultImage ? `Render_${Date.now()}.png` : undefined}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${resultImage ? 'bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary' : 'bg-transparent text-gray-500 cursor-not-allowed'}`}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${resultImage ? 'bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary' : 'bg-transparent text-gray-500 cursor-not-allowed'}`}
                             onClick={(e) => !resultImage && e.preventDefault()}
                         >
                             <SaveIcon className="w-3 h-3" /> Descargar
                         </a>
 
                         {/* Clear */}
-                        <button onClick={handleReset} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900/30 text-xs font-bold transition-all" title="Limpiar Todo">
+                        <button onClick={handleReset} className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900/30 text-xs font-bold transition-all" title="Limpiar Todo">
                             <CloseIcon className="w-3 h-3" /> Limpiar
                         </button>
                     </div>
@@ -1039,13 +1128,9 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin scrollbar-thumb-theme-bg-tertiary">
-                    {/* Scene Type */}
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider">Tipo de Escena</label>
-                        <div className="flex bg-theme-bg-primary p-1 rounded-lg border border-theme-bg-tertiary">
-                            <button onClick={() => setSceneType('exterior')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${sceneType === 'exterior' ? 'bg-theme-accent-primary text-white shadow-md' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}>Exterior</button>
-                            <button onClick={() => setSceneType('interior')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${sceneType === 'interior' ? 'bg-theme-accent-primary text-white shadow-md' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}>Interior</button>
-                        </div>
+                    {/* Scene Type Select */}
+                    <div className="space-y-4">
+                        <CollapsiblePillGroup label="Tipo de Escena" options={sceneTypeOptions} value={sceneType} onChange={(v) => setSceneType(v as SceneType)} />
                     </div>
 
                     {/* Style Reference Upload (Moved here) */}
@@ -1069,22 +1154,52 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
 
                     <div className="h-px bg-theme-bg-tertiary"></div>
 
-                    {/* Dynamic Controls */}
-                    <div className="space-y-2">
-                        {sceneType === 'exterior' ? (
+                    {/* Dynamic Controls based on SceneType */}
+                    {/* Dynamic Controls based on SceneType */}
+                    <div className="space-y-4">
+                        {/* 2. RENDER STYLE (Technique) */}
+                        <CollapsiblePillGroup label="Estilo de Renderizado" options={renderStyleOptions} value={renderStyle} onChange={(v) => setRenderStyle(v as RenderStyleMode)} />
+
+                        <div className="h-px bg-theme-bg-tertiary"></div>
+
+                        {/* 3. SCENE OPTIONS (3 per type) */}
+                        {sceneType === 'exterior' && (
                             <>
+                                <CollapsiblePillGroup label="Estilo Arquitectónico" options={archStyleOptions} value={archStyle} onChange={setArchStyle} />
                                 <CollapsiblePillGroup label="Hora del día" options={timeOptions} value={timeOfDay} onChange={setTimeOfDay} />
                                 <CollapsiblePillGroup label="Clima" options={weatherOptions} value={weather} onChange={setWeather} />
-                                <CollapsiblePillGroup label="Estilo Arquitectónico" options={extStyleOptions} value={archStyle} onChange={setArchStyle} />
                             </>
-                        ) : (
+                        )}
+                        {sceneType === 'interior' && (
                             <>
+                                <CollapsiblePillGroup label="Estilo Interior" options={archStyleOptions} value={archStyle} onChange={setArchStyle} />
                                 <CollapsiblePillGroup label="Tipo de Habitación" options={roomOptions} value={roomType} onChange={setRoomType} />
-                                <CollapsiblePillGroup label="Estilo de Interior" options={intStyleOptions} value={archStyle} onChange={setArchStyle} />
                                 <CollapsiblePillGroup label="Iluminación" options={lightingOptions} value={lighting} onChange={setLighting} />
                             </>
                         )}
+                        {sceneType === 'studio' && (
+                            <>
+                                <CollapsiblePillGroup label="Tipo de Plano" options={studioShotOptions} value={studioShot} onChange={setStudioShot} />
+                                <CollapsiblePillGroup label="Iluminación" options={studioLightOptions} value={studioLighting} onChange={setStudioLighting} />
+                                <CollapsiblePillGroup label="Fondo" options={studioBgOptions} value={studioBackground} onChange={setStudioBackground} />
+                            </>
+                        )}
+                        {sceneType === 'automotive' && (
+                            <>
+                                <CollapsiblePillGroup label="Pintura / Color" options={carColorOptions} value={carColor} onChange={setCarColor} />
+                                <CollapsiblePillGroup label="Ángulo Cámara" options={carAngleOptions} value={carAngle} onChange={setCarAngle} />
+                                <CollapsiblePillGroup label="Entorno" options={carEnvOptions} value={carEnvironment} onChange={setCarEnvironment} />
+                            </>
+                        )}
+                        {(sceneType === 'object_interior' || sceneType === 'object_exterior') && (
+                            <>
+                                <CollapsiblePillGroup label="Contexto" options={objContextOptions} value={objectContext} onChange={setObjectContext} />
+                                <CollapsiblePillGroup label="Material Foco" options={objMatOptions} value={objectMaterial} onChange={setObjectMaterial} />
+                                <CollapsiblePillGroup label="Lente / Foco" options={objDofOptions} value={objectDoF} onChange={setObjectDoF} />
+                            </>
+                        )}
                     </div>
+
 
                     <div className="h-px bg-theme-bg-tertiary"></div>
 
@@ -1138,7 +1253,7 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                         {isGenerating ? "Generando..." : <><SparklesIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" /> Convertir a Fotorealista</>}
                     </button>
                 </div>
-            </aside>
-        </div>
+            </aside >
+        </div >
     );
 }));

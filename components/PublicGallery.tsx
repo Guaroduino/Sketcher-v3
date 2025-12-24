@@ -1,29 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, limit, getDocs, doc, deleteDoc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
-import { PhotoIcon, XIcon, UserIcon, CalendarIcon, TrashIcon } from './icons';
-
-import { User } from 'firebase/auth'; // Ensure this import exists or use 'any' if type is not available directly, but User is better. 
-// Actually, App.tsx uses a User type, likely from firebase/auth or a local definition. I'll assume firebase/auth for now or check imports.
-// Wait, App.tsx imports User from firebase/auth usually, or defines it. 
-// Let's just use `any` for user prop temporarily to avoid import hell if I don't see the User type definition file, 
-// OR better, checking imports in PublicGallery. It doesn't import User.
-// I will start by adding the authorId field.
+import { db, storage } from '../firebaseConfig'; // Added storage
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'; // Added storage functions
+import { PhotoIcon, XIcon, UserIcon, CalendarIcon, TrashIcon, PlusIcon, ImageIcon } from './icons'; // Added PlusIcon
+import { GalleryUploadModal } from './modals/GalleryUploadModal';
 
 interface PublicGalleryProps {
     isOpen: boolean;
     onClose: () => void;
     isAdmin?: boolean;
-    currentUser?: any; // Using any to avoid import issues for now, or I can try loading it if I knew where it was defined.
+    currentUser?: any;
 }
 
 interface PublicImage {
     id: string;
     imageUrl: string;
     thumbnailUrl?: string;
+    inputImageUrl?: string;
+    refImageUrl?: string;
     title: string;
     authorName: string;
-    authorId?: string; // Added authorId
+    authorId?: string;
     createdAt: any;
     description: string;
     likes: number;
@@ -33,6 +30,7 @@ export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose, i
     const [images, setImages] = useState<PublicImage[]>([]);
     const [loading, setLoading] = useState(false);
     const [selectedImage, setSelectedImage] = useState<PublicImage | null>(null);
+    const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -56,9 +54,11 @@ export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose, i
                     id: doc.id,
                     imageUrl: data.imageUrl,
                     thumbnailUrl: data.thumbnailUrl,
+                    inputImageUrl: data.inputImageUrl, // New field
+                    refImageUrl: data.refImageUrl,     // New field
                     title: data.title || 'Untitled',
                     authorName: data.authorName || 'Anonymous',
-                    authorId: data.userId || data.authorId, // Support both fields just in case
+                    authorId: data.userId || data.authorId,
                     createdAt: data.createdAt,
                     description: data.description,
                     likes: data.likes || 0
@@ -111,6 +111,10 @@ export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose, i
         }
     };
 
+    const handleNewImage = (newImage: any) => {
+        setImages(prev => [newImage, ...prev]);
+    };
+
     if (!isOpen) return null;
 
     return (
@@ -122,9 +126,20 @@ export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose, i
                         <PhotoIcon className="w-6 h-6 text-theme-accent-primary" />
                         <h2 className="text-xl font-bold text-theme-text-primary">Galería Pública (Beta)</h2>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-theme-bg-tertiary rounded-full text-theme-text-secondary hover:text-theme-text-primary transition-colors">
-                        <XIcon className="w-6 h-6" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {isAdmin && (
+                            <button
+                                onClick={() => setIsUploadModalOpen(true)}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-theme-accent-primary text-white text-sm font-bold hover:bg-theme-accent-secondary transition-colors"
+                            >
+                                <PlusIcon className="w-4 h-4" />
+                                <span className="hidden sm:inline">Publicar</span>
+                            </button>
+                        )}
+                        <button onClick={onClose} className="p-2 hover:bg-theme-bg-tertiary rounded-full text-theme-text-secondary hover:text-theme-text-primary transition-colors">
+                            <XIcon className="w-6 h-6" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Content */}
@@ -166,7 +181,6 @@ export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose, i
                                             <span className="text-xs text-gray-300 flex items-center gap-1">
                                                 <UserIcon className="w-3 h-3" /> {img.authorName}
                                             </span>
-                                            {/* Future: Likes */}
                                         </div>
                                     </div>
                                 </div>
@@ -181,16 +195,19 @@ export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose, i
                 <div className="fixed inset-0 z-[70] bg-black/90 flex items-center justify-center p-4">
                     <button
                         onClick={() => setSelectedImage(null)}
-                        className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+                        className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors z-[80]"
                     >
                         <XIcon className="w-8 h-8" />
                     </button>
 
-                    <div className="max-w-5xl w-full flex flex-col md:flex-row gap-6 bg-theme-bg-secondary p-1 rounded-xl overflow-hidden max-h-[90vh]">
-                        <div className="flex-1 bg-black flex items-center justify-center relative min-h-[40vh]">
-                            <img src={selectedImage.imageUrl} alt={selectedImage.title} className="max-w-full max-h-[80vh] object-contain" />
+                    <div className="max-w-6xl w-full flex flex-col lg:flex-row gap-6 bg-theme-bg-secondary p-1 rounded-xl overflow-hidden h-full max-h-[90vh]">
+                        {/* Main Image View - Scrollable if too large */}
+                        <div className="flex-1 bg-black flex items-center justify-center relative min-h-[40vh] overflow-hidden">
+                            <img src={selectedImage.imageUrl} alt={selectedImage.title} className="max-w-full max-h-full object-contain" />
                         </div>
-                        <div className="w-full md:w-80 bg-theme-bg-secondary p-6 flex flex-col text-theme-text-primary">
+
+                        {/* Sidebar Info */}
+                        <div className="w-full lg:w-96 bg-theme-bg-secondary p-6 flex flex-col text-theme-text-primary overflow-y-auto">
                             <h3 className="text-2xl font-bold mb-2">{selectedImage.title}</h3>
                             <div className="flex items-center gap-2 text-theme-text-secondary mb-6 pb-6 border-b border-theme-bg-tertiary">
                                 <div className="p-2 bg-theme-bg-tertiary rounded-full">
@@ -203,37 +220,61 @@ export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose, i
                                         {selectedImage.createdAt?.toDate ? selectedImage.createdAt.toDate().toLocaleDateString() : 'Reciente'}
                                     </span>
                                 </div>
-
-                                {/* Delete Button in Modal */}
-                                {(isAdmin || (currentUser && selectedImage.authorId && currentUser.uid === selectedImage.authorId)) && (
-                                    <button
-                                        onClick={(e) => handleDelete(e, selectedImage.id, selectedImage.authorId)}
-                                        className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors flex items-center gap-2"
-                                        title="Eliminar imagen"
-                                    >
-                                        <TrashIcon className="w-5 h-5" />
-                                        <span className="text-xs font-bold hidden md:inline">Eliminar</span>
-                                    </button>
-                                )}
                             </div>
+
+                            {/* NEW: Process Section */}
+                            {(selectedImage.inputImageUrl || selectedImage.refImageUrl) && (
+                                <div className="mb-6">
+                                    <h4 className="text-xs font-bold uppercase text-theme-text-secondary mb-3 flex items-center gap-2">
+                                        <ImageIcon className="w-3 h-3" /> Proceso Creativo
+                                    </h4>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {selectedImage.inputImageUrl && (
+                                            <div className="group relative aspect-square rounded overflow-hidden border border-theme-bg-tertiary">
+                                                <img src={selectedImage.inputImageUrl} className="w-full h-full object-cover" />
+                                                <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] p-1 font-bold text-center">Input</span>
+                                            </div>
+                                        )}
+                                        {selectedImage.refImageUrl && (
+                                            <div className="group relative aspect-square rounded overflow-hidden border border-theme-bg-tertiary">
+                                                <img src={selectedImage.refImageUrl} className="w-full h-full object-cover" />
+                                                <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] p-1 font-bold text-center">Referencia</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                             {selectedImage.description && (
                                 <div className="mb-6">
                                     <h4 className="text-xs font-bold uppercase text-theme-text-secondary mb-2">Descripción</h4>
-                                    <p className="text-sm leading-relaxed">{selectedImage.description}</p>
+                                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{selectedImage.description}</p>
                                 </div>
                             )}
 
-                            <div className="mt-auto">
-                                <button className="w-full py-3 bg-theme-accent-primary hover:bg-theme-accent-secondary text-white rounded-lg font-bold shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98]">
-                                    Usar como Referencia
-                                </button>
-                                <p className="text-[10px] text-center text-theme-text-tertiary mt-2">Próximamente</p>
-                            </div>
+                            {/* Delete Button */}
+                            {(isAdmin || (currentUser && selectedImage.authorId && currentUser.uid === selectedImage.authorId)) && (
+                                <div className="mt-auto pt-6 border-t border-theme-bg-tertiary">
+                                    <button
+                                        onClick={(e) => handleDelete(e, selectedImage.id, selectedImage.authorId)}
+                                        className="w-full p-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        <TrashIcon className="w-4 h-4" />
+                                        <span className="text-xs font-bold">Eliminar Publicación</span>
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
             )}
+
+            <GalleryUploadModal
+                isOpen={isUploadModalOpen}
+                onClose={() => setIsUploadModalOpen(false)}
+                currentUser={currentUser}
+                onUploadComplete={handleNewImage}
+            />
         </div>
     );
 };

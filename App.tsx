@@ -36,16 +36,17 @@ import { CanvasSizeModal } from './components/modals/CanvasSizeModal';
 import { ConfirmClearModal } from './components/modals/ConfirmClearModal';
 import { ConfirmDeleteLibraryItemModal } from './components/modals/ConfirmDeleteLibraryItemModal';
 import { ConfirmResetModal } from './components/modals/ConfirmResetModal';
-import { CropIcon, CheckIcon, XIcon, RulerIcon, PerspectiveIcon, ImageSquareIcon, OrthogonalIcon, MirrorIcon, GridIcon, IsometricIcon, LockIcon, LockOpenIcon, TransformIcon, FreeTransformIcon, SunIcon, MoonIcon, CopyIcon, CutIcon, PasteIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, GoogleIcon, LogOutIcon, ArrowUpIcon, ArrowDownIcon, SnapIcon, BookmarkIcon, SaveIcon, FolderOpenIcon, GalleryIcon, StrokeModeIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, ExpandIcon, MinimizeIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, HistoryIcon, MoreVerticalIcon, AddAboveIcon, AddBelowIcon, HandRaisedIcon, DownloadIcon, SparklesIcon, MenuIcon } from './components/icons';
+import { CropIcon, CheckIcon, XIcon, RulerIcon, PerspectiveIcon, ImageSquareIcon, OrthogonalIcon, MirrorIcon, GridIcon, IsometricIcon, LockIcon, LockOpenIcon, TransformIcon, FreeTransformIcon, SunIcon, MoonIcon, CopyIcon, CutIcon, PasteIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, GoogleIcon, LogOutIcon, ArrowUpIcon, ArrowDownIcon, SnapIcon, BookmarkIcon, SaveIcon, FolderOpenIcon, GalleryIcon, StrokeModeIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, ExpandIcon, MinimizeIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, HistoryIcon, MoreVerticalIcon, AddAboveIcon, AddBelowIcon, HandRaisedIcon, DownloadIcon, SparklesIcon, MenuIcon, ChevronDownIcon } from './components/icons';
 import { ArchitecturalRenderView, ArchitecturalRenderViewHandle } from './components/ArchitecturalRenderView';
 import { FreeModeView, FreeModeViewHandle } from './components/FreeModeView';
+import { LandingGalleryCarousel } from './components/LandingGalleryCarousel';
 
 
 import { AIRequestInspectorModal } from './components/modals/AIRequestInspectorModal';
 import type { SketchObject, ItemType, Tool, CropRect, TransformState, WorkspaceTemplate, QuickAccessTool, ProjectFile, Project, StrokeMode, StrokeState, CanvasItem, StrokeModifier, ScaleUnit, Selection, ClipboardData, AppState, Point } from './types';
 import { getContentBoundingBox, createNewCanvas, createThumbnail, cloneCanvas, generateMipmaps, getCompositeCanvas } from './utils/canvasUtils';
 import { prepareAIRequest } from './utils/aiUtils';
-import { GEMINI_MODEL_ID } from './utils/constants';
+import { GEMINI_MODEL_ID, AI_MODELS, UI_DEFAULT_MODEL } from './utils/constants';
 
 type Theme = 'light' | 'dark';
 
@@ -100,6 +101,8 @@ function useAppUI() {
 
     // UI Scaling
     const [uiScale, setUiScale] = useState(1);
+    // AI Model Selection
+    const [selectedModel, setSelectedModel] = useState<string>(UI_DEFAULT_MODEL);
 
     useEffect(() => {
         const storedScale = localStorage.getItem('sketcher-ui-scale');
@@ -223,6 +226,9 @@ function useAppUI() {
         handleSaveUiScale,
         deferredPrompt,
         handleInstallClick,
+        selectedModel,
+        setSelectedModel,
+        isInstallable: !!deferredPrompt,
     };
 }
 
@@ -485,6 +491,7 @@ function useAI(
     currentScaleFactor: number,
     credits: number | null,
     deductCredit: () => Promise<boolean>,
+    selectedModel: string, // Accept from hook
     inspectRequest?: (payload: { model: string; parts: any[]; config?: any }) => Promise<boolean>
 ) {
     const [isEnhancing, setIsEnhancing] = useState(false);
@@ -694,7 +701,8 @@ function useAI(
             // @ts-ignore
             const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
             const textPart = { text: finalPrompt };
-            const model = GEMINI_MODEL_ID;
+            // Use selected model from state (passed as dependency/arg)
+            const model = selectedModel;
             const config = {
                 responseModalities: ["IMAGE"],
             };
@@ -740,6 +748,7 @@ function useAI(
                         transparentColors = result.transparentColors;
                         tolerance = result.tolerance;
 
+                        // Prepare original file
                         // Prepare original file
                         const res = await fetch(`data:image/png;base64,${newImageBase64}`);
                         const blob = await res.blob();
@@ -926,8 +935,6 @@ export function App() {
             // we have a closure issue if useCredits is defined after.
             // However, useCredits is called inside App component, but 'inspectAIRequest' is also defined inside App.
             // We just need to ensure 'role' is available in the dependency array or accessible via ref if needed.
-            // Wait, inspectAIRequest is defined BEFORE useCredits call in the current file structure.
-            // We need to move useCredits call UP or use a Ref for the role to access it here without re-creating the function constantly
             // OR just add 'role' to dependency array (which might re-create it often, but that's fine for this app).
 
             // Actually, let's look at where useCredits is called. Line 919.
@@ -963,6 +970,13 @@ export function App() {
     };
 
     const ui = useAppUI();
+    // Destructure for easier access
+    const {
+        isExportModalOpen, setExportModalOpen,
+        isSingleExportModalOpen, setSingleExportModalOpen,
+        selectedModel, setSelectedModel,
+    } = ui;
+
     const freeModeRef = useRef<FreeModeViewHandle>(null);
     const archRenderRef = useRef<ArchitecturalRenderViewHandle>(null);
 
@@ -985,7 +999,7 @@ export function App() {
         }
     }, [selection]);
 
-    const ai = useAI(dispatch, library.onImportToLibrary, handleSelectItem, setTool, scaleFactor, credits, deductCredit, inspectAIRequest);
+    const ai = useAI(dispatch, library.onImportToLibrary, handleSelectItem, setTool, scaleFactor, credits, deductCredit, selectedModel, inspectAIRequest);
     const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
 
     const loadAllToolSettings = useCallback((settings: any) => {
@@ -1586,10 +1600,12 @@ export function App() {
                         <button onClick={ui.handleStart} className="px-10 py-4 bg-theme-accent-primary text-white font-bold text-lg rounded-lg shadow-lg hover:bg-theme-accent-hover transform hover:scale-105 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-offset-2 focus:ring-offset-theme-bg-primary focus:ring-theme-accent-primary">
                             Comenzar a Dibujar
                         </button>
-                        <button onClick={() => ui.setIsPublicGalleryOpen(true)} className="text-theme-text-secondary hover:text-theme-accent-primary transition-colors text-sm font-semibold underline">
-                            Explorar Galería Pública
-                        </button>
+
                     </div>
+                </div>
+
+                <div className="absolute bottom-0 left-0 right-0 p-4">
+                    <LandingGalleryCarousel onOpenGallery={() => { ui.handleStart(); ui.setIsPublicGalleryOpen(true); }} />
                 </div>
                 <PublicGallery isOpen={ui.isPublicGalleryOpen} onClose={() => ui.setIsPublicGalleryOpen(false)} isAdmin={credits?.role === 'admin'} />
             </div>
@@ -1609,6 +1625,7 @@ export function App() {
             {ui.showClearConfirm && <ConfirmClearModal isOpen={ui.showClearConfirm} onCancel={() => ui.setShowClearConfirm(false)} onConfirm={handleConfirmClear} />}
             {ui.isCanvasSizeModalOpen && <CanvasSizeModal isOpen={ui.isCanvasSizeModalOpen} onClose={() => ui.setCanvasSizeModalOpen(false)} currentSize={canvasSize} onApply={(w, h) => { dispatch({ type: 'RESIZE_CANVAS', payload: { width: w, height: h } }); ui.setCanvasSizeModalOpen(false); setTimeout(canvasView.onZoomExtents, 100); }} />}
             {ui.isResetConfirmOpen && <ConfirmResetModal isOpen={ui.isResetConfirmOpen} onCancel={() => ui.setIsResetConfirmOpen(false)} onConfirm={() => { console.log("Resetting preferences..."); ui.setIsResetConfirmOpen(false); }} />}
+            <WorkspaceTemplatesPopover isOpen={isWorkspacePopoverOpen} onClose={() => setWorkspacePopoverOpen(false)} templates={templates.templates} onSave={handleSaveWorkspace} onLoad={handleLoadWorkspace} onDelete={templates.deleteTemplate} onResetPreferences={() => ui.setIsResetConfirmOpen(true)} />
             {library.imageToEdit && <TransparencyEditor item={library.imageToEdit} onApply={library.onApplyTransparency} onCancel={library.onCancelEditTransparency} />}
             {isToolSelectorOpen && editingToolSlotIndex !== null && <ToolSelectorModal isOpen={isToolSelectorOpen} onClose={() => { setIsToolSelectorOpen(false); setEditingToolSlotIndex(null); }} onSelectTool={(tool) => quickAccess.updateTool(editingToolSlotIndex, tool)} fxPresets={toolSettings.brushPresets} />}
 
@@ -1631,11 +1648,12 @@ export function App() {
                 onCreateFolder={library.onCreateFolder}
                 onEditItem={library.onEditTransparency}
                 onMoveItems={library.onMoveItems}
+                onOpenPublicGallery={() => ui.setIsPublicGalleryOpen(true)}
             />
 
             {/* Main Header */}
             {ui.isHeaderVisible && (
-                <header className="flex-shrink-0 relative z-20">
+                <header className="flex-shrink-0 relative z-50">
                     <div className="flex items-center justify-between p-2 bg-theme-bg-primary border-b border-theme-bg-tertiary">
                         <div className="flex items-center gap-4">
                             <div className="flex items-center gap-2">
@@ -1652,16 +1670,29 @@ export function App() {
                                     <GalleryIcon className="w-5 h-5" />
                                     <span>Proyectos</span>
                                 </button>
-                                <button ref={workspaceButtonRef} onClick={() => setWorkspacePopoverOpen(p => !p)} className="flex items-center gap-2 p-2 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary border border-theme-bg-tertiary transition-colors text-sm relative">
-                                    <BookmarkIcon className="w-5 h-5" />
-                                    <span>Plantillas</span>
-                                    {/* Keep Popover attached to button in DOM */}
-                                    <WorkspaceTemplatesPopover isOpen={isWorkspacePopoverOpen} onClose={() => setWorkspacePopoverOpen(false)} templates={templates.templates} onSave={handleSaveWorkspace} onLoad={handleLoadWorkspace} onDelete={templates.deleteTemplate} onResetPreferences={() => ui.setIsResetConfirmOpen(true)} />
-                                </button>
-                                <button onClick={() => ui.setIsPublicGalleryOpen(true)} className="flex items-center gap-2 p-2 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary border border-theme-bg-tertiary transition-colors text-sm">
-                                    <SparklesIcon className="w-5 h-5 text-theme-accent-primary" />
-                                    <span>Galería Pública</span>
-                                </button>
+                                {/* Templates button moved to user menu */}
+
+                                <div className="h-6 w-px bg-theme-bg-tertiary mx-1 hidden md:block"></div>
+
+                                {/* AI Model Selector - Desktop */}
+                                <div className="hidden md:flex items-center gap-2">
+                                    <div className="relative">
+                                        <select
+                                            value={selectedModel}
+                                            onChange={(e) => setSelectedModel(e.target.value)}
+                                            className="h-9 bg-theme-bg-primary text-theme-text-primary text-xs font-medium border border-theme-bg-tertiary rounded-md pl-2 pr-8 focus:ring-2 focus:ring-theme-accent-primary outline-none cursor-pointer hover:bg-theme-bg-hover transition-colors appearance-none"
+                                        >
+                                            {AI_MODELS.map(model => (
+                                                <option key={model.id} value={model.id}>
+                                                    {model.name} {model.isNew ? '(Nuevo)' : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-theme-text-secondary">
+                                            <ChevronDownIcon className="w-4 h-4" />
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -1700,67 +1731,61 @@ export function App() {
                             <div className="flex items-center gap-1 mr-2 px-2 py-1 bg-theme-bg-secondary rounded-md border border-theme-bg-tertiary">
                                 {ui.deferredPrompt && (
                                     <>
-                                        <button onClick={ui.handleInstallClick} className="flex items-center gap-1 p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title="Instalar Aplicación">
-                                            <DownloadIcon className="w-4 h-4" />
-                                            <span className="text-xs font-bold hidden sm:inline">Instalar</span>
-                                        </button>
-                                        <div className="w-px h-4 bg-theme-bg-tertiary mx-1"></div>
+
                                     </>
                                 )}
-                                <button onClick={() => ui.setUiScale(ui.uiScale - 0.1)} className="p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title="Reducir Interfaz">
-                                    <span className="text-xs font-bold">A-</span>
-                                </button>
-                                <span className="text-xs font-mono w-8 text-center">{Math.round(ui.uiScale * 100)}%</span>
-                                <button onClick={() => ui.setUiScale(ui.uiScale + 0.1)} className="p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title="Aumentar Interfaz">
-                                    <span className="text-xs font-bold">A+</span>
-                                </button>
-                                <div className="w-px h-4 bg-theme-bg-tertiary mx-1"></div>
-                                <button onClick={ui.handleSaveUiScale} className="p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title="Guardar configuración de tamaño">
-                                    <SaveIcon className="w-4 h-4" />
-                                </button>
-                                <div className="w-px h-4 bg-theme-bg-tertiary mx-1"></div>
+
                                 <button onClick={ui.handleToggleFullscreen} className="p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title={ui.isFullscreen ? "Salir de Pantalla Completa" : "Pantalla Completa"}>
                                     {ui.isFullscreen ? <MinimizeIcon className="w-4 h-4" /> : <ExpandIcon className="w-4 h-4" />}
                                 </button>
                             </div>
 
-                            <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-md bg-theme-bg-secondary hover:bg-theme-bg-tertiary text-theme-text-secondary">
-                                {theme === 'dark' ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
-                            </button>
-                            <Auth user={user} credits={credits} role={role} />
+                            <Auth
+                                user={user}
+                                credits={credits}
+                                role={role}
+                                onThemeToggle={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                                isDarkTheme={theme === 'dark'}
+                                uiScale={ui.uiScale}
+                                setUiScale={ui.setUiScale}
+                                onSaveUiScale={ui.handleSaveUiScale}
+                                onOpenTemplates={() => setWorkspacePopoverOpen(true)}
+                                onInstallApp={ui.handleInstallClick}
+                                isInstallable={ui.isInstallable}
+                            />
                         </div>
                     </div>
 
                     {/* MOBILE MENU DROPDOWN */}
-                    {isMobileMenuOpen && (
-                        <div className="md:hidden absolute top-full left-0 w-full bg-theme-bg-secondary border-b border-theme-bg-tertiary shadow-xl flex flex-col p-4 gap-3 z-50">
-                            <div className="flex flex-col gap-2">
-                                <label className="text-[10px] uppercase font-bold text-theme-text-tertiary">Navegación</label>
-                                <button onClick={() => { ui.setProjectGalleryOpen(true); setIsMobileMenuOpen(false); }} className="flex items-center gap-3 p-3 rounded-md bg-theme-bg-primary hover:bg-theme-bg-hover text-sm font-medium">
-                                    <GalleryIcon className="w-5 h-5" /> Proyectos
-                                </button>
-                                <button onClick={() => { setWorkspacePopoverOpen(true); setIsMobileMenuOpen(false); }} className="flex items-center gap-3 p-3 rounded-md bg-theme-bg-primary hover:bg-theme-bg-hover text-sm font-medium">
-                                    <BookmarkIcon className="w-5 h-5" /> Plantillas
-                                </button>
-                                <button onClick={() => { ui.setIsPublicGalleryOpen(true); setIsMobileMenuOpen(false); }} className="flex items-center gap-3 p-3 rounded-md bg-theme-bg-primary hover:bg-theme-bg-hover text-sm font-medium">
-                                    <SparklesIcon className="w-5 h-5 text-theme-accent-primary" /> Galería Pública
-                                </button>
-                            </div>
+                    {
+                        isMobileMenuOpen && (
+                            <div className="md:hidden absolute top-full left-0 w-full bg-theme-bg-secondary border-b border-theme-bg-tertiary shadow-xl flex flex-col p-4 gap-3 z-50">
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[10px] uppercase font-bold text-theme-text-tertiary">Navegación</label>
+                                    <button onClick={() => { ui.setProjectGalleryOpen(true); setIsMobileMenuOpen(false); }} className="flex items-center gap-3 p-3 rounded-md bg-theme-bg-primary hover:bg-theme-bg-hover text-sm font-medium">
+                                        <GalleryIcon className="w-5 h-5" /> Proyectos
+                                    </button>
 
-                            <div className="h-px bg-theme-bg-tertiary"></div>
+                                    <button onClick={() => { ui.setIsPublicGalleryOpen(true); setIsMobileMenuOpen(false); }} className="flex items-center gap-3 p-3 rounded-md bg-theme-bg-primary hover:bg-theme-bg-hover text-sm font-medium">
+                                        <SparklesIcon className="w-5 h-5 text-theme-accent-primary" /> Galería Pública
+                                    </button>
+                                </div>
+                                <div className="h-px bg-theme-bg-tertiary"></div>
 
-                            <div className="flex flex-col gap-2">
-                                <label className="text-[10px] uppercase font-bold text-theme-text-tertiary">Modo</label>
-                                <div className="grid grid-cols-3 gap-2">
-                                    <button onClick={() => { setActiveView('sketch'); setIsMobileMenuOpen(false); }} className={`p-2 rounded text-xs font-bold text-center ${activeView === 'sketch' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-primary'}`}>Sketch</button>
-                                    <button onClick={() => { setActiveView('render'); ui.setIsRightSidebarVisible(true); setIsMobileMenuOpen(false); }} className={`p-2 rounded text-xs font-bold text-center ${activeView === 'render' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-primary'}`}>Render</button>
-                                    <button onClick={() => { setActiveView('free'); ui.setIsRightSidebarVisible(false); setIsMobileMenuOpen(false); }} className={`p-2 rounded text-xs font-bold text-center ${activeView === 'free' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-primary'}`}>Libre</button>
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[10px] uppercase font-bold text-theme-text-tertiary">Modo</label>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <button onClick={() => { setActiveView('sketch'); setIsMobileMenuOpen(false); }} className={`p-2 rounded text-xs font-bold text-center ${activeView === 'sketch' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-primary'}`}>Sketch</button>
+                                        <button onClick={() => { setActiveView('render'); ui.setIsRightSidebarVisible(true); setIsMobileMenuOpen(false); }} className={`p-2 rounded text-xs font-bold text-center ${activeView === 'render' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-primary'}`}>Render</button>
+                                        <button onClick={() => { setActiveView('free'); ui.setIsRightSidebarVisible(false); setIsMobileMenuOpen(false); }} className={`p-2 rounded text-xs font-bold text-center ${activeView === 'free' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-primary'}`}>Libre</button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    )}
-                </header>
+                        )
+                    }
+                </header >
             )}
+
 
             {/* Main Content Area */}
             <div className="flex flex-grow min-h-0 relative">
@@ -1895,6 +1920,7 @@ export function App() {
                             ref={archRenderRef}
                             onImportFromSketch={getSketchSnapshot}
                             isSidebarOpen={ui.isRightSidebarVisible}
+                            selectedModel={selectedModel}
                             onUndo={() => dispatch({ type: 'UNDO' })}
                             onRedo={() => dispatch({ type: 'REDO' })}
                             canUndo={canUndo}
@@ -1914,9 +1940,10 @@ export function App() {
                             onImportFromSketch={getSketchSnapshot}
                             lastRenderedImage={lastRenderedImage}
                             onSaveToLibrary={handleSaveItemToLibrary}
-                            credits={credits}
                             deductCredit={deductCredit}
-                            onInspectRequest={inspectAIRequest}
+                            onInspectRequest={credits?.role === 'admin' ? inspectAIRequest : undefined}
+                            libraryItems={library.libraryItems}
+                            selectedModel={selectedModel}
                         />
                     </div>
                 </main>
@@ -1951,10 +1978,11 @@ export function App() {
                         </div>
                     </aside>
                 )}
-                <button onClick={() => ui.setIsRightSidebarVisible(!ui.isRightSidebarVisible)} className="absolute top-1/2 -translate-y-1/2 bg-theme-bg-secondary p-2 rounded-full shadow-xl z-40 border border-theme-bg-tertiary hover:bg-theme-bg-tertiary transition-all" style={{ right: ui.isRightSidebarVisible ? '20.25rem' : '0.25rem' }} title={ui.isRightSidebarVisible ? 'Ocultar paneles' : 'Mostrar paneles'}>
-
-                    {ui.isRightSidebarVisible ? <ChevronRightIcon className="w-5 h-5" /> : <ChevronLeftIcon className="w-5 h-5" />}
-                </button>
+                {activeView !== 'free' && (
+                    <button onClick={() => ui.setIsRightSidebarVisible(!ui.isRightSidebarVisible)} className="absolute top-1/2 -translate-y-1/2 bg-theme-bg-secondary p-2 rounded-full shadow-xl z-40 border border-theme-bg-tertiary hover:bg-theme-bg-tertiary transition-all" style={{ right: ui.isRightSidebarVisible ? '20.25rem' : '0.25rem' }} title={ui.isRightSidebarVisible ? 'Ocultar paneles' : 'Mostrar paneles'}>
+                        {ui.isRightSidebarVisible ? <ChevronRightIcon className="w-5 h-5" /> : <ChevronLeftIcon className="w-5 h-5" />}
+                    </button>
+                )}
             </div >
             <AIRequestInspectorModal
                 isOpen={!!inspectorPayload}
@@ -1989,12 +2017,13 @@ interface ProjectGalleryModalProps {
     onCreateFolder: (name: string, parentId: string | null) => void;
     onEditItem: (id: string) => void;
     onMoveItems: (itemIds: string[], targetParentId: string | null) => void;
+    onOpenPublicGallery?: () => void;
 }
 
 const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({
     isOpen, onClose, user, projects, isLoading, onSave, onLoad, onDelete, onSaveLocally, onLoadFromFile,
     libraryItems, onAddLibraryItemToScene, onPublishLibraryItem, onDeleteLibraryItem,
-    onImportImage, onCreateFolder, onEditItem, onMoveItems
+    onImportImage, onCreateFolder, onEditItem, onMoveItems, onOpenPublicGallery
 }) => {
     const [activeTab, setActiveTab] = useState<'projects' | 'library'>('projects');
     const [newProjectName, setNewProjectName] = useState('');
@@ -2040,6 +2069,11 @@ const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({
                     ) : (
                         <div className="flex items-center gap-2">
                             <input type="file" ref={fileInputRef} className="hidden" accept=".sketcher,application/json" onChange={handleFileSelected} />
+                            {onOpenPublicGallery && (
+                                <button onClick={() => { onOpenPublicGallery(); onClose(); }} className="flex items-center gap-2 px-4 py-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover font-semibold text-theme-accent-primary">
+                                    <SparklesIcon className="w-5 h-5" /> <span className="hidden md:inline">Galería Pública</span>
+                                </button>
+                            )}
                             <button onClick={handleFileLoadClick} className="flex items-center gap-2 px-4 py-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover font-semibold"> <FolderOpenIcon className="w-5 h-5" /> <span>Cargar desde Archivo</span> </button>
                             <button onClick={handleHeaderSaveLocalClick} className="flex items-center gap-2 px-4 py-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover font-semibold"> <SaveIcon className="w-5 h-5" /> <span>Guardar Local</span> </button>
                             <button onClick={onClose} className="p-2 rounded-full hover:bg-theme-bg-tertiary"> <XIcon className="w-6 h-6" /> </button>

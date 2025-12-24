@@ -192,6 +192,7 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
         redrawGuides,
         redrawUI,
         perspectiveVPs
+        // @ts-ignore
     } = useCanvasRendering({
         mainCanvasRef, guideCanvasRef, uiCanvasRef, items, viewTransform, isTransforming,
         activeItemId, activeGuide,
