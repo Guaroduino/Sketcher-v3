@@ -35,15 +35,39 @@ export interface ArchitecturalRenderOptions {
     hasStyleReference?: boolean;
 }
 
-const getRoleDefinition = () =>
-    "ROLE: You are an expert Visual Artist and Photographer. TASK: Convert the input Mixed-Media Composite Layout into a final visual realization based on the requested style.";
+const getRoleDefinition = (style: RenderStyleMode) => {
+    const role = style === 'photorealistic' ? "High-End Architectural Visualizer" : "Expert Architectural Artist";
+    const medium = style === 'photorealistic' ? "photorealistic 8k architectural photograph" : `architectural ${style.replace('_', ' ')} realization`;
+    return `ROLE: ${role}. TASK: Convert the input Mixed-Media Composite Layout into a final ${medium}.`;
+};
 
-const getInputAnalysisAndRules = () => `
-INPUT ANALYSIS: The input is a concept collage/sketch.
-RULES:
-1. GEOMETRY: Retain the structural forms and perspective of the input.
-2. MATERIALIZATION: Convert loose shapes/blobs into the materials implied by the prompt context.
+const getUniversalInputAnalysis = (style: RenderStyleMode) => {
+    const isPhoto = style === 'photorealistic';
+    const targetDescriptor = isPhoto ? "realistic physical objects" : "artistic elements consistent with the medium";
+    const exampleObject = isPhoto ? "realistic" : "stylized";
+    const objectiveTexture = isPhoto ? "high-fidelity textures and objects" : "stylized textures and artistic forms";
+    const cohesionDescriptor = isPhoto ? "as if taken by a single camera" : "maintaining a cohesive artistic style throughout";
+
+    return `
+INPUT ANALYSIS (CRITICAL): The input image is a concept collage. It contains two types of data:
+
+Linear Structure: Represents the fixed architecture (walls, windows, roof).
+
+Loose Shapes/Stickers/Colors: Represent volumes of entourage (vegetation, trees, people, cars, furniture).
+
+PROCESSING RULES:
+
+ARCHITECTURAL LAYER (STRICT): You must retain the exact perspective and geometry of the linear structural elements. Do not move walls or change the building design.
+
+ENTOURAGE LAYER (INTERPRETIVE): You must materialize all loose shapes, colored blobs, or pasted elements into ${targetDescriptor} based on their context.
+
+Example: A green shape on the lawn = A ${exampleObject} tree or bush.
+Example: A boxy shape on the driveway = A ${exampleObject} car.
+Example: Vertical shapes on paths = Stylized human figures.
+
+OBJECTIVE: Do NOT clean up or remove the "messy" elements. Instead, transform them into ${objectiveTexture} that match the lighting and mood of the scene. The final image must look cohesive, ${cohesionDescriptor}.
 `;
+};
 
 const getRenderStyleInstruction = (style: RenderStyleMode): string => {
     switch (style) {
@@ -55,7 +79,7 @@ const getRenderStyleInstruction = (style: RenderStyleMode): string => {
         case 'digital_painting': return "STYLE MODE: DIGITAL CONCEPT ART. Technique: Clean edges, painterly lighting, matte painting aesthetic. Artstation style.";
         case '3d_cartoon': return "STYLE MODE: 3D CARTOON RENDER. Texture: Smooth plastic/clay surfaces, exaggerated soft lighting, Pixar/Disney aesthetic.";
         case 'photorealistic':
-        default: return "STYLE MODE: PHOTOREALISTIC RENDERING. Quality: Professional architectural photography, 8k resolution, highly detailed, sharp focus, natural lighting, realistic textures and materials, cinematic composition.";
+        default: return "STYLE: Modern, Realistic, Cinematic Lighting. NEGATIVE PROMPT: Abstract, cartoon, illustration, drawing, blurred, low quality, disappearing objects, empty lawn.";
     }
 };
 
@@ -189,9 +213,12 @@ export const buildArchitecturalPrompt = (options: ArchitecturalRenderOptions): s
     let promptParts: string[] = [];
 
     // 1. Role
-    promptParts.push(getRoleDefinition());
+    promptParts.push(getRoleDefinition(options.renderStyle));
 
-    // 2. Render Style (Technique) - PRIMARY INSTRUCTION
+    // 2. Input Analysis (Universal logic applied style-aware)
+    promptParts.push(getUniversalInputAnalysis(options.renderStyle));
+
+    // 3. Render Style (Technique) - PRIMARY INSTRUCTION
     promptParts.push(getRenderStyleInstruction(options.renderStyle));
 
     // 3. Scene Content (Subject matter)
@@ -219,9 +246,9 @@ export const buildArchitecturalPrompt = (options: ArchitecturalRenderOptions): s
     }
 
     // 7. Negative Prompt (Dynamic based on Render Style)
-    if (options.renderStyle === 'photorealistic') {
-        promptParts.push("NEGATIVE PROMPT: Sketch, painting, drawing, cartoon, illustration, blueprint, abstract, low quality, blurry, distorted.");
-    } else {
+    // 7. Negative Prompt (Dynamic based on Render Style)
+    // Note: The specific negative prompt for photorealistic is now part of its style instruction above.
+    if (options.renderStyle !== 'photorealistic') {
         // If artistic, we don't want it to look like a photo
         promptParts.push("NEGATIVE PROMPT: Photorealistic, 3d render, photograph, shiny 3d, plastic looking. Do NOT make it look like a photo. Keep the artistic medium texture.");
     }

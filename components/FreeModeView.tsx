@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
-import { SendIcon, PaperClipIcon, SparklesIcon, SaveIcon, FolderIcon, TrashIcon, XIcon, DownloadIcon } from './icons';
+import { SendIcon, PaperClipIcon, SparklesIcon, SaveIcon, FolderIcon, TrashIcon, XIcon, DownloadIcon, EditIcon, ImageIcon } from './icons';
 import { GoogleGenAI } from "@google/genai";
 import { GEMINI_MODEL_ID } from '../utils/constants';
 import { collection, addDoc, query, orderBy, onSnapshot, deleteDoc, doc, Timestamp } from 'firebase/firestore';
@@ -36,6 +36,8 @@ interface FreeModeViewProps {
     onInspectRequest?: (payload: { model: string; parts: any[]; config?: any }) => Promise<boolean>;
     libraryItems: LibraryItem[];
     selectedModel: string;
+    onSendToSketch?: (url: string) => void;
+    onSendToRender?: (url: string) => void;
 }
 
 export interface FreeModeViewHandle {
@@ -50,7 +52,9 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
     deductCredit,
     libraryItems = [],
     onInspectRequest,
-    selectedModel
+    selectedModel,
+    onSendToSketch,
+    onSendToRender
 }, ref) => {
     const [messages, setMessages] = useState<Message[]>([
         { id: 'welcome', role: 'model', content: 'Hola! Soy tu asistente creativo visual. Escribe un prompt (y opcionalmente adjunta imágenes) y generaré una nueva imagen para ti.', timestamp: Date.now() }
@@ -354,13 +358,48 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
                                                     Img {idx + 1}
                                                 </span>
                                                 {msg.role === 'model' && (
-                                                    <button
-                                                        onClick={() => handleSaveImageToLibrary(att)}
-                                                        className="absolute bottom-2 right-2 p-2 bg-black/60 hover:bg-black/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        title="Guardar en librería"
-                                                    >
-                                                        <DownloadIcon className="w-4 h-4" />
-                                                    </button>
+                                                    <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); onSaveToLibrary(dataURLtoBlob(att) as any); }}
+                                                            className="p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full"
+                                                            title="Guardar en librería"
+                                                        >
+                                                            <FolderIcon className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                const link = document.createElement('a');
+                                                                link.href = att;
+                                                                link.download = `generated-image-${Date.now()}.png`;
+                                                                document.body.appendChild(link);
+                                                                link.click();
+                                                                document.body.removeChild(link);
+                                                            }}
+                                                            className="p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full"
+                                                            title="Descargar"
+                                                        >
+                                                            <DownloadIcon className="w-4 h-4" />
+                                                        </button>
+                                                        {onSendToSketch && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); onSendToSketch(att); }}
+                                                                className="p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full"
+                                                                title="Enviar a Sketch"
+                                                            >
+                                                                <EditIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        {onSendToRender && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); onSendToRender(att); }}
+                                                                className="p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full"
+                                                                title="Enviar a Render"
+                                                            >
+                                                                <ImageIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 )}
                                             </div>
                                         ))}

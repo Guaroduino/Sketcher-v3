@@ -1343,6 +1343,29 @@ export function App() {
             });
     }, [lastRenderedImage]);
 
+    const handleSendFreeToSketch = useCallback((url: string) => {
+        // Similar to handleImportRenderToSketch but from a URL
+        fetch(url)
+            .then(res => res.blob())
+            .then(blob => {
+                const file = new File([blob], `FreeMode_${Date.now()}.png`, { type: "image/png" });
+                setPendingBgFile(file);
+                setIsBgImportModalOpen(true);
+                setActiveView('sketch');
+            })
+            .catch(err => {
+                console.error("Error importing free mode image:", err);
+                alert("Error al importar la imagen.");
+            });
+    }, []);
+
+    const handleSendFreeToRender = useCallback((url: string) => {
+        if (archRenderRef.current) {
+            archRenderRef.current.setInputImage(url);
+            setActiveView('render');
+        }
+    }, []);
+
 
     const handleRemoveBackgroundImage = useCallback(() => dispatch({ type: 'REMOVE_BACKGROUND_IMAGE' }), [dispatch]);
     const handleConfirmDelete = useCallback(() => {
@@ -1592,7 +1615,7 @@ export function App() {
 
     if (ui.showSplash) {
         return (
-            <div className="w-screen h-screen bg-theme-bg-primary text-theme-text-primary flex items-center justify-center font-sans">
+            <div className="h-[100dvh] w-screen bg-theme-bg-primary text-theme-text-primary flex items-center justify-center font-sans select-none touch-none overscroll-none">
                 <div className="text-center p-8">
                     <h1 className="text-5xl font-bold mb-4">Sketcher</h1>
                     <p className="text-lg text-theme-text-secondary mb-10">Tu lienzo creativo te espera.</p>
@@ -1613,7 +1636,7 @@ export function App() {
     }
 
     return (
-        <div className="w-screen h-screen bg-theme-bg-primary text-theme-text-primary flex flex-col font-sans overflow-hidden">
+        <div className="h-[100dvh] w-screen bg-theme-bg-primary text-theme-text-primary flex flex-col font-sans overflow-hidden select-none touch-none overscroll-none">
             <div className="absolute bottom-4 right-4 z-50 pointer-events-none opacity-50 text-[10px] text-theme-text-secondary">
                 v0.5.3-debug-render-fix
             </div>
@@ -1769,6 +1792,22 @@ export function App() {
                                     <button onClick={() => { ui.setIsPublicGalleryOpen(true); setIsMobileMenuOpen(false); }} className="flex items-center gap-3 p-3 rounded-md bg-theme-bg-primary hover:bg-theme-bg-hover text-sm font-medium">
                                         <SparklesIcon className="w-5 h-5 text-theme-accent-primary" /> Galería Pública
                                     </button>
+                                </div>
+                                <div className="h-px bg-theme-bg-tertiary"></div>
+
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[10px] uppercase font-bold text-theme-text-tertiary">Modelo AI</label>
+                                    <select
+                                        value={selectedModel}
+                                        onChange={(e) => setSelectedModel(e.target.value)}
+                                        className="w-full bg-theme-bg-primary text-theme-text-primary text-xs rounded-md border border-theme-bg-tertiary p-2 focus:outline-none focus:ring-1 focus:ring-theme-accent-primary"
+                                    >
+                                        {AI_MODELS.map(model => (
+                                            <option key={model.id} value={model.id}>
+                                                {model.name} {model.isNew ? '(Nuevo)' : ''}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div className="h-px bg-theme-bg-tertiary"></div>
 
@@ -1944,6 +1983,8 @@ export function App() {
                             onInspectRequest={credits?.role === 'admin' ? inspectAIRequest : undefined}
                             libraryItems={library.libraryItems}
                             selectedModel={selectedModel}
+                            onSendToSketch={handleSendFreeToSketch}
+                            onSendToRender={handleSendFreeToRender}
                         />
                     </div>
                 </main>

@@ -30,6 +30,7 @@ export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose, i
     const [images, setImages] = useState<PublicImage[]>([]);
     const [loading, setLoading] = useState(false);
     const [selectedImage, setSelectedImage] = useState<PublicImage | null>(null);
+    const [editingImage, setEditingImage] = useState<PublicImage | null>(null);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
     useEffect(() => {
@@ -111,8 +112,28 @@ export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose, i
         }
     };
 
-    const handleNewImage = (newImage: any) => {
-        setImages(prev => [newImage, ...prev]);
+    const handleEdit = (e: React.MouseEvent, image: PublicImage) => {
+        e.stopPropagation();
+        setEditingImage(image);
+        setIsUploadModalOpen(true);
+    };
+
+    const handleUploadComplete = (newOrUpdatedImage: any) => {
+        if (editingImage) {
+            // Update existing
+            setImages(prev => prev.map(img => img.id === newOrUpdatedImage.id ? newOrUpdatedImage : img));
+            if (selectedImage?.id === newOrUpdatedImage.id) {
+                setSelectedImage(newOrUpdatedImage);
+            }
+        } else {
+            // Add new
+            setImages(prev => [newOrUpdatedImage, ...prev]);
+        }
+    };
+
+    const closeUploadModal = () => {
+        setIsUploadModalOpen(false);
+        setEditingImage(null);
     };
 
     if (!isOpen) return null;
@@ -156,35 +177,47 @@ export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose, i
                         </div>
                     ) : (
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                            {images.map((img) => (
-                                <div
-                                    key={img.id}
-                                    className="group relative aspect-square rounded-xl overflow-hidden bg-theme-bg-tertiary cursor-pointer border border-transparent hover:border-theme-accent-primary transition-all hover:shadow-lg"
-                                    onClick={() => setSelectedImage(img)}
-                                >
-                                    <img src={img.thumbnailUrl || img.imageUrl} alt={img.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                            {images.map((img) => {
+                                const canEdit = isAdmin || (currentUser && img.authorId && currentUser.uid === img.authorId);
+                                return (
+                                    <div
+                                        key={img.id}
+                                        className="group relative aspect-square rounded-xl overflow-hidden bg-theme-bg-tertiary cursor-pointer border border-transparent hover:border-theme-accent-primary transition-all hover:shadow-lg"
+                                        onClick={() => setSelectedImage(img)}
+                                    >
+                                        <img src={img.thumbnailUrl || img.imageUrl} alt={img.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
 
-                                    {/* Delete Button (Top Right) */}
-                                    {(isAdmin || (currentUser && img.authorId && currentUser.uid === img.authorId)) && (
-                                        <button
-                                            onClick={(e) => handleDelete(e, img.id, img.authorId)}
-                                            className="absolute top-2 right-2 p-2 bg-red-500/90 hover:bg-red-600 rounded-full text-white opacity-0 group-hover:opacity-100 transition-all z-20 shadow-sm"
-                                            title="Eliminar imagen"
-                                        >
-                                            <TrashIcon className="w-4 h-4" />
-                                        </button>
-                                    )}
+                                        {/* Action Buttons (Top Right) */}
+                                        {canEdit && (
+                                            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all z-20">
+                                                <button
+                                                    onClick={(e) => handleEdit(e, img)}
+                                                    className="p-2 bg-black/60 hover:bg-theme-accent-primary rounded-full text-white shadow-sm backdrop-blur-sm"
+                                                    title="Editar"
+                                                >
+                                                    <PlusIcon className="w-4 h-4 rotate-45" /> {/* Using PlusIcon rotated as rough edit icon or maybe I should use an EditIcon if available?? I'll stick to what I have or check imports */}
+                                                </button>
+                                                <button
+                                                    onClick={(e) => handleDelete(e, img.id, img.authorId)}
+                                                    className="p-2 bg-red-500/90 hover:bg-red-600 rounded-full text-white shadow-sm"
+                                                    title="Eliminar"
+                                                >
+                                                    <TrashIcon className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        )}
 
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
-                                        <p className="text-white font-bold text-sm truncate">{img.title}</p>
-                                        <div className="flex items-center justify-between mt-1">
-                                            <span className="text-xs text-gray-300 flex items-center gap-1">
-                                                <UserIcon className="w-3 h-3" /> {img.authorName}
-                                            </span>
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+                                            <p className="text-white font-bold text-sm truncate">{img.title}</p>
+                                            <div className="flex items-center justify-between mt-1">
+                                                <span className="text-xs text-gray-300 flex items-center gap-1">
+                                                    <UserIcon className="w-3 h-3" /> {img.authorName}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -201,7 +234,7 @@ export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose, i
                     </button>
 
                     <div className="max-w-6xl w-full flex flex-col lg:flex-row gap-6 bg-theme-bg-secondary p-1 rounded-xl overflow-hidden h-full max-h-[90vh]">
-                        {/* Main Image View - Scrollable if too large */}
+                        {/* Main Image View */}
                         <div className="flex-1 bg-black flex items-center justify-center relative min-h-[40vh] overflow-hidden">
                             <img src={selectedImage.imageUrl} alt={selectedImage.title} className="max-w-full max-h-full object-contain" />
                         </div>
@@ -222,7 +255,7 @@ export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose, i
                                 </div>
                             </div>
 
-                            {/* NEW: Process Section */}
+                            {/* Process Section */}
                             {(selectedImage.inputImageUrl || selectedImage.refImageUrl) && (
                                 <div className="mb-6">
                                     <h4 className="text-xs font-bold uppercase text-theme-text-secondary mb-3 flex items-center gap-2">
@@ -252,9 +285,16 @@ export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose, i
                                 </div>
                             )}
 
-                            {/* Delete Button */}
+                            {/* Actions */}
                             {(isAdmin || (currentUser && selectedImage.authorId && currentUser.uid === selectedImage.authorId)) && (
-                                <div className="mt-auto pt-6 border-t border-theme-bg-tertiary">
+                                <div className="mt-auto pt-6 border-t border-theme-bg-tertiary flex flex-col gap-2">
+                                    <button
+                                        onClick={(e) => handleEdit(e, selectedImage)}
+                                        className="w-full p-2 bg-theme-accent-primary/10 hover:bg-theme-accent-primary/20 text-theme-accent-primary rounded-lg transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        <PlusIcon className="w-4 h-4 rotate-45" /> {/* Placeholder for edit icon */}
+                                        <span className="text-xs font-bold">Editar Publicación</span>
+                                    </button>
                                     <button
                                         onClick={(e) => handleDelete(e, selectedImage.id, selectedImage.authorId)}
                                         className="w-full p-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors flex items-center justify-center gap-2"
@@ -271,9 +311,10 @@ export const PublicGallery: React.FC<PublicGalleryProps> = ({ isOpen, onClose, i
 
             <GalleryUploadModal
                 isOpen={isUploadModalOpen}
-                onClose={() => setIsUploadModalOpen(false)}
+                onClose={closeUploadModal}
                 currentUser={currentUser}
-                onUploadComplete={handleNewImage}
+                onUploadComplete={handleUploadComplete}
+                initialData={editingImage}
             />
         </div>
     );

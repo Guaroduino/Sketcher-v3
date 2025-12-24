@@ -39,8 +39,8 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                                 key={section.id}
                                 onClick={() => setActiveSection(section.id as HelpSection)}
                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${activeSection === section.id
-                                        ? 'bg-theme-accent-primary text-white font-bold shadow-md'
-                                        : 'text-theme-text-secondary hover:bg-theme-bg-tertiary hover:text-theme-text-primary'
+                                    ? 'bg-theme-accent-primary text-white font-bold shadow-md'
+                                    : 'text-theme-text-secondary hover:bg-theme-bg-tertiary hover:text-theme-text-primary'
                                     }`}
                             >
                                 <section.icon className="w-5 h-5" />
@@ -77,7 +77,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                             <div className="space-y-6">
                                 <h1 className="text-3xl font-bold text-theme-text-primary">Bienvenido a Sketcher Companion</h1>
                                 <p className="text-lg text-theme-text-secondary leading-relaxed">
-                                    Sketcher Companion combina herramientas de dibujo vectorial de precisión con potentes modelos de inteligencia artificial para transformar garabatos simples en visualizaciones complejas.
+                                    Sketcher Companion combina herramientas de dibujo digital fluidas con potentes modelos de inteligencia artificial para transformar tus trazos en visualizaciones complejas.
                                 </p>
 
                                 <div className="aspect-video bg-black/40 rounded-xl border border-theme-bg-tertiary flex items-center justify-center overflow-hidden relative group cursor-pointer hover:border-theme-accent-primary transition-colors">
@@ -91,9 +91,9 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
                                     <div className="p-6 bg-theme-bg-primary rounded-xl border border-theme-bg-tertiary">
                                         <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
-                                            <EditIcon className="w-5 h-5 text-blue-400" /> Dibuja sin límites
+                                            <EditIcon className="w-5 h-5 text-blue-400" /> Dibuja con Libertad
                                         </h3>
-                                        <p className="text-sm text-theme-text-secondary">Un lienzo infinito con herramientas de vectoriales precisas.</p>
+                                        <p className="text-sm text-theme-text-secondary">Un lienzo digital versátil con pinceles sensibles a la presión y herramientas de precisión.</p>
                                     </div>
                                     <div className="p-6 bg-theme-bg-primary rounded-xl border border-theme-bg-tertiary">
                                         <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
@@ -110,24 +110,24 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                                 <h1 className="text-3xl font-bold text-theme-text-primary">Modo Boceto</h1>
 
                                 <section>
-                                    <h3 className="text-xl font-bold text-theme-accent-primary mb-4">Barra de Herramientas</h3>
-                                    <p className="mb-4 text-theme-text-secondary">Utiliza las herramientas vectoriales para crear la base de tu diseño. La IA seguirá estas líneas fielmente.</p>
+                                    <h3 className="text-xl font-bold text-theme-accent-primary mb-4">Herramientas de Dibujo</h3>
+                                    <p className="mb-4 text-theme-text-secondary">Utiliza herramientas clásicas de dibujo digital para plasmar tus ideas. La IA interpretará estos trazos como guía estructural.</p>
 
                                     <div className="aspect-[4/1] bg-theme-bg-primary rounded-lg border border-theme-bg-tertiary flex items-center justify-center mb-4">
                                         <span className="text-theme-text-tertiary text-sm">[IMAGEN: Diagrama de la Barra de Herramientas]</span>
                                     </div>
 
                                     <ul className="list-disc pl-5 space-y-2 text-theme-text-secondary">
-                                        <li><strong>Lápiz (P):</strong> Para trazos libres y orgánicos.</li>
-                                        <li><strong>Línea (L):</strong> Trazos rectos precisos. Mantén Shift para líneas ortogonales (0°, 45°, 90°).</li>
-                                        <li><strong>Polilínea:</strong> Conecta múltiples segmentos de línea continua.</li>
-                                        <li><strong>Formas:</strong> Rectángulos y círculos para definir volúmenes rápidos.</li>
+                                        <li><strong>Lápiz (P):</strong> Ideal para bocetado libre. Soporta presión si usas tableta gráfica.</li>
+                                        <li><strong>Línea (L):</strong> Trazos rectos y limpios. Mantén Shift para bloquear ángulos ortogonales.</li>
+                                        <li><strong>Marcador:</strong> Trazos más gruesos y expresivos, útiles para definir volúmenes o sombras.</li>
+                                        <li><strong>Borrador (E):</strong> Elimina trazos no deseados o refina bordes.</li>
                                     </ul>
                                 </section>
 
                                 <section>
                                     <h3 className="text-xl font-bold text-theme-accent-primary mb-4">Guías y Asistentes</h3>
-                                    <p className="text-theme-text-secondary">Activa las guías isométricas o de perspectiva desde la barra superior para mantener la proporción.</p>
+                                    <p className="text-theme-text-secondary">Activa las guías de perspectiva o isométricas para mantener la coherencia espacial de tu dibujo, facilitando que la IA entienda la profundidad de la escena.</p>
                                 </section>
                             </div>
                         )}
@@ -136,7 +136,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                             <div className="space-y-6">
                                 <h1 className="text-3xl font-bold text-theme-text-primary">Modo Render</h1>
                                 <p className="text-lg text-theme-text-secondary">
-                                    Transforma tu lineart en una imagen final utilizando el motor de IA.
+                                    Transforma tu dibujo en una imagen final de alta calidad ("Mapa de Bits") utilizando el motor de IA.
                                 </p>
 
                                 <div className="space-y-8 mt-6">

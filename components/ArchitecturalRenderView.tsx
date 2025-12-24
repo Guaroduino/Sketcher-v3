@@ -78,6 +78,7 @@ const CollapsiblePillGroup: React.FC<{ label: string, options: { label: string, 
 
 export interface ArchitecturalRenderViewHandle {
     setInputImageFromFile: (file: File) => void;
+    setInputImage: (url: string) => void;
 }
 
 export const ArchitecturalRenderView = React.memo(React.forwardRef<ArchitecturalRenderViewHandle, ArchitecturalRenderViewProps>(({
@@ -91,22 +92,31 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
     selectedModel
 }, ref) => {
     const [sceneType, setSceneType] = useState<SceneType>('exterior');
-    const [inputImage, setInputImage] = useState<string | null>(null);
+    const [inputImage, setInputImageState] = useState<string | null>(null); // Renamed to avoid conflict
 
-    const processInputImage = (file: File) => {
+    // Wrapper for setInputImageState to handle common side effects
+    const setInputImage = useCallback((dataUrl: string | null) => {
+        setInputImageState(dataUrl);
+        setResultImage(null);
+        setShowOriginal(false);
+        setGenerationHistory([]);
+        setHistoryIndex(-1);
+    }, []);
+
+    const processInputImage = useCallback((file: File) => {
         const reader = new FileReader();
-        reader.onload = (ev) => {
-            if (ev.target?.result) {
-                const result = ev.target.result as string;
+        reader.onload = (e) => {
+            if (e.target?.result) {
+                const result = e.target.result as string;
                 const img = new Image();
                 img.onload = () => {
-                    // Max dimension 2048 for performance and consistency
+                    // Max dimension 1024 for performance and consistency
                     let w = img.width;
                     let h = img.height;
-                    const maxDim = 2048;
-                    if (w > maxDim || h > maxDim) {
-                        if (w > h) { h = (h / w) * maxDim; w = maxDim; }
-                        else { w = (w / h) * maxDim; h = maxDim; }
+                    const maxSize = 1024;
+                    if (w > maxSize || h > maxSize) {
+                        if (w > h) { h = (h / w) * maxSize; w = maxSize; }
+                        else { w = (w / h) * maxSize; h = maxSize; }
                     }
 
                     const canvas = document.createElement('canvas');
@@ -116,23 +126,21 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                     if (ctx) {
                         ctx.drawImage(img, 0, 0, w, h);
                         const bakedUrl = canvas.toDataURL('image/png'); // Strip EXIF
-                        setCanvasDimensions({ width: w, height: h });
-                        setInputImage(bakedUrl);
-                        setResultImage(null);
-                        setShowOriginal(false);
-                        setGenerationHistory([]);
-                        setHistoryIndex(-1);
+                        setInputImage(bakedUrl); // Use the wrapper
                     }
                 };
                 img.src = result;
             }
         };
         reader.readAsDataURL(file);
-    };
+    }, [setInputImage]);
 
     useImperativeHandle(ref, () => ({
         setInputImageFromFile: (file: File) => {
             processInputImage(file);
+        },
+        setInputImage: (url: string) => {
+            setInputImage(url);
         }
     }));
 
