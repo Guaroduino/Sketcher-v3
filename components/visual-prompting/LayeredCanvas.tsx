@@ -55,6 +55,9 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
     // Polygon State
     const [currentPolygonPoints, setCurrentPolygonPoints] = useState<{ x: number, y: number }[]>([]);
 
+    // Drawing Region State (Preview)
+    const [drawingRegion, setDrawingRegion] = useState<{ start: { x: number, y: number }, current: { x: number, y: number } } | null>(null);
+
     // Initialize Canvas
     useEffect(() => {
         if (drawingCanvasRef.current && width && height) {
@@ -279,7 +282,9 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
                 }
             } else if (activeTool === 'region') {
                 isDrawing.current = true;
-                lastPos.current = getCanvasPoint(e);
+                const pt = getCanvasPoint(e);
+                lastPos.current = pt;
+                setDrawingRegion({ start: pt, current: pt });
             } else if (activeTool === 'polygon') {
                 const pt = getCanvasPoint(e);
                 setCurrentPolygonPoints(prev => [...prev, pt]);
@@ -348,6 +353,8 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
                     ctx.beginPath();
                     ctx.moveTo(x, y);
                 }
+            } else if (activeTool === 'region') {
+                setDrawingRegion(prev => prev ? { ...prev, current: { x, y } } : null);
             }
         }
     };
@@ -371,11 +378,8 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
                 if (ctx) ctx.globalCompositeOperation = 'source-over';
             } else if (activeTool === 'region') {
                 const end = getCanvasPoint(e);
-                // Correctly use stored start point (need to handle coordinate space carefully)
-                // lastPos for region was stored as canvas coords in pointerDown
-                // But wait, lastPos is shared with Pan. 
-                // Let's rely on stored start point which WAS converted to canvas coords.
                 const start = lastPos.current;
+                setDrawingRegion(null);
 
                 const w = Math.abs(end.x - start.x);
                 const h = Math.abs(end.y - start.y);
@@ -498,6 +502,19 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
                             )}
                         </g>
                     ))}
+                    {/* Active Region Preview */}
+                    {drawingRegion && (
+                        <rect
+                            x={Math.min(drawingRegion.start.x, drawingRegion.current.x)}
+                            y={Math.min(drawingRegion.start.y, drawingRegion.current.y)}
+                            width={Math.abs(drawingRegion.current.x - drawingRegion.start.x)}
+                            height={Math.abs(drawingRegion.current.y - drawingRegion.start.y)}
+                            fill="rgba(255, 0, 0, 0.2)"
+                            stroke="#ff0000"
+                            strokeWidth={2 / zoom}
+                            strokeDasharray={`${4 / zoom},${4 / zoom}`}
+                        />
+                    )}
                     {/* Render Active Polygon under creation */}
                     {currentPolygonPoints.length > 0 && (
                         <>

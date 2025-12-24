@@ -107,6 +107,37 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
         alert("Imagen guardada en la librería.");
     };
 
+    // Helper to fetch any image (dataURL or remote URL) and return { mimeType, data } for Gemini
+    const fetchAsBase64 = async (url: string): Promise<{ mimeType: string, data: string }> => {
+        if (url.startsWith('data:')) {
+            const mimeType = url.substring(url.indexOf(':') + 1, url.indexOf(';'));
+            const data = url.split(',')[1];
+            return { mimeType, data };
+        }
+
+        // It's a remote URL, fetch it
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
+            const blob = await response.blob();
+            const mimeType = blob.type;
+
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64 = (reader.result as string).split(',')[1];
+                    resolve({ mimeType, data: base64 });
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        } catch (error) {
+            console.error("Error in fetchAsBase64:", error);
+            // Fallback: try to guess mime from extension if fetch fails, though data will be empty
+            return { mimeType: 'image/jpeg', data: '' };
+        }
+    };
+
     // Persistence Fetching
     useEffect(() => {
         if (!user) return;
@@ -183,14 +214,20 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
             const parts: any[] = [];
             // Add attachments first (common practice for multimodal)
             for (const att of newUserMessage.attachments || []) {
-                const base64Data = att.split(',')[1];
-                const mimeType = att.substring(att.indexOf(':') + 1, att.indexOf(';'));
-                parts.push({
-                    inlineData: {
-                        mimeType: mimeType,
-                        data: base64Data
+                try {
+                    const { mimeType, data } = await fetchAsBase64(att);
+                    if (data) {
+                        parts.push({
+                            inlineData: {
+                                mimeType: mimeType,
+                                data: data
+                            }
+                        });
                     }
-                });
+                } catch (err) {
+                    console.warn("Could not process attachment:", att, err);
+                    // Continue with other parts
+                }
             }
 
             // Add text prompt
@@ -231,34 +268,37 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
                 config
             });
 
-            // Extract Image
+            // Extract Response Parts
             let newImageBase64: string | null = null;
-            // Check candidates
+            let responseText = '';
+
             const candidates = response.candidates;
             if (candidates && candidates.length > 0) {
                 for (const part of candidates[0].content.parts) {
                     if (part.inlineData && part.inlineData.data) {
                         newImageBase64 = part.inlineData.data;
-                        break;
+                    }
+                    if (part.text) {
+                        responseText += part.text;
                     }
                 }
             }
 
-            if (newImageBase64) {
+            if (newImageBase64 || responseText) {
                 // Deduct Credit
                 if (deductCredit) await deductCredit();
 
                 const aiMessage: Message = {
                     id: (Date.now() + 1).toString(),
                     role: 'model',
-                    content: 'Imagen generada:', // Placeholder text
-                    attachments: [`data:image/png;base64,${newImageBase64}`],
+                    content: responseText || (newImageBase64 ? 'Imagen generada:' : ''),
+                    attachments: newImageBase64 ? [`data:image/png;base64,${newImageBase64}`] : undefined,
                     timestamp: Date.now(),
-                    isImageOnly: true
+                    isImageOnly: !!newImageBase64 && !responseText
                 };
                 setMessages([...newMessages, aiMessage]);
             } else {
-                throw new Error("No image generated. The model might have returned text instead.");
+                throw new Error("El modelo no devolvió ninguna respuesta válida.");
             }
 
         } catch (error) {

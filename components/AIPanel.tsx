@@ -636,13 +636,24 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                     <div className="flex items-center">
                                         <input
                                             type="checkbox"
+                                            id="sketch-update-bg"
+                                            checked={shouldUpdateBackground}
+                                            onChange={(e) => setShouldUpdateBackground(e.target.checked)}
+                                            className="h-4 w-4 bg-theme-bg-tertiary border-theme-bg-hover rounded accent-theme-accent-primary"
+                                            disabled={isEnhancing}
+                                        />
+                                        <label htmlFor="sketch-update-bg" className="ml-2 text-xs text-theme-text-secondary">Reemplazar Fondo</label>
+                                    </div>
+                                    <div className="flex items-center">
+                                        <input
+                                            type="checkbox"
                                             id="sketch-add-to-canvas"
                                             checked={shouldAddToCanvas}
                                             onChange={(e) => setShouldAddToCanvas(e.target.checked)}
                                             className="h-4 w-4 bg-theme-bg-tertiary border-theme-bg-hover rounded accent-theme-accent-primary"
                                             disabled={isEnhancing}
                                         />
-                                        <label htmlFor="sketch-add-to-canvas" className="ml-2 text-xs text-theme-text-secondary">Añadir a Canvas</label>
+                                        <label htmlFor="sketch-add-to-canvas" className="ml-2 text-xs text-theme-text-secondary">Añadir como Capa</label>
                                     </div>
                                     <div className="flex items-center">
                                         <input
@@ -722,8 +733,20 @@ export const AIPanel: React.FC<AIPanelProps> = ({
                                     </p>
                                 </div>
 
+                                <div className="flex items-center mb-4">
+                                    <input
+                                        type="checkbox"
+                                        id="upscale-update-bg"
+                                        checked={shouldUpdateBackground}
+                                        onChange={(e) => setShouldUpdateBackground(e.target.checked)}
+                                        className="h-4 w-4 bg-theme-bg-tertiary border-theme-bg-hover rounded accent-theme-accent-primary"
+                                        disabled={isEnhancing}
+                                    />
+                                    <label htmlFor="upscale-update-bg" className="ml-2 text-xs text-theme-text-secondary">Actualizar en Lienzo (sustituir actual)</label>
+                                </div>
+
                                 <button
-                                    onClick={() => onEnhance({ activeAiTab, upscaleFormat, upscaleCreativity })}
+                                    onClick={() => onEnhance({ activeAiTab, upscaleFormat, upscaleCreativity, shouldUpdateBackground })}
                                     disabled={isEnhancing}
                                     className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 text-sm rounded-md disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
                                 >

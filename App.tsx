@@ -476,6 +476,7 @@ function useProjectManager(
         deleteProject: handleDeleteProject,
         saveLocally: handleSaveLocally,
         loadFromFile: handleLoadFromFile,
+        getFullProjectStateAsFile,
     };
 }
 
@@ -703,9 +704,7 @@ function useAI(
             const textPart = { text: finalPrompt };
             // Use selected model from state (passed as dependency/arg)
             const model = selectedModel;
-            const config = {
-                responseModalities: ["IMAGE"],
-            };
+            const config = {}; // Modalitiy set dynamically if needed, but avoided for general stability
             const contents = (parts.length > 0) ? { parts: [...parts, textPart] } : { parts: [textPart] };
 
             // INSPECTOR CHECK
@@ -724,8 +723,19 @@ function useAI(
                 if (part.inlineData) { newImageBase64 = part.inlineData.data; break; }
             }
 
+            // Fallback for Upscale Mode: if AI fails to return image, use composition for client-side upscale
+            if (!newImageBase64 && payload.activeAiTab === 'upscale') {
+                console.warn("AI did not return an upscaled image, using client-side fallback.");
+                // We'll proceed to the img.onload section using the original composition
+                // We need to trigger the success flow manually with original data
+                const compositionCanvas = getCompositeCanvas(true, canvasSize, getDrawableObjects, backgroundObject);
+                if (compositionCanvas) {
+                    newImageBase64 = compositionCanvas.toDataURL('image/jpeg', 1.0).split(',')[1];
+                }
+            }
+
             if (newImageBase64) {
-                // Deduct credit on successful generation
+                // Deduct credit on successful generation (or fallback upscale)
                 if (deductCredit) {
                     deductCredit();
                 }
@@ -762,8 +772,8 @@ function useAI(
                         finalImg = processedImg;
                     }
 
-                    if (payload.activeAiTab === 'composition') {
-                        if (payload.shouldUpdateBackground !== false) { // Default to true if undefined
+                    if (payload.activeAiTab === 'composition' || payload.activeAiTab === 'sketch') {
+                        if (payload.shouldUpdateBackground) {
                             dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: finalImg } });
                         }
                     }
@@ -794,8 +804,19 @@ function useAI(
                             document.body.appendChild(link);
                             link.click();
                             document.body.removeChild(link);
+
+                            // --- Substitution Logic (NEW) ---
+                            // If user wants to update the background with the upscaled version
+                            if (payload.shouldUpdateBackground) {
+                                const upscaledImg = new Image();
+                                upscaledImg.onload = () => {
+                                    dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: upscaledImg } });
+                                };
+                                upscaledImg.src = downloadUrl;
+                            }
                         }
-                        return; // Stop further processing (don't add to library or canvas)
+                        // If shouldUpdateBackground is false, we just stop here (classic download behavior)
+                        if (!payload.shouldUpdateBackground) return;
                     }
 
                     // Common Handling for All Tabs (Library, Canvas Layer, Delete Content)
@@ -913,8 +934,13 @@ export function App() {
 
     // -- View State --
     const [activeView, setActiveView] = useState<'sketch' | 'render' | 'free'>('sketch'); // Using string for safety
+    const [galleryInitialTab, setGalleryInitialTab] = useState<'projects' | 'library'>('projects');
     const [lastRenderedImage, setLastRenderedImage] = useState<string | null>(null);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+    // -- Autosave & Recovery State --
+    const [showRecoveryPrompt, setShowRecoveryPrompt] = useState(false);
+    const [recoveredData, setRecoveredData] = useState<any>(null);
 
     // -- 3. CUSTOM HOOKS --
     const [selection, setSelection] = useState<Selection | null>(null);
@@ -1136,6 +1162,70 @@ export function App() {
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => setUser(currentUser));
         return () => unsubscribe();
     }, []);
+
+    // Exit Confirmation
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (objects.filter(o => !o.isBackground).length > 0 || lastRenderedImage) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [objects, lastRenderedImage]);
+
+    // Debounced Autosave
+    useEffect(() => {
+        if (!isInitialized || (objects.length === 0 && !lastRenderedImage)) return;
+
+        const timer = setTimeout(async () => {
+            try {
+                const { projectBlob } = await projects.getFullProjectStateAsFile(() => ({
+                    currentState,
+                    guides: {
+                        activeGuide: guides.activeGuide, isOrthogonalVisible: guides.isOrthogonalVisible, rulerGuides: guides.rulerGuides,
+                        mirrorGuides: guides.mirrorGuides, perspectiveGuide: guides.perspectiveGuide, orthogonalGuide: guides.orthogonalGuide,
+                        gridGuide: guides.gridGuide, areGuidesLocked: guides.areGuidesLocked, isPerspectiveStrokeLockEnabled: guides.isPerspectiveStrokeLockEnabled,
+                        isSnapToGridEnabled: guides.isSnapToGridEnabled,
+                    },
+                    toolSettings: { ...toolSettings },
+                    quickAccess: quickAccess.quickAccessSettings
+                }));
+
+                const reader = new FileReader();
+                reader.onload = () => {
+                    try {
+                        localStorage.setItem('sketcher_v3_autosave', reader.result as string);
+                    } catch (e) {
+                        console.warn("Autosave quota exceeded, could not save to localStorage.");
+                    }
+                };
+                reader.readAsText(projectBlob);
+            } catch (err) {
+                console.error("Autosave failed:", err);
+            }
+        }, 5000); // 5 second debounce
+
+        return () => clearTimeout(timer);
+    }, [currentState, guides, toolSettings, quickAccess, isInitialized, projects.getFullProjectStateAsFile, lastRenderedImage, objects.length]);
+
+    // Session Recovery Check
+    useEffect(() => {
+        if (!isInitialized) return;
+        const savedData = localStorage.getItem('sketcher_v3_autosave');
+        if (savedData) {
+            try {
+                const parsed = JSON.parse(savedData);
+                if (parsed && parsed.objects && parsed.objects.length > 0) {
+                    setRecoveredData(parsed);
+                    setShowRecoveryPrompt(true);
+                }
+            } catch (e) {
+                console.error("Failed to parse autosave data");
+            }
+        }
+    }, [isInitialized]);
 
     useEffect(() => {
         const savedTheme = localStorage.getItem('sketcher-theme') as Theme | null;
@@ -1380,7 +1470,11 @@ export function App() {
         setSelectedItemIds([targetId]);
     }, [dispatch]);
 
-    const handleConfirmClear = useCallback(() => { dispatch({ type: 'CLEAR_CANVAS' }); ui.setShowClearConfirm(false); }, [dispatch, ui]);
+    const handleConfirmClear = useCallback(() => {
+        dispatch({ type: 'CLEAR_CANVAS' });
+        ui.setShowClearConfirm(false);
+        localStorage.removeItem('sketcher_v3_autosave');
+    }, [dispatch, ui]);
     const handleSaveItemToLibrary = useCallback((fileOrUrl: string | File, name?: string) => {
         if (fileOrUrl instanceof File) {
             library.onImportToLibrary(fileOrUrl, null);
@@ -1630,7 +1724,7 @@ export function App() {
                 <div className="absolute bottom-0 left-0 right-0 p-4">
                     <LandingGalleryCarousel onOpenGallery={() => { ui.handleStart(); ui.setIsPublicGalleryOpen(true); }} />
                 </div>
-                <PublicGallery isOpen={ui.isPublicGalleryOpen} onClose={() => ui.setIsPublicGalleryOpen(false)} isAdmin={credits?.role === 'admin'} />
+                <PublicGallery isOpen={ui.isPublicGalleryOpen} onClose={() => ui.setIsPublicGalleryOpen(false)} isAdmin={role === 'admin'} />
             </div>
         );
     }
@@ -1664,14 +1758,22 @@ export function App() {
                 onSaveLocally={(name) => projects.saveLocally(name, () => ({ currentState, guides, toolSettings: { ...toolSettings }, quickAccess: quickAccess.quickAccessSettings }))}
                 onLoadFromFile={projects.loadFromFile}
                 libraryItems={library.libraryItems}
-                onAddLibraryItemToScene={(item) => addItem(item.type, item.dataUrl)}
+                onAddLibraryItemToScene={(item) => {
+                    if (activeView === 'render') {
+                        archRenderRef.current?.setInputImage(item.dataUrl);
+                        ui.setProjectGalleryOpen(false);
+                    } else {
+                        addItem(item.type, item.dataUrl);
+                    }
+                }}
                 onPublishLibraryItem={(item) => library.publishToPublicGallery(item, item.name || 'Sin Título')}
-                onDeleteLibraryItem={library.onConfirmDeleteLibraryItem}
+                onDeleteLibraryItem={library.onDeleteLibraryItem}
                 onImportImage={library.onImportToLibrary}
                 onCreateFolder={library.onCreateFolder}
                 onEditItem={library.onEditTransparency}
                 onMoveItems={library.onMoveItems}
                 onOpenPublicGallery={() => ui.setIsPublicGalleryOpen(true)}
+                initialTab={galleryInitialTab}
             />
 
             {/* Main Header */}
@@ -1686,6 +1788,38 @@ export function App() {
                                 </button>
                                 <h1 className="text-xl font-bold">Sketcher</h1>
                             </div>
+
+                            {/* Recovery Banner */}
+                            {showRecoveryPrompt && (
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-[100] bg-theme-accent-primary text-white px-4 py-2 rounded-full shadow-2xl flex items-center gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                                    <div className="flex items-center gap-2">
+                                        <HistoryIcon className="w-5 h-5" />
+                                        <span className="text-xs font-bold whitespace-nowrap">¿Recuperar sesión anterior?</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => {
+                                                const file = new File([JSON.stringify(recoveredData)], 'recovery.sketcher', { type: 'application/json' });
+                                                projects.loadFromFile(file);
+                                                setShowRecoveryPrompt(false);
+                                                localStorage.removeItem('sketcher_v3_autosave');
+                                            }}
+                                            className="bg-white text-theme-accent-primary px-3 py-1 rounded-full text-[10px] font-black hover:bg-theme-bg-primary transition-colors"
+                                        >
+                                            SÍ, RECUPERAR
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setShowRecoveryPrompt(false);
+                                                localStorage.removeItem('sketcher_v3_autosave');
+                                            }}
+                                            className="bg-black/20 hover:bg-black/40 p-1 rounded-full transition-colors"
+                                        >
+                                            <XIcon className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* DESKTOP NAVIGATION (Hidden on Mobile) */}
                             <div className="hidden md:flex items-center gap-2">
@@ -1960,6 +2094,10 @@ export function App() {
                             onImportFromSketch={getSketchSnapshot}
                             isSidebarOpen={ui.isRightSidebarVisible}
                             selectedModel={selectedModel}
+                            onOpenLibrary={() => {
+                                setGalleryInitialTab('library');
+                                ui.setProjectGalleryOpen(true);
+                            }}
                             onUndo={() => dispatch({ type: 'UNDO' })}
                             onRedo={() => dispatch({ type: 'REDO' })}
                             canUndo={canUndo}
@@ -1980,7 +2118,7 @@ export function App() {
                             lastRenderedImage={lastRenderedImage}
                             onSaveToLibrary={handleSaveItemToLibrary}
                             deductCredit={deductCredit}
-                            onInspectRequest={credits?.role === 'admin' ? inspectAIRequest : undefined}
+                            onInspectRequest={role === 'admin' ? inspectAIRequest : undefined}
                             libraryItems={library.libraryItems}
                             selectedModel={selectedModel}
                             onSendToSketch={handleSendFreeToSketch}
@@ -2059,32 +2197,39 @@ interface ProjectGalleryModalProps {
     onEditItem: (id: string) => void;
     onMoveItems: (itemIds: string[], targetParentId: string | null) => void;
     onOpenPublicGallery?: () => void;
+    initialTab?: 'projects' | 'library';
 }
 
 const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({
     isOpen, onClose, user, projects, isLoading, onSave, onLoad, onDelete, onSaveLocally, onLoadFromFile,
     libraryItems, onAddLibraryItemToScene, onPublishLibraryItem, onDeleteLibraryItem,
-    onImportImage, onCreateFolder, onEditItem, onMoveItems, onOpenPublicGallery
+    onImportImage, onCreateFolder, onEditItem, onMoveItems, onOpenPublicGallery, initialTab = 'projects'
 }) => {
-    const [activeTab, setActiveTab] = useState<'projects' | 'library'>('projects');
+    const [activeTab, setActiveTab] = useState<'projects' | 'library'>(initialTab);
     const [newProjectName, setNewProjectName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [deletingProject, setDeletingProject] = useState<Project | null>(null);
-    const [deletingLibraryItem, setDeletingLibraryItem] = useState<any | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isSavingLocal, setIsSavingLocal] = useState(false);
     const [localFileName, setLocalFileName] = useState('mi-boceto');
     const localSaveInputRef = useRef<HTMLInputElement>(null);
 
-    useEffect(() => { if (isOpen) { setNewProjectName(''); setIsSaving(false); setDeletingProject(null); setIsSavingLocal(false); } }, [isOpen]);
+    useEffect(() => {
+        if (isOpen) {
+            setNewProjectName('');
+            setIsSaving(false);
+            setDeletingProject(null);
+            setIsSavingLocal(false);
+            setActiveTab(initialTab);
+        }
+    }, [isOpen, initialTab]);
 
     const handleHeaderSaveLocalClick = () => { setIsSavingLocal(true); setTimeout(() => { localSaveInputRef.current?.focus(); localSaveInputRef.current?.select(); }, 0); };
     const handleConfirmSaveLocal = async () => { if (localFileName.trim()) { try { await onSaveLocally(localFileName.trim()); setIsSavingLocal(false); } catch (error) { console.error("Failed to save project locally:", error); alert(`Error al guardar el proyecto localmente: ${error instanceof Error ? error.message : String(error)}`); } } };
     const handleCancelSaveLocal = () => setIsSavingLocal(false);
     const handleSave = async () => { if (!newProjectName.trim()) { alert("Please enter a project name."); return; } setIsSaving(true); try { await onSave(newProjectName.trim()); setNewProjectName(''); } catch (error) { console.error("Failed to save project:", error); alert(`Error saving project: ${error instanceof Error ? error.message : String(error)}`); } finally { setIsSaving(false); } };
     const handleDeleteConfirm = async () => { if (deletingProject) { await onDelete(deletingProject); setDeletingProject(null); } };
-    const handleDeleteLibraryItemConfirm = async () => { if (deletingLibraryItem) { onDeleteLibraryItem(deletingLibraryItem); setDeletingLibraryItem(null); } };
 
     const handleFileLoadClick = () => fileInputRef.current?.click();
     const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files?.[0]) { await onLoadFromFile(e.target.files[0]); } if (e.target) e.target.value = ''; };

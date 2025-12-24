@@ -180,7 +180,7 @@ Apply the requested change (e.g., "change material", "add light").
 
 Ensure seamless blending with the surrounding pixels of IMAGE 1.
 
-MARKUP ELIMINATION: The final output must look like a pristine photograph. It must NOT contain any red lines, boxes, or UI elements from IMAGE 2. The red boxes are strictly for your internal spatial logic, not for the final render.
+MARKUP ELIMINATION: The final output must look like a pristine, high-fidelity photograph. It must NOT contain any red lines, red boxes, numbers, labels, or UI elements from IMAGE 2. The red markup in IMAGE 2 is strictly for your internal spatial logic and MUST BE COMPLETELY ERASED and replaced with natural architectural content in the final render.
 
 USER CHANGE REQUEST:
 `;
@@ -189,10 +189,6 @@ USER CHANGE REQUEST:
     if (payload.regions.length > 0) {
         payload.regions.sort((a, b) => a.regionNumber - b.regionNumber).forEach(region => {
             prompt += `- Inside Red Box ${region.regionNumber}: ${region.prompt}\n`;
-
-            // Note: Reference images are handled by the multimodal part indices, 
-            // but we can mention them here if needed.
-            // For now, we stick to the requested structure.
         });
     }
 
@@ -200,8 +196,7 @@ USER CHANGE REQUEST:
         prompt += `- Global Note: ${payload.globalInstructions}\n`;
     }
 
-
-    prompt += `\nNEGATIVE PROMPT: Red lines, red boxes, annotations, markup, borders, outlines, glitch, artifacts, changes outside the box, low resolution.`;
+    prompt += `\nCRITICAL NEGATIVE CONSTRAINTS: NO red lines, NO red boxes, NO red rectangles, NO annotations, NO markup, NO borders, NO outlines, NO numbering, NO text, NO artifacts. The result must be a CLEAN image without any technical markers.`;
 
     return prompt;
 }

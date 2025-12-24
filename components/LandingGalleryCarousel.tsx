@@ -67,7 +67,7 @@ export const LandingGalleryCarousel: React.FC<LandingGalleryCarouselProps> = ({ 
             </div>
 
             <div
-                className="flex gap-4 overflow-x-auto pb-6 px-4 scrollbar-thin scrollbar-thumb-theme-bg-tertiary scrollbar-track-transparent snap-x"
+                className="flex gap-4 overflow-x-auto pb-6 px-4 modern-scrollbar snap-x"
                 style={{ scrollBehavior: 'smooth' }}
             >
                 {/* Add a "Explore" card at start */}

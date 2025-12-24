@@ -311,17 +311,25 @@ export function useLibrary(user: User | null) {
             // Create thumbnail (max 300x300 for grid)
             const thumbnailBlob = await createThumbnail(canvas, 300, 300);
 
-            // 2. Upload Thumbnail
-            const thumbnailPath = `public_gallery_thumbnails/${user.uid}_${Date.now()}_thumb.png`;
+            // 2. Prepare and Upload Full Image Blob
+            const fullImageResponse = await fetch(item.dataUrl || '');
+            const fullImageBlob = await fullImageResponse.blob();
+            const fullImagePath = `public_gallery/images/${user.uid}_${Date.now()}_full.png`;
+            const fullImageRef = ref(storage, fullImagePath);
+            await uploadBytes(fullImageRef, fullImageBlob);
+            const publicFullImageUrl = await getDownloadURL(fullImageRef);
+
+            // 3. Upload Thumbnail
+            const thumbnailPath = `public_gallery/thumbnails/${user.uid}_${Date.now()}_thumb.png`;
             const thumbnailRef = ref(storage, thumbnailPath);
             await uploadBytes(thumbnailRef, thumbnailBlob);
-            const thumbnailUrl = await getDownloadURL(thumbnailRef);
+            const publicThumbnailUrl = await getDownloadURL(thumbnailRef);
 
-            // 3. Save to Firestore
+            // 4. Save to Firestore
             await addDoc(collection(db, 'public_gallery'), {
                 originalLibraryId: item.id,
-                imageUrl: item.dataUrl,
-                thumbnailUrl: thumbnailUrl,
+                imageUrl: publicFullImageUrl,
+                thumbnailUrl: publicThumbnailUrl,
                 title: title,
                 description: description || '',
                 authorId: user.uid,

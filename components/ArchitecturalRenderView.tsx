@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { PhotoIcon, SparklesIcon, UploadIcon, UndoIcon, RedoIcon, SaveIcon, XIcon as CloseIcon, ZoomInIcon, ZoomOutIcon, MaximizeIcon, DownloadIcon, ChevronLeftIcon, ChevronRightIcon, FolderOpenIcon } from './icons';
+import { PhotoIcon, SparklesIcon, UploadIcon, UndoIcon, RedoIcon, SaveIcon, XIcon as CloseIcon, ZoomInIcon, ZoomOutIcon, MaximizeIcon, DownloadIcon, ChevronLeftIcon, ChevronRightIcon, FolderOpenIcon, GalleryIcon } from './icons';
 import { GoogleGenAI } from "@google/genai";
 import { buildArchitecturalPrompt, ArchitecturalRenderOptions, SceneType, RenderStyleMode } from '../utils/architecturalPromptBuilder';
 import { prepareVisualPromptingRequest, Region, buildVisualPrompt } from '../services/visualPromptingService';
@@ -22,6 +22,7 @@ interface ArchitecturalRenderViewProps {
     onSaveToLibrary?: (file: File) => void;
     // New: Model Selection
     selectedModel: string;
+    onOpenLibrary: () => void;
 }
 
 
@@ -89,13 +90,15 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
     credits,
     deductCredit,
     onSaveToLibrary,
-    selectedModel
+    selectedModel,
+    onOpenLibrary
 }, ref) => {
     const [sceneType, setSceneType] = useState<SceneType>('exterior');
     const [inputImage, setInputImageState] = useState<string | null>(null); // Renamed to avoid conflict
 
     // Wrapper for setInputImageState to handle common side effects
-    const setInputImage = useCallback((dataUrl: string | null) => {
+    // Hard reset for new projects/imports
+    const resetWithNewInput = useCallback((dataUrl: string | null) => {
         setInputImageState(dataUrl);
         setResultImage(null);
         setShowOriginal(false);
@@ -110,10 +113,10 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                 const result = e.target.result as string;
                 const img = new Image();
                 img.onload = () => {
-                    // Max dimension 1024 for performance and consistency
+                    // Max dimension 2048 for high-quality iterative cycles
                     let w = img.width;
                     let h = img.height;
-                    const maxSize = 1024;
+                    const maxSize = 2048;
                     if (w > maxSize || h > maxSize) {
                         if (w > h) { h = (h / w) * maxSize; w = maxSize; }
                         else { w = (w / h) * maxSize; h = maxSize; }
@@ -126,21 +129,21 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                     if (ctx) {
                         ctx.drawImage(img, 0, 0, w, h);
                         const bakedUrl = canvas.toDataURL('image/png'); // Strip EXIF
-                        setInputImage(bakedUrl); // Use the wrapper
+                        resetWithNewInput(bakedUrl); // Use the reset wrapper
                     }
                 };
                 img.src = result;
             }
         };
         reader.readAsDataURL(file);
-    }, [setInputImage]);
+    }, [resetWithNewInput]);
 
     useImperativeHandle(ref, () => ({
         setInputImageFromFile: (file: File) => {
             processInputImage(file);
         },
         setInputImage: (url: string) => {
-            setInputImage(url);
+            resetWithNewInput(url);
         }
     }));
 
@@ -283,26 +286,42 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
     const handleLocalUndo = useCallback(() => {
         if (historyIndex > 0) {
             const prev = generationHistory[historyIndex - 1];
-            setInputImage(prev.input);
+            setInputImageState(prev.input);
             setResultImage(prev.result);
             setHistoryIndex(prevIdx => prevIdx - 1);
         } else if (historyIndex === 0) {
             // Back to initial state (null result)
             const initial = generationHistory[0];
-            setInputImage(initial.input);
+            setInputImageState(initial.input);
             setResultImage(null);
             setHistoryIndex(-1);
         }
-    }, [historyIndex, generationHistory]);
+    }, [historyIndex, generationHistory, setInputImageState]);
 
     const handleLocalRedo = useCallback(() => {
         if (historyIndex < generationHistory.length - 1) {
             const next = generationHistory[historyIndex + 1];
-            setInputImage(next.input);
+            setInputImageState(next.input);
             setResultImage(next.result);
             setHistoryIndex(prev => prev + 1);
         }
-    }, [historyIndex, generationHistory]);
+    }, [historyIndex, generationHistory, setInputImageState]);
+
+    // Keyboard Listeners for Undo/Redo within the tab
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+                if (e.shiftKey) handleLocalRedo();
+                else handleLocalUndo();
+                e.preventDefault();
+            } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+                handleLocalRedo();
+                e.preventDefault();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [handleLocalUndo, handleLocalRedo]);
 
     // Navigation State
     const [transform, setTransform] = useState({ zoom: 1, x: 0, y: 0 });
@@ -498,11 +517,7 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                     ctx.drawImage(img, 0, 0, w, h);
                     const bakedUrl = canvas.toDataURL('image/png');
                     setCanvasDimensions({ width: w, height: h });
-                    setInputImage(bakedUrl);
-                    setResultImage(null);
-                    setShowOriginal(false);
-                    setGenerationHistory([]);
-                    setHistoryIndex(-1);
+                    resetWithNewInput(bakedUrl);
                 }
             };
             img.src = dataUrl;
@@ -528,8 +543,7 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
 
     const handleReset = () => {
         if (confirm("¿Estás seguro de que quieres limpiar todo y restablecer la configuración?")) {
-            setInputImage(null);
-            setResultImage(null);
+            resetWithNewInput(null);
             setStyleReferenceImage(null);
             setShowOriginal(false);
             setAdditionalPrompt('');
@@ -589,14 +603,17 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
             return;
         }
 
-        // Iterative Workflow: Use Ref to guarantee latest state
-        const activeBaseImage = currentResult || currentInput;
+        // --- Iterative Workflow: Determine Active Base Image ---
+        // If "Show Original" is active, we use the original input. 
+        // Otherwise, we use the previous result if it exists.
+        const activeBaseImage = showOriginal ? currentInput : (currentResult || currentInput);
 
-        if (!activeBaseImage) return; // Should not happen
+        if (!activeBaseImage) return;
 
-        // Commit the current state as the new input to avoid UI jumping back to original
-        if (currentResult) {
-            setInputImage(currentResult);
+        // Commit the active base image as the new input to avoid UI jumping/flickering
+        // Use non-destructive state setter to preserve history
+        if (!showOriginal && currentResult) {
+            setInputImageState(currentResult);
         }
 
         setIsGenerating(true);
@@ -650,9 +667,71 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
             }
 
             if (newImageBase64) {
-                const newResult = `data:image/png;base64,${newImageBase64}`;
-                updateResult(newResult);
-                pushToHistory(currentResult || currentInput, newResult);
+                const newResultDataUrl = `data:image/png;base64,${newImageBase64}`;
+
+                // --- Regional Blending (Mitigate Quality Loss) ---
+                if (regions.length > 0) {
+                    const baseImg = new Image();
+                    baseImg.src = activeBaseImage;
+                    const aiImg = new Image();
+                    aiImg.src = newResultDataUrl;
+
+                    await Promise.all([
+                        new Promise(r => baseImg.onload = r),
+                        new Promise(r => aiImg.onload = r)
+                    ]);
+
+                    const blendCanvas = document.createElement('canvas');
+                    blendCanvas.width = baseImg.width;
+                    blendCanvas.height = baseImg.height;
+                    const bCtx = blendCanvas.getContext('2d');
+
+                    if (bCtx) {
+                        // 1. Draw Original (High Quality)
+                        bCtx.drawImage(baseImg, 0, 0);
+
+                        // 2. Create Mask
+                        const maskCanvas = document.createElement('canvas');
+                        maskCanvas.width = baseImg.width;
+                        maskCanvas.height = baseImg.height;
+                        const mCtx = maskCanvas.getContext('2d');
+                        if (mCtx) {
+                            mCtx.fillStyle = 'white';
+                            regions.forEach(r => {
+                                // Draw rectangle with slight expansion (2px) to ensure coverage
+                                mCtx.fillRect(r.x - 2, r.y - 2, r.width + 4, r.height + 4);
+                            });
+                            // Apply Blur for Soft Edges (Feathering)
+                            mCtx.filter = 'blur(8px)';
+                            mCtx.drawImage(maskCanvas, 0, 0);
+                        }
+
+                        // 3. Draw AI Result over Original using Mask
+                        const tempCanvas = document.createElement('canvas');
+                        tempCanvas.width = baseImg.width;
+                        tempCanvas.height = baseImg.height;
+                        const tCtx = tempCanvas.getContext('2d');
+                        if (tCtx) {
+                            tCtx.drawImage(aiImg, 0, 0, blendCanvas.width, blendCanvas.height);
+                            tCtx.globalCompositeOperation = 'destination-in';
+                            tCtx.drawImage(maskCanvas, 0, 0);
+
+                            bCtx.drawImage(tempCanvas, 0, 0);
+                        }
+
+                        const blendedDataUrl = blendCanvas.toDataURL('image/png');
+                        updateResult(blendedDataUrl);
+                        pushToHistory(activeBaseImage, blendedDataUrl);
+                    } else {
+                        // Fallback to simple update if canvas fails
+                        updateResult(newResultDataUrl);
+                        pushToHistory(activeBaseImage, newResultDataUrl);
+                    }
+                } else {
+                    // Global Edit (No Regions): Just update as usual
+                    updateResult(newResultDataUrl);
+                    pushToHistory(activeBaseImage, newResultDataUrl);
+                }
             } else {
                 alert("La IA no generó una imagen.");
             }
@@ -684,23 +763,29 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
         }
 
         setIsGenerating(true);
+
+        const currentInput = inputImageRef.current;
+        const currentResult = resultImageRef.current;
+
+        // --- Iterative Workflow: Determine Active Base Image ---
+        const activeBaseImage = showOriginal ? currentInput : (currentResult || currentInput);
+
+        // Commit logic for consistency (non-destructive)
+        if (!showOriginal && currentResult) {
+            setInputImageState(currentResult);
+        }
+
         setResultImage(null);
         setShowOriginal(false);
 
         try {
             const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
             const model = selectedModel || GEMINI_MODEL_ID;
-            // console.log("Render View using model:", model);
 
-            // STRICT SEPARATION: User requested that Photorealistic flow NEVER mixes with Visual Prompting.
-            // This function is triggered by the Right Sidebar (Architectural Config).
-            // It acts STRICTLY as the "Classic" pipeline (Image + Prompt -> Image).
-            // Visual Prompting (Regions/Drawings) is handled exclusively by handleProcessChanges in the Left Panel.
-
-            // console.log("[Prompt Maestro] Sending Classic Prompt:\n", manualPrompt);
+            // ... (rest of logic uses activeBaseImage)
 
             const parts: any[] = [];
-            const inputBase64 = inputImage.split(',')[1];
+            const inputBase64 = activeBaseImage!.split(',')[1];
             parts.push({ inlineData: { mimeType: 'image/png', data: inputBase64 } });
 
             if (styleReferenceImage) {
@@ -732,7 +817,7 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                 if (deductCredit) await deductCredit();
                 const newResult = `data:image/png;base64,${newImageBase64}`;
                 updateResult(newResult);
-                pushToHistory(inputImage, newResult);
+                pushToHistory(activeBaseImage, newResult);
             } else {
                 alert("La IA no generó una imagen.");
             }
@@ -762,100 +847,108 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
             const textPart = { text: prompt };
 
             const contents = { parts: [imagePart, textPart] };
-            // @ts-ignore
-            const config = { responseModalities: ["IMAGE"] };
-
-            const response = await ai.models.generateContent({ model, contents, config });
+            const config = {}; // Remove problematic responseModalities
 
             let newImageBase64: string | null = null;
-            for (const part of response.candidates?.[0]?.content.parts || []) {
-                if (part.inlineData) { newImageBase64 = part.inlineData.data; break; }
+            try {
+                const response = await ai.models.generateContent({ model, contents, config });
+                for (const part of response.candidates?.[0]?.content.parts || []) {
+                    if (part.inlineData) { newImageBase64 = part.inlineData.data; break; }
+                }
+            } catch (aiError) {
+                console.warn("AI Upscale failed, falling back to high-quality client-side scaling:", aiError);
             }
+
+            // --- 4K Processing (AI Result or Fallback to Original) ---
+            const upscaleSource = newImageBase64 ? `data:image/png;base64,${newImageBase64}` : resultImage;
 
             if (newImageBase64) {
-                const newResult = `data:image/png;base64,${newImageBase64}`;
-                updateResult(newResult);
-                pushToHistory(resultImage, newResult);
-
-                // --- 4K Processing with Smart AR Correction ---
-
-                // 1. Determine Original Aspect Ratio (from Canvas)
-                // We STRICTLY use the canvas dimensions to ensure WYSIWYG (What You See Is What You Get).
-                // If the user cropped the canvas, we want the 4K render to match that crop, not the original input file.
-                const originalAR = canvasDimensions.width / canvasDimensions.height;
-
-                const img = new Image();
-                img.onload = () => {
-
-                    const MAX_DIM = 3840;
-                    let targetWidth, targetHeight;
-
-                    // 2. Calculate Target Dimensions (4K) based on ORIGINAL Aspect Ratio
-                    if (originalAR >= 1) {
-                        // Landscape/Square
-                        targetWidth = MAX_DIM;
-                        targetHeight = Math.round(MAX_DIM / originalAR);
-                    } else {
-                        // Portrait
-                        targetHeight = MAX_DIM;
-                        targetWidth = Math.round(MAX_DIM * originalAR);
-                    }
-
-                    const canvas = document.createElement('canvas');
-                    canvas.width = targetWidth;
-                    canvas.height = targetHeight;
-                    const ctx = canvas.getContext('2d');
-                    if (ctx) {
-                        ctx.imageSmoothingEnabled = true;
-                        ctx.imageSmoothingQuality = 'high';
-
-                        // 3. Draw using "Object Fit: Cover" logic (Center Crop)
-                        // This ensures we fill the target dimensions (Original AR) without stretching the AI image.
-                        const aiAR = img.naturalWidth / img.naturalHeight;
-
-                        let renderX = 0;
-                        let renderY = 0;
-                        let renderW = targetWidth;
-                        let renderH = targetHeight;
-
-                        // If AI AR differs from Target AR, we need to calculate crop
-                        if (Math.abs(aiAR - originalAR) > 0.01) {
-                            // If AI is wider than Target -> Crop sides (Fit Height)
-                            if (aiAR > originalAR) {
-                                renderH = targetHeight;
-                                renderW = targetHeight * aiAR;
-                                renderX = (targetWidth - renderW) / 2; // Center horizontally
-                            }
-                            // If AI is taller than Target -> Crop top/bottom (Fit Width)
-                            else {
-                                renderW = targetWidth;
-                                renderH = targetWidth / aiAR;
-                                renderY = (targetHeight - renderH) / 2; // Center vertically
-                            }
-                        }
-
-                        // Draw!
-                        ctx.drawImage(img, renderX, renderY, renderW, renderH);
-
-                        canvas.toBlob((blob) => {
-                            if (blob) {
-                                const downloadUrl = URL.createObjectURL(blob);
-                                const link = document.createElement('a');
-                                link.href = downloadUrl;
-                                link.download = `Architectural_Render_4K_${Date.now()}.png`;
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                                URL.revokeObjectURL(downloadUrl);
-                            }
-                        }, 'image/png');
-                    }
-                };
-                img.src = newResult;
-            } else {
-                alert("La IA no pudo escalar la imagen.");
+                updateResult(upscaleSource);
+                pushToHistory(resultImage, upscaleSource);
             }
 
+            // --- 4K Processing with Smart AR Correction ---
+
+            // 1. Determine Original Aspect Ratio (from Canvas)
+            // We STRICTLY use the canvas dimensions to ensure WYSIWYG (What You See Is What You Get).
+            // If the user cropped the canvas, we want the 4K render to match that crop, not the original input file.
+            const originalAR = canvasDimensions.width / canvasDimensions.height;
+
+            const img = new Image();
+            img.onload = () => {
+
+                const MAX_DIM = 3840;
+                let targetWidth, targetHeight;
+
+                // 2. Calculate Target Dimensions (4K) based on ORIGINAL Aspect Ratio
+                if (originalAR >= 1) {
+                    // Landscape/Square
+                    targetWidth = MAX_DIM;
+                    targetHeight = Math.round(MAX_DIM / originalAR);
+                } else {
+                    // Portrait
+                    targetHeight = MAX_DIM;
+                    targetWidth = Math.round(MAX_DIM * originalAR);
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = targetWidth;
+                canvas.height = targetHeight;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
+
+                    // 3. Draw using "Object Fit: Cover" logic (Center Crop)
+                    // This ensures we fill the target dimensions (Original AR) without stretching the AI image.
+                    const aiAR = img.naturalWidth / img.naturalHeight;
+
+                    let renderX = 0;
+                    let renderY = 0;
+                    let renderW = targetWidth;
+                    let renderH = targetHeight;
+
+                    // If AI AR differs from Target AR, we need to calculate crop
+                    if (Math.abs(aiAR - originalAR) > 0.01) {
+                        // If AI is wider than Target -> Crop sides (Fit Height)
+                        if (aiAR > originalAR) {
+                            renderH = targetHeight;
+                            renderW = targetHeight * aiAR;
+                            renderX = (targetWidth - renderW) / 2; // Center horizontally
+                        }
+                        // If AI is taller than Target -> Crop top/bottom (Fit Width)
+                        else {
+                            renderW = targetWidth;
+                            renderH = targetWidth / aiAR;
+                            renderY = (targetHeight - renderH) / 2; // Center vertically
+                        }
+                    }
+
+                    // Draw!
+                    ctx.drawImage(img, renderX, renderY, renderW, renderH);
+
+                    const finalDataUrl = canvas.toDataURL('image/png');
+
+                    // --- Substitution Logic (NEW) ---
+                    // After generating the 4K version, we substitute the current result in the UI
+                    // so the user sees the clean/sharp version they just downloaded.
+                    updateResult(finalDataUrl);
+
+                    canvas.toBlob((blob) => {
+                        if (blob) {
+                            const downloadUrl = URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = downloadUrl;
+                            link.download = `Architectural_Render_4K_${Date.now()}.png`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(downloadUrl);
+                        }
+                    }, 'image/png');
+                }
+            };
+            img.src = upscaleSource;
         } catch (error) {
             console.error("Error upscaling:", error);
             alert("Error al escalar la imagen.");
@@ -866,14 +959,16 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
 
 
     const handleSaveToLibrary = async () => {
-        if (!resultImage || !onSaveToLibrary) return;
+        if (!resultImage) return;
 
         try {
             const res = await fetch(resultImage);
             const blob = await res.blob();
             const file = new File([blob], `Render_${Date.now()}.png`, { type: 'image/png' });
-            onSaveToLibrary(file);
-            alert("Imagen guardada en la galería.");
+            if (onSaveToLibrary) {
+                onSaveToLibrary(file);
+                alert("Imagen guardada en la galería.");
+            }
         } catch (error) {
             console.error("Error saving to library:", error);
             alert("Error al guardar en la galería.");
@@ -1020,10 +1115,13 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                                 <PhotoIcon className="w-16 h-16 opacity-30 mb-6" />
                                 <h3 className="text-xl font-bold opacity-50 mb-4">Empezar Proyecto</h3>
                                 <div className="flex gap-4">
-                                    <button onClick={handleImport} className="px-6 py-3 bg-theme-accent-primary hover:bg-theme-accent-secondary rounded-lg text-white font-bold shadow-lg shadow-theme-accent-primary/20 transition-all hover:scale-105 flex items-center gap-2">
+                                    <button onClick={handleImport} className="px-6 py-3 bg-theme-accent-primary hover:bg-theme-accent-secondary rounded-lg text-white font-bold shadow-lg shadow-theme-accent-primary/20 transition-all hover:scale-105 flex items-center gap-2 w-full justify-center">
                                         <UndoIcon className="w-5 h-5 rotate-180" /> Importar Sketch
                                     </button>
-                                    <label className="px-6 py-3 bg-theme-bg-secondary hover:bg-theme-bg-tertiary border border-theme-bg-tertiary rounded-lg text-theme-text-primary font-bold shadow-lg transition-all hover:scale-105 flex items-center gap-2 cursor-pointer">
+                                    <button onClick={onOpenLibrary} className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg text-white font-bold shadow-lg shadow-purple-600/20 transition-all hover:scale-105 flex items-center gap-2 w-full justify-center">
+                                        <GalleryIcon className="w-5 h-5" /> Importar de Librería
+                                    </button>
+                                    <label className="px-6 py-3 bg-theme-bg-secondary hover:bg-theme-bg-tertiary border border-theme-bg-tertiary rounded-lg text-theme-text-primary font-bold shadow-lg transition-all hover:scale-105 flex items-center gap-2 cursor-pointer w-full justify-center">
                                         <UploadIcon className="w-5 h-5" /> Subir Imagen
                                         <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
                                     </label>
@@ -1242,13 +1340,12 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                     {/* Input Management in Sidebar removed as it's now in Center Canvas */}
                     {inputImage && (
                         <div className="flex gap-2">
-                            <div className="flex-1 relative group h-16 bg-black/40 rounded overflow-hidden border border-theme-bg-tertiary">
-                                <img src={inputImage} className="w-full h-full object-cover" />
-                                <button onClick={() => setInputImage(null)} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-bold transition-opacity">Cambiar</button>
+                            <div className="flex-1 relative h-16 bg-black/40 rounded overflow-hidden border border-theme-bg-tertiary">
+                                <img src={resultImage || inputImage || ''} className="w-full h-full object-cover" />
                             </div>
                             <div className="flex-1 flex flex-col justify-center gap-1">
                                 <span className="text-[10px] text-theme-text-secondary font-bold">IMAGEN INPUT</span>
-                                <span className="text-[10px] text-emerald-500">✓ Cargada</span>
+                                <span className="text-[9px] text-theme-text-tertiary truncate">Base para el render</span>
                             </div>
                         </div>
                     )}

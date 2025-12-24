@@ -85,3 +85,26 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+.modern-scrollbar::-webkit-scrollbar {
+  height: 4px;
+}
+
+.modern-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modern-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(var(--text-tertiary), 0.2);
+  border-radius: 20px;
+}
+
+.modern-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(var(--text-tertiary), 0.5);
+}
+
+/* Firefox */
+.modern-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--text-tertiary), 0.2) transparent;
+}

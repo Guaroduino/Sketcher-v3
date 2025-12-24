@@ -106,9 +106,9 @@ export const prepareAIRequest = (
                     finalImageCanvas = imageCanvas;
                 }
 
-                const dataUrl = finalImageCanvas.toDataURL('image/jpeg');
+                const dataUrl = finalImageCanvas.toDataURL('image/png');
                 debugImages.push({ name: 'Imagen de Entrada', url: dataUrl });
-                parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(dataUrl) } });
+                parts.push({ inlineData: { mimeType: 'image/png', data: dataURLtoBase64(dataUrl) } });
 
                 let creativityInstruction = '';
                 if (enhancementCreativity <= 40) creativityInstruction = 'Sé muy fiel a la imagen de entrada y a la descripción proporcionada. Realiza solo los cambios solicitados.';
@@ -175,9 +175,9 @@ export const prepareAIRequest = (
             const compositionCanvas = getCompositeCanvas(true, canvasSize, getDrawableObjects, backgroundObject);
 
             if (compositionCanvas) {
-                const compDataUrl = compositionCanvas.toDataURL('image/jpeg', 1.0); // High quality
+                const compDataUrl = compositionCanvas.toDataURL('image/png'); // High quality PNG
                 debugImages.push({ name: 'Imagen a Escalar', url: compDataUrl });
-                parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(compDataUrl) } });
+                parts.push({ inlineData: { mimeType: 'image/png', data: dataURLtoBase64(compDataUrl) } });
             }
 
             // 2. High-Res Prompt Engineering
@@ -218,9 +218,9 @@ export const prepareAIRequest = (
             // 1. Get Image (Full Composition)
             const compositionCanvas = getCompositeCanvas(true, canvasSize, getDrawableObjects, backgroundObject);
             if (compositionCanvas) {
-                const compDataUrl = compositionCanvas.toDataURL('image/jpeg');
+                const compDataUrl = compositionCanvas.toDataURL('image/png');
                 debugImages.push({ name: 'Imagen Base', url: compDataUrl });
-                parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(compDataUrl) } });
+                parts.push({ inlineData: { mimeType: 'image/png', data: dataURLtoBase64(compDataUrl) } });
             }
 
             // 2. Construct Prompt Hierarchy
