@@ -934,7 +934,7 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
 
             const contents = { parts };
             // @ts-ignore
-            const config = { responseModalities: ["IMAGE"] };
+            const config = {}; // responseModalities removed to fix "invalid argument" error
 
             if (onInspectRequest) {
                 const confirmed = await onInspectRequest({ model, parts, config });

@@ -5,7 +5,7 @@ interface CanvasSizeModalProps {
     isOpen: boolean;
     onClose: () => void;
     currentSize: { width: number, height: number };
-    onApply: (width: number, height: number) => void;
+    onApply: (width: number, height: number, scale?: boolean) => void;
 }
 
 const PRESETS = {
@@ -23,12 +23,16 @@ export const CanvasSizeModal: React.FC<CanvasSizeModalProps> = ({
     const [width, setWidth] = useState(currentSize.width);
     const [height, setHeight] = useState(currentSize.height);
     const [orientation, setOrientation] = useState<'horizontal' | 'vertical'>('horizontal');
+    const [lockAspectRatio, setLockAspectRatio] = useState(true);
+    const [aspectRatio, setAspectRatio] = useState(currentSize.width / currentSize.height);
+    const [shouldScaleContent, setShouldScaleContent] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
             setWidth(currentSize.width);
             setHeight(currentSize.height);
             setOrientation(currentSize.width >= currentSize.height ? 'horizontal' : 'vertical');
+            setAspectRatio(currentSize.width / currentSize.height);
         }
     }, [isOpen, currentSize]);
 
@@ -56,10 +60,10 @@ export const CanvasSizeModal: React.FC<CanvasSizeModalProps> = ({
         const newWidth = Number(width);
         const newHeight = Number(height);
         if (!isNaN(newWidth) && !isNaN(newHeight) && newWidth > 0 && newHeight > 0) {
-            onApply(newWidth, newHeight);
+            onApply(newWidth, newHeight, shouldScaleContent);
         }
     };
-    
+
     if (!isOpen) return null;
 
     return (
@@ -93,25 +97,70 @@ export const CanvasSizeModal: React.FC<CanvasSizeModalProps> = ({
                     <h3 className="text-sm font-bold uppercase text-theme-text-secondary mb-2">Personalizado</h3>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label htmlFor="canvas-width" className="block text-xs text-theme-text-secondary mb-1">Ancho</label>
+                            <label htmlFor="canvas-width" className="block text-xs text-theme-text-secondary mb-1">Ancho (px)</label>
                             <input
                                 type="number"
                                 id="canvas-width"
                                 value={width}
-                                onChange={(e) => setWidth(Number(e.target.value))}
-                                className="w-full bg-theme-bg-tertiary text-theme-text-primary text-sm rounded-md p-2"
+                                onChange={(e) => {
+                                    const val = Number(e.target.value);
+                                    setWidth(val);
+                                    if (lockAspectRatio) {
+                                        setHeight(Math.round(val / aspectRatio));
+                                    }
+                                }}
+                                className="w-full bg-theme-bg-tertiary text-theme-text-primary text-sm rounded-md p-2 focus:ring-1 focus:ring-theme-accent-primary outline-none"
                             />
                         </div>
                         <div>
-                            <label htmlFor="canvas-height" className="block text-xs text-theme-text-secondary mb-1">Alto</label>
+                            <label htmlFor="canvas-height" className="block text-xs text-theme-text-secondary mb-1">Alto (px)</label>
                             <input
                                 type="number"
                                 id="canvas-height"
                                 value={height}
-                                onChange={(e) => setHeight(Number(e.target.value))}
-                                className="w-full bg-theme-bg-tertiary text-theme-text-primary text-sm rounded-md p-2"
+                                onChange={(e) => {
+                                    const val = Number(e.target.value);
+                                    setHeight(val);
+                                    if (lockAspectRatio) {
+                                        setWidth(Math.round(val * aspectRatio));
+                                    }
+                                }}
+                                className="w-full bg-theme-bg-tertiary text-theme-text-primary text-sm rounded-md p-2 focus:ring-1 focus:ring-theme-accent-primary outline-none"
                             />
                         </div>
+                    </div>
+                </div>
+
+                <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                        <input
+                            type="checkbox"
+                            id="lock-aspect-ratio"
+                            checked={lockAspectRatio}
+                            onChange={(e) => {
+                                setLockAspectRatio(e.target.checked);
+                                if (e.target.checked) {
+                                    setAspectRatio(width / height);
+                                }
+                            }}
+                            className="w-4 h-4 rounded border-theme-bg-tertiary text-theme-accent-primary focus:ring-theme-accent-primary"
+                        />
+                        <label htmlFor="lock-aspect-ratio" className="text-sm text-theme-text-primary cursor-pointer select-none">
+                            Mantener Relación de Aspecto
+                        </label>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <input
+                            type="checkbox"
+                            id="scale-content"
+                            checked={shouldScaleContent}
+                            onChange={(e) => setShouldScaleContent(e.target.checked)}
+                            className="w-4 h-4 rounded border-theme-bg-tertiary text-theme-accent-primary focus:ring-theme-accent-primary"
+                        />
+                        <label htmlFor="scale-content" className="text-sm text-theme-text-primary cursor-pointer select-none">
+                            Redimensionar contenido (Escalar imagen)
+                        </label>
                     </div>
                 </div>
 

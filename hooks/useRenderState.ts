@@ -42,10 +42,10 @@ export function useRenderState(
     const [inputImage, setInputImage] = useState<string | null>(null);
     const [resultImage, setResultImage] = useState<string | null>(null);
 
-    // Prompt Builder Effect
     const canvasAspectRatio = useRef<number | undefined>(undefined);
     const lastOptions = useRef<ArchitecturalRenderOptions | null>(null);
 
+    // Prompt Builder Effect (Debounced)
     useEffect(() => {
         const renderOptions: ArchitecturalRenderOptions = {
             sceneType,
@@ -62,8 +62,13 @@ export function useRenderState(
             ...((sceneType === 'object_interior' || sceneType === 'object_exterior') && { objectMaterial, objectDoF, objectContext }),
         };
         lastOptions.current = renderOptions;
-        const generatedPrompt = buildArchitecturalPrompt(renderOptions);
-        setManualPrompt(generatedPrompt);
+
+        const timer = setTimeout(() => {
+            const generatedPrompt = buildArchitecturalPrompt(renderOptions);
+            setManualPrompt(generatedPrompt);
+        }, 300);
+
+        return () => clearTimeout(timer);
     }, [sceneType, renderStyle, creativeFreedom, additionalPrompt, archStyle, timeOfDay, weather, roomType, lighting, styleReferenceImage, studioLighting, studioBackground, studioShot, carAngle, carEnvironment, carColor, objectMaterial, objectDoF, objectContext]);
 
 

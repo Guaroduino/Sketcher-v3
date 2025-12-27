@@ -183,7 +183,7 @@ export const FloatingQuickAccessBar: React.FC<FloatingQuickAccessBarProps> = ({
     }, [colorContextMenu]);
 
     return (
-        <div className={`fixed left-1/2 -translate-x-1/2 z-50 flex flex-col items-center max-w-[95vw] transition-all duration-300 ${isHeaderVisible ? 'top-20' : 'top-4'}`}>
+        <div className={`fixed left-1/2 -translate-x-1/2 z-30 flex flex-col items-center max-w-[95vw] transition-all duration-300 ${isHeaderVisible ? 'top-20' : 'top-4'}`}>
 
             {/* Color Edit Popover and Context Menu */}
             {editingColor && (

@@ -12,8 +12,8 @@ type DragAction =
     | { type: 'none' }
     | { type: 'pan'; startX: number; startY: number; startPan: { x: number; y: number } }
     | { type: 'draw' } // Simplified, state is now in the brush instance
-    | { type: 'selection'; tool: 'marquee-rect' | 'lasso'; startPoint: Point; points: Point[] }
-    | { type: 'crop'; handle: 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r' | 'move'; startRect: CropRect, startPoint: Point }
+    | { type: 'selection'; tool: 'marquee-rect' | 'lasso' | 'marquee-circle'; startPoint: Point; points: Point[] }
+    | { type: 'crop'; handle: 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r' | 'move' | 'new'; startRect: CropRect, startPoint: Point }
     | { type: 'transform'; handle: string; startState: TransformState, startPoint: Point; center?: Point }
     | { type: 'text-place' };
 
@@ -131,7 +131,7 @@ export function usePointerEvents({
     onCommitText,
     strokeSmoothing,
     strokeModifier,
-    setDebugPointers,
+    // setDebugPointers, // OPTIMIZATION: Removed
     isPalmRejectionEnabled,
     isSolidBox,
     fillColor,
@@ -190,7 +190,7 @@ export function usePointerEvents({
     onCommitText: (textState: { position: Point; value: string; activeItemId: string; }) => void;
     strokeSmoothing: number;
     strokeModifier: StrokeModifier;
-    setDebugPointers: React.Dispatch<React.SetStateAction<Map<number, { x: number, y: number }>>>;
+    // setDebugPointers: React.Dispatch<React.SetStateAction<Map<number, { x: number, y: number }>>>; // OPTIMIZATION: Removed
     isPalmRejectionEnabled: boolean;
     isSolidBox: boolean;
     fillColor: string;
@@ -348,7 +348,7 @@ export function usePointerEvents({
         }
 
         activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-        setDebugPointers(new Map(activePointers.current));
+        // setDebugPointers(new Map(activePointers.current)); // OPTIMIZATION: Removed heavy state update
 
         // Palm Rejection Logic for actions
         const isRejectedPointer = isPalmRejectionEnabled && e.pointerType !== 'pen';
@@ -490,12 +490,18 @@ export function usePointerEvents({
         }
 
         if (tool === 'crop' && cropRect) {
-            const getCropHandles = (rect: CropRect) => ({
-                tl: { x: rect.x, y: rect.y }, tr: { x: rect.x + rect.width, y: rect.y }, bl: { x: rect.x, y: rect.y + rect.height }, br: { x: rect.x + rect.width, y: rect.y + rect.height },
-                t: { x: rect.x + rect.width / 2, y: rect.y }, b: { x: rect.x + rect.width / 2, y: rect.y + rect.height }, l: { x: rect.x, y: rect.y + rect.height / 2 }, r: { x: rect.x + rect.width, y: rect.y + rect.height / 2 },
-            });
-            const handles = getCropHandles(cropRect);
-            const threshold = 10 / viewTransform.zoom;
+            const threshold = 15 / viewTransform.zoom;
+            const handles = {
+                tl: { x: cropRect.x, y: cropRect.y },
+                tr: { x: cropRect.x + cropRect.width, y: cropRect.y },
+                bl: { x: cropRect.x, y: cropRect.y + cropRect.height },
+                br: { x: cropRect.x + cropRect.width, y: cropRect.y + cropRect.height },
+                t: { x: cropRect.x + cropRect.width / 2, y: cropRect.y },
+                b: { x: cropRect.x + cropRect.width / 2, y: cropRect.y + cropRect.height },
+                l: { x: cropRect.x, y: cropRect.y + cropRect.height / 2 },
+                r: { x: cropRect.x + cropRect.width, y: cropRect.y + cropRect.height / 2 },
+            };
+
             for (const [handle, pos] of Object.entries(handles)) {
                 if (pos && isNearPoint(point, pos as Point, threshold)) {
                     setDragAction({ type: 'crop', handle: handle as any, startRect: cropRect, startPoint: point });
@@ -506,6 +512,10 @@ export function usePointerEvents({
                 setDragAction({ type: 'crop', handle: 'move', startRect: cropRect, startPoint: point });
                 return;
             }
+
+            // If clicking outside, start a NEW crop rectangle
+            setDragAction({ type: 'crop', handle: 'new', startRect: { x: point.x, y: point.y, width: 0, height: 0 }, startPoint: point });
+            return;
         }
 
         if ((tool === 'transform' || tool === 'free-transform') && transformState) {
@@ -563,10 +573,11 @@ export function usePointerEvents({
 
         if (isSelectionTool) {
             setSelection(null);
-            if (tool === 'marquee-rect' || tool === 'lasso') {
+            if (tool === 'marquee-rect' || tool === 'lasso' || tool === 'marquee-circle') {
                 setDragAction({ type: 'selection', tool, startPoint: snappedPoint, points: [snappedPoint] });
                 return;
-            } else if (tool === 'magic-wand') {
+            }
+            else if (tool === 'magic-wand') {
                 if (activeItem && activeItem.type === 'object' && (activeItem as SketchObject).canvas) {
                     const canvas = (activeItem as SketchObject).canvas!;
                     const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -888,7 +899,7 @@ export function usePointerEvents({
                 brush.onPointerDown(snappedPointWithPressure, brushContext);
             }
         }
-    }, [tool, viewTransform, activeItem, isDrawingTool, isSelectionTool, magicWandSettings, setSelection, cropRect, activeGuide, rulerGuides, mirrorGuides, perspectiveGuide, areGuidesLocked, setPerspectiveGuide, setRulerGuides, setMirrorGuides, setGuideDragState, perspectiveVPs, transformState, isPerspectiveStrokeLockEnabled, snapPointToGrid, strokeMode, strokeState, setStrokeState, onDrawCommit, onAddItem, setTextEditState, textEditState, onCommitText, getBrushForTool, strokeSmoothing, strokeModifier, setDebugPointers, isPalmRejectionEnabled, isSolidBox, fillColor]);
+    }, [tool, viewTransform, activeItem, isDrawingTool, isSelectionTool, magicWandSettings, setSelection, cropRect, activeGuide, rulerGuides, mirrorGuides, perspectiveGuide, areGuidesLocked, setPerspectiveGuide, setRulerGuides, setMirrorGuides, setGuideDragState, perspectiveVPs, transformState, isPerspectiveStrokeLockEnabled, snapPointToGrid, strokeMode, strokeState, setStrokeState, onDrawCommit, onAddItem, setTextEditState, textEditState, onCommitText, getBrushForTool, strokeSmoothing, strokeModifier, isPalmRejectionEnabled, isSolidBox, fillColor]);
 
     const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
         if (!uiCanvasRef.current) return;
@@ -905,7 +916,7 @@ export function usePointerEvents({
 
         const now = Date.now();
         if (now - lastDebugUpdateRef.current > 16) { // ~60fps Limit
-            setDebugPointers(new Map(activePointers.current));
+            // setDebugPointers(new Map(activePointers.current)); // OPTIMIZATION: Removed
             lastDebugUpdateRef.current = now;
         }
 
@@ -1359,6 +1370,13 @@ export function usePointerEvents({
             if (currentAction.tool === 'marquee-rect') {
                 const { startPoint } = currentAction;
                 previewCtx.rect(startPoint.x, startPoint.y, finalPoint.x - startPoint.x, finalPoint.y - startPoint.y);
+            } else if (currentAction.tool === 'marquee-circle') {
+                const { startPoint } = currentAction;
+                const x = Math.min(startPoint.x, finalPoint.x);
+                const y = Math.min(startPoint.y, finalPoint.y);
+                const width = Math.abs(startPoint.x - finalPoint.x);
+                const height = Math.abs(startPoint.y - finalPoint.y);
+                previewCtx.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
             } else { // lasso
                 previewCtx.moveTo(newPoints[0].x, newPoints[0].y);
                 for (let i = 1; i < newPoints.length; i++) {
@@ -1382,6 +1400,13 @@ export function usePointerEvents({
             if (handle === 'move') {
                 newRect.x = startRect.x + dx;
                 newRect.y = startRect.y + dy;
+            } else if (handle === 'new') {
+                newRect = {
+                    x: Math.min(startPoint.x, rawPoint.x),
+                    y: Math.min(startPoint.y, rawPoint.y),
+                    width: Math.abs(dx),
+                    height: Math.abs(dy),
+                };
             } else {
                 let newX = startRect.x;
                 let newY = startRect.y;
@@ -1505,13 +1530,13 @@ export function usePointerEvents({
         setCropRect, setTransformState, snapPointToGrid, getMinZoom, MAX_ZOOM,
         isAspectRatioLocked, isAngleSnapEnabled, angleSnapValue, isDrawingTool, activeGuide,
         rulerGuides, isOrthogonalVisible, isPerspectiveStrokeLockEnabled, perspectiveVPs, onDrawCommit, mirrorGuides,
-        strokeModifier, getBrushForTool, setDebugPointers
+        strokeModifier, getBrushForTool
     ]);
 
     const onPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
         const pointerCountBeforeUp = activePointers.current.size;
         activePointers.current.delete(e.pointerId);
-        setDebugPointers(new Map(activePointers.current));
+        // setDebugPointers(new Map(activePointers.current)); // OPTIMIZATION: Removed
 
         if (activePointers.current.size === 0) {
             wasInGestureRef.current = false;
@@ -1633,6 +1658,16 @@ export function usePointerEvents({
                     path = new Path2D();
                     path.rect(x, y, width, height);
                     boundingBox = { x, y, width, height };
+                } else if (tool === 'marquee-circle') {
+                    const endPoint = points[points.length - 1];
+                    const x = Math.min(startPoint.x, endPoint.x);
+                    const y = Math.min(startPoint.y, endPoint.y);
+                    const width = Math.abs(startPoint.x - endPoint.x);
+                    const height = Math.abs(startPoint.y - endPoint.y);
+
+                    path = new Path2D();
+                    path.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
+                    boundingBox = { x, y, width, height };
                 } else { // lasso
                     path = new Path2D();
                     path.moveTo(points[0].x, points[0].y);
@@ -1675,7 +1710,7 @@ export function usePointerEvents({
     }, [
         viewTransform, uiCanvasRef, activeItem, onDrawCommit, onSelectItem, tool, setGuideDragState,
         isDrawingTool, strokeState, setStrokeState, snapPointToGrid, setSelection, setTextEditState, onCommitText,
-        strokeModifier, mirrorGuides, activeGuide, setLivePreviewLayerId, getBrushForTool, setDebugPointers
+        strokeModifier, mirrorGuides, activeGuide, setLivePreviewLayerId, getBrushForTool
     ]);
 
     const onPointerCancel = useCallback((e: React.PointerEvent<HTMLDivElement>) => {

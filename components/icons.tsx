@@ -84,6 +84,12 @@ export const MarqueeRectIcon: React.FC<{ className?: string }> = ({ className })
     </svg>
 );
 
+export const MarqueeCircleIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="2 2">
+        <circle cx="12" cy="12" r="9" />
+    </svg>
+);
+
 export const LassoIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 22a7 7 0 0 0-7-7c0-4 7-4 7-10 0 6 7 6 7 10a7 7 0 0 0-7 7z" />

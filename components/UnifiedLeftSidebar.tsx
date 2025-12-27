@@ -10,7 +10,7 @@ interface UnifiedLeftSidebarProps {
     drawingToolsNode: React.ReactNode;
 }
 
-export const UnifiedLeftSidebar: React.FC<UnifiedLeftSidebarProps> = ({
+export const UnifiedLeftSidebar: React.FC<UnifiedLeftSidebarProps> = React.memo(({
     isOpen,
     activeTab,
     onTabChange,
@@ -59,14 +59,17 @@ export const UnifiedLeftSidebar: React.FC<UnifiedLeftSidebarProps> = ({
             </div>
 
             {/* Content Area */}
-            <div className="flex-grow overflow-hidden relative">
-                <div className={`absolute inset-0 transition-opacity duration-300 ${activeTab === 'visual-prompting' ? 'opacity-100 z-10 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none'}`}>
-                    {visualPromptingNode}
-                </div>
-                <div className={`absolute inset-0 transition-opacity duration-300 ${activeTab === 'tools' ? 'opacity-100 z-10 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none'}`}>
-                    {drawingToolsNode}
-                </div>
+            <div className="flex-1 overflow-hidden relative">
+                {activeTab === 'visual-prompting' ? (
+                    <div className="absolute inset-0 w-full h-full bg-theme-bg-secondary z-10 transition-opacity">
+                        {visualPromptingNode}
+                    </div>
+                ) : (
+                    <div className="absolute inset-0 w-full h-full bg-theme-bg-secondary z-10 transition-opacity">
+                        {drawingToolsNode}
+                    </div>
+                )}
             </div>
         </div>
     );
-};
+});

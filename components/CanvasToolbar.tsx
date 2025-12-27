@@ -84,7 +84,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = React.memo(({
   const toolButtonClasses = (t: Tool) => `p-2 rounded-md transition-colors ${tool === t ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'}`;
 
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center max-w-[95vw]">
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center max-w-[95vw]">
 
       {/* Grid Settings Menu */}
       {isGridSettingsOpen && gridGuide && (

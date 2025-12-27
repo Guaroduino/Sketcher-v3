@@ -50,23 +50,25 @@ const getUniversalInputAnalysis = (style: RenderStyleMode) => {
     const cohesionDescriptor = isPhoto ? "as if taken by a single camera" : "maintaining a cohesive artistic style throughout";
 
     return `
-INPUT ANALYSIS (CRITICAL): The input image is a concept collage. It contains two types of data:
-
-Linear Structure: Represents the fixed architecture (walls, windows, roof).
-
-Loose Shapes/Stickers/Colors: Represent volumes of entourage (vegetation, trees, people, cars, furniture).
+INPUT ANALYSIS (CRITICAL): The input image is a visual reference associated with an architectural project. It can be:
+1. A Mixed-Media Layout: Linear structures (walls/roofs) overlaid with loose shapes/colors.
+2. A 3D Viewport Export: "Sketchup" style simple render with basic colors/lines.
+3. A Physical Model / Maquette: A photograph of a physical architectural model, potentially invalid/messy, or with mixed-media elements (drawings, stickers) pasted on top of the photo.
 
 PROCESSING RULES:
 
-ARCHITECTURAL LAYER (STRICT): You must retain the exact perspective and geometry of the linear structural elements. Do not move walls or change the building design.
+ARCHITECTURAL LAYER (STRICT):
+- You must retain the exact perspective and geometry of the structural forms provided in the input (whether drawn lines, 3D edges, or physical model masses).
+- Do not fundamentally alter the building's design or massing.
 
-ENTOURAGE LAYER (INTERPRETIVE): You must materialize all loose shapes, colored blobs, or pasted elements into ${targetDescriptor} based on their context.
+ENTOURAGE & CONTEXT (INTERPRETIVE):
+- Interpret the abstract or "mock-up" elements as real-world objects.
+- Example: Green blob/sponge -> ${exampleObject} Tree/Vegetation.
+- Example: Gray box/cardboard -> ${exampleObject} Car or Building Volume.
+- Example: Blue paper/shape -> ${exampleObject} Water/Pool.
+- If the input is a photo of a model, eliminate the "toy/miniature" look unless requested. Make it look like a full-scale building.
 
-Example: A green shape on the lawn = A ${exampleObject} tree or bush.
-Example: A boxy shape on the driveway = A ${exampleObject} car.
-Example: Vertical shapes on paths = Stylized human figures.
-
-OBJECTIVE: Do NOT clean up or remove the "messy" elements. Instead, transform them into ${objectiveTexture} that match the lighting and mood of the scene. The final image must look cohesive, ${cohesionDescriptor}.
+OBJECTIVE: Transform this input (Sketch, 3D View, or Maquette Photo) into a final ${objectiveTexture}. The final image must look cohesive, ${cohesionDescriptor}.
 `;
 };
 

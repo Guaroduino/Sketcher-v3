@@ -235,7 +235,34 @@ export function useCanvasRendering({
         const foregroundObjects = items.filter(item => item.type === 'object' && !item.isBackground);
 
         const drawItem = (item: SketchObject) => {
-            if (item.mipmaps && item.canvas) {
+            if (!item.canvas) return;
+
+            // Viewport Culling
+            const itemX = item.offsetX || 0;
+            const itemY = item.offsetY || 0;
+            const itemW = item.canvas.width;
+            const itemH = item.canvas.height;
+
+            const canvasWidth = mainCtx.canvas.width;
+            const canvasHeight = mainCtx.canvas.height;
+
+            // Calculate visible world bounds
+            const visibleLeft = -viewTransform.pan.x / viewTransform.zoom;
+            const visibleTop = -viewTransform.pan.y / viewTransform.zoom;
+            const visibleRight = (canvasWidth - viewTransform.pan.x) / viewTransform.zoom;
+            const visibleBottom = (canvasHeight - viewTransform.pan.y) / viewTransform.zoom;
+
+            // Check intersection
+            const isVisible = (
+                itemX < visibleRight &&
+                itemX + itemW > visibleLeft &&
+                itemY < visibleBottom &&
+                itemY + itemH > visibleTop
+            );
+
+            if (!isVisible) return;
+
+            if (item.mipmaps) {
                 // Mipmap Logic
                 let sourceCanvas = item.canvas;
                 let scale = 1;
@@ -251,14 +278,14 @@ export function useCanvasRendering({
                 mainCtx.globalAlpha = item.opacity;
                 mainCtx.drawImage(
                     sourceCanvas,
-                    item.offsetX || 0,
-                    item.offsetY || 0,
+                    itemX,
+                    itemY,
                     item.canvas.width,
                     item.canvas.height
                 );
-            } else if (item.canvas) {
+            } else {
                 mainCtx.globalAlpha = item.opacity;
-                mainCtx.drawImage(item.canvas, item.offsetX || 0, item.offsetY || 0);
+                mainCtx.drawImage(item.canvas, itemX, itemY);
             }
         };
 
@@ -633,9 +660,28 @@ export function useCanvasRendering({
         }
 
         if (isCropping && cropRect) {
-            uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-            uiCtx.lineWidth = 1 / viewTransform.zoom;
-            uiCtx.setLineDash([4 / viewTransform.zoom, 2 / viewTransform.zoom]);
+            // --- CROP OVERLAY (Dimming) ---
+            uiCtx.save();
+            uiCtx.setTransform(1, 0, 0, 1, 0, 0); // Screen space for overlay
+            uiCtx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+
+            // Convert cropRect to screen space
+            const screenX = cropRect.x * viewTransform.zoom + viewTransform.pan.x;
+            const screenY = cropRect.y * viewTransform.zoom + viewTransform.pan.y;
+            const screenW = cropRect.width * viewTransform.zoom;
+            const screenH = cropRect.height * viewTransform.zoom;
+
+            // Draw overlay with hole (even-odd rule)
+            uiCtx.beginPath();
+            uiCtx.rect(0, 0, uiCtx.canvas.width, uiCtx.canvas.height);
+            uiCtx.rect(screenX, screenY, screenW, screenH);
+            uiCtx.fill('evenodd');
+            uiCtx.restore();
+
+            // --- CROP HANDLES AND OUTLINE ---
+            uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+            uiCtx.lineWidth = 1.5 / viewTransform.zoom;
+            uiCtx.setLineDash([5 / viewTransform.zoom, 3 / viewTransform.zoom]);
             uiCtx.strokeRect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
             uiCtx.setLineDash([]);
 

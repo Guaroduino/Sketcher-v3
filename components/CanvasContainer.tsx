@@ -129,7 +129,7 @@ interface CanvasContainerPropsWithRef extends CanvasContainerProps {
     handleRef?: React.Ref<CanvasHandle>;
 }
 
-export const CanvasContainer: React.FC<CanvasContainerPropsWithRef> = (props) => {
+export const CanvasContainerComponent: React.FC<CanvasContainerPropsWithRef> = (props) => {
     const {
         handleRef,
         items, activeItemId, tool, viewTransform, setViewTransform,
@@ -183,7 +183,8 @@ export const CanvasContainer: React.FC<CanvasContainerPropsWithRef> = (props) =>
     const [guideDragState, setGuideDragState] = useState<GuideDragState>(null);
     const [transformPreviewDataUrl, setTransformPreviewDataUrl] = useState<string | null>(null);
     const [livePreviewLayerId, setLivePreviewLayerId] = useState<string | null>(null);
-    const [debugPointers, setDebugPointers] = useState<Map<number, { x: number, y: number }>>(new Map());
+    // Debug pointers state removed for performance
+    // const [debugPointers, setDebugPointers] = useState<Map<number, { x: number, y: number }>>(new Map());
 
     const activeItem = items.find(i => i.id === activeItemId);
     const isDrawingTool = ['brush', 'eraser', 'simple-marker', 'natural-marker', 'airbrush', 'fx-brush', 'debug-brush', 'advanced-marker', 'watercolor'].includes(tool);
@@ -249,7 +250,7 @@ export const CanvasContainer: React.FC<CanvasContainerPropsWithRef> = (props) =>
         onCommitText,
         strokeSmoothing,
         strokeModifier,
-        setDebugPointers,
+        // setDebugPointers, // OPTIMIZATION: Removed
         isPalmRejectionEnabled,
         isSolidBox,
         brushSettings: props.brushSettings,
@@ -332,7 +333,7 @@ export const CanvasContainer: React.FC<CanvasContainerPropsWithRef> = (props) =>
         // Note: debug pointer rendering removed to avoid drawing red debug circles on the cursor canvas.
 
         // Only draw the brush cursor if there's no multi-touch gesture happening
-        if (debugPointers.size <= 1 && isDrawingTool && pointerPosition && (!isDrawingRef.current || tool === 'eraser')) {
+        if (isDrawingTool && pointerPosition && (!isDrawingRef.current || tool === 'eraser')) {
             let size = 0;
             switch (tool) {
                 case 'brush': size = props.brushSettings.size; break;
@@ -380,7 +381,7 @@ export const CanvasContainer: React.FC<CanvasContainerPropsWithRef> = (props) =>
                 drawOutline(shapeToDraw);
             }
         }
-    }, [isDrawingTool, tool, pointerPosition, viewTransform.zoom, props.brushSettings, props.eraserSettings, props.simpleMarkerSettings, props.naturalMarkerSettings, props.airbrushSettings, props.fxBrushSettings, props.advancedMarkerSettings, props.watercolorSettings, isDrawingRef.current, debugPointers]);
+    }, [isDrawingTool, tool, pointerPosition, viewTransform.zoom, props.brushSettings, props.eraserSettings, props.simpleMarkerSettings, props.naturalMarkerSettings, props.airbrushSettings, props.fxBrushSettings, props.advancedMarkerSettings, props.watercolorSettings, isDrawingRef.current]);
 
     useEffect(() => {
         const selectionCtx = selectionCanvasRef.current?.getContext('2d');
@@ -426,7 +427,7 @@ export const CanvasContainer: React.FC<CanvasContainerPropsWithRef> = (props) =>
         redrawMainCanvas();
         redrawGuides();
         redrawUI();
-    }, [redrawMainCanvas, redrawGuides, redrawUI, isTransforming, transformState, activeItem, transformSourceBbox, viewTransform, renderTrigger, livePreviewLayerId]);
+    }, [redrawMainCanvas, redrawGuides, redrawUI, isTransforming, transformState, activeItem, transformSourceBbox, viewTransform, renderTrigger, livePreviewLayerId, isCropping, cropRect]);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -633,3 +634,5 @@ export const CanvasContainer: React.FC<CanvasContainerPropsWithRef> = (props) =>
         </div>
     );
 };
+
+export const CanvasContainer = React.memo(CanvasContainerComponent);

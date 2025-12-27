@@ -1,7 +1,7 @@
 import type { AppState, SketchObject, ItemType, CropRect, TransformState, Point, WorkspaceTemplate, QuickAccessSettings, CanvasItem, ScaleUnit, ClipboardData } from '../types';
 import { getHomographyMatrix, createNewCanvas, cloneCanvasWithContext, generateMipmaps } from '../utils/canvasUtils';
 
-const MAX_HISTORY_SIZE = 50;
+const MAX_HISTORY_SIZE = 20; // Optimized for Tablet RAM
 
 function drawWarpedImage(
     ctx: CanvasRenderingContext2D,
@@ -134,7 +134,7 @@ export type Action =
     | { type: 'CROP_CANVAS'; payload: { cropRect: CropRect } }
     | { type: 'COPY_ITEM'; payload: { id: string } }
     | { type: 'APPLY_TRANSFORM'; payload: { id: string, transform: TransformState, sourceBbox: CropRect } }
-    | { type: 'RESIZE_CANVAS'; payload: { width: number, height: number } }
+    | { type: 'RESIZE_CANVAS'; payload: { width: number, height: number, scale?: boolean } }
     | { type: 'SET_SCALE_FACTOR'; payload: number }
     | { type: 'SET_SCALE_UNIT'; payload: ScaleUnit }
     | { type: 'LOAD_PROJECT_STATE'; payload: { newState: AppState } }
@@ -562,14 +562,17 @@ function appReducer(state: AppState, action: Action): AppState {
             return { ...state, objects: newObjects, canvasSize: newCanvasSize };
         }
         case 'RESIZE_CANVAS': {
-            const { width, height } = action.payload;
+            const { width, height, scale } = action.payload;
             const newCanvasSize = { width: Math.round(width), height: Math.round(height) };
 
             const newObjects = state.objects.map((item): CanvasItem => {
                 if (item.canvas) {
                     const { canvas: newCanvas, context: newCtx } = createNewCanvas(newCanvasSize.width, newCanvasSize.height);
 
-                    if (item.isBackground) {
+                    if (scale) {
+                        // Scale content to new size
+                        newCtx.drawImage(item.canvas, 0, 0, newCanvasSize.width, newCanvasSize.height);
+                    } else if (item.isBackground) {
                         if (item.backgroundImage) {
                             newCtx.fillStyle = item.color || '#FFFFFF';
                             newCtx.fillRect(0, 0, newCanvasSize.width, newCanvasSize.height);
@@ -580,7 +583,7 @@ function appReducer(state: AppState, action: Action): AppState {
                             newCtx.fillRect(0, 0, newCanvasSize.width, newCanvasSize.height);
                         }
                     } else {
-                        // Center old content on new canvas
+                        // Center old content on new canvas (Canvas size change)
                         const dx = (newCanvasSize.width - item.canvas.width) / 2;
                         const dy = (newCanvasSize.height - item.canvas.height) / 2;
                         newCtx.drawImage(item.canvas, dx, dy);

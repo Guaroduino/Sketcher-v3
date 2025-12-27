@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
-import { SendIcon, PaperClipIcon, SparklesIcon, SaveIcon, FolderIcon, TrashIcon, XIcon, DownloadIcon, EditIcon, ImageIcon } from './icons';
+import { SendIcon, PaperClipIcon, SparklesIcon, SaveIcon, FolderIcon, TrashIcon, XIcon, DownloadIcon, EditIcon, ImageIcon, PlusIcon } from './icons';
 import { GoogleGenAI } from "@google/genai";
 import { GEMINI_MODEL_ID } from '../utils/constants';
 import { collection, addDoc, query, orderBy, onSnapshot, deleteDoc, doc, Timestamp } from 'firebase/firestore';
@@ -30,14 +30,13 @@ interface SavedPrompt {
 interface FreeModeViewProps {
     user: User | null;
     onImportFromSketch: () => string | null;
-    lastRenderedImage: string | null;
     onSaveToLibrary: (file: File) => void;
     deductCredit?: () => Promise<boolean>;
     onInspectRequest?: (payload: { model: string; parts: any[]; config?: any }) => Promise<boolean>;
     libraryItems: LibraryItem[];
     selectedModel: string;
     onSendToSketch?: (url: string) => void;
-    onSendToRender?: (url: string) => void;
+    lastRenderedImage?: string | null;
 }
 
 export interface FreeModeViewHandle {
@@ -55,8 +54,7 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
     libraryItems = [],
     onInspectRequest,
     selectedModel,
-    onSendToSketch,
-    onSendToRender
+    onSendToSketch
 }, ref) => {
     const [messages, setMessages] = useState<Message[]>([
         { id: 'welcome', role: 'model', content: 'Hola! Soy tu asistente creativo visual. Escribe un prompt (y opcionalmente adjunta imágenes) y generaré una nueva imagen para ti.', timestamp: Date.now() }
@@ -337,14 +335,6 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
         }
     };
 
-    const handleImportRender = () => {
-        if (lastRenderedImage) {
-            setAttachments(prev => [...prev, lastRenderedImage]);
-        } else {
-            alert("No hay ningún render disponible.");
-        }
-    };
-
     return (
         <div className="flex h-full w-full bg-theme-bg-secondary text-theme-text-primary relative overflow-hidden">
             <AttachmentImportModal
@@ -443,15 +433,13 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
                                                                 <EditIcon className="w-4 h-4" />
                                                             </button>
                                                         )}
-                                                        {onSendToRender && (
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); onSendToRender(att); }}
-                                                                className="p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full"
-                                                                title="Enviar a Render"
-                                                            >
-                                                                <ImageIcon className="w-4 h-4" />
-                                                            </button>
-                                                        )}
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setAttachments(prev => [...prev, att]); }}
+                                                            className="p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full transition-colors group"
+                                                            title="Agregar al chat (usar como referencia)"
+                                                        >
+                                                            <PlusIcon className="w-4 h-4 transition-transform group-hover:scale-110" />
+                                                        </button>
                                                     </div>
                                                 )}
                                             </div>
@@ -502,17 +490,17 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
                         </div>
                     )}
 
-                    <div className="flex items-end gap-2">
-                        <div className="flex gap-1 mr-2">
-                            <button onClick={handleImportSketch} className="p-2 text-theme-text-secondary hover:text-theme-accent-primary hover:bg-theme-bg-secondary rounded-full transition-colors" title="Importar desde Sketch">
-                                <span className="font-bold text-xs">SK</span>
+                    <div className="flex items-end gap-2 max-w-4xl mx-auto w-full">
+                        <div className="relative flex-grow flex items-end bg-theme-bg-secondary rounded-2xl border border-theme-bg-tertiary px-2 focus-within:ring-2 focus-within:ring-theme-accent-primary shadow-sm hover:border-theme-bg-hover transition-all">
+                            {/* Import Sketch Action */}
+                            <button
+                                onClick={handleImportSketch}
+                                className="p-3 text-theme-text-secondary hover:text-theme-accent-primary rounded-full transition-colors group mb-0.5"
+                                title="Importar desde Sketch"
+                            >
+                                <ImageIcon className="w-5 h-5 transition-transform group-hover:scale-110" />
                             </button>
-                            <button onClick={handleImportRender} className="p-2 text-theme-text-secondary hover:text-theme-accent-primary hover:bg-theme-bg-secondary rounded-full transition-colors" title="Importar último Render">
-                                <span className="font-bold text-xs">RE</span>
-                            </button>
-                        </div>
 
-                        <div className="relative flex-grow">
                             <textarea
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
@@ -523,24 +511,27 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
                                     }
                                 }}
                                 placeholder="Describe la imagen que quieres generar..."
-                                className="w-full bg-theme-bg-secondary text-theme-text-primary rounded-xl border border-theme-bg-tertiary pl-4 pr-12 py-3 max-h-32 min-h-[50px] focus:outline-none focus:ring-2 focus:ring-theme-accent-primary resize-none"
+                                className="flex-grow bg-transparent text-theme-text-primary pl-2 pr-12 py-3 max-h-48 min-h-[52px] focus:outline-none resize-none text-sm"
                                 rows={1}
                             />
+
+                            {/* Attachment Action */}
                             <button
                                 onClick={() => setAttachmentModalOpen(true)}
-                                className="absolute right-2 bottom-2 p-2 text-theme-text-secondary hover:text-theme-accent-primary rounded-full transition-colors"
+                                className="absolute right-3 bottom-2 p-2 text-theme-text-secondary hover:text-theme-accent-primary rounded-full transition-colors"
                                 title="Subir imagen"
                             >
                                 <PaperClipIcon className="w-5 h-5" />
                             </button>
                         </div>
 
+                        {/* Send Action */}
                         <button
                             onClick={handleSendMessage}
                             disabled={(!inputValue.trim() && attachments.length === 0) || isGenerating}
-                            className={`p-3 rounded-full shadow-lg transition-all ${(!inputValue.trim() && attachments.length === 0) || isGenerating
-                                ? 'bg-theme-bg-tertiary text-theme-text-secondary cursor-not-allowed'
-                                : 'bg-theme-accent-primary text-white hover:scale-105 active:scale-95'
+                            className={`p-3.5 rounded-full shadow-lg transition-all ${(!inputValue.trim() && attachments.length === 0) || isGenerating
+                                ? 'bg-theme-bg-tertiary text-theme-text-tertiary cursor-not-allowed'
+                                : 'bg-theme-accent-primary text-white hover:scale-110 active:scale-95 hover:shadow-theme-accent-primary/20'
                                 }`}
                         >
                             <SendIcon className="w-5 h-5" />

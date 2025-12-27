@@ -89,7 +89,7 @@ const CollapsiblePillGroup: React.FC<{ label: string, options: { label: string, 
     );
 };
 
-export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = ({
+export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = React.memo(({
     sceneType, setSceneType,
     renderStyle, setRenderStyle,
     archStyle, setArchStyle,
@@ -112,6 +112,24 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = ({
     onRender,
     isGenerating
 }) => {
+    // Local state for debouncing additionalPrompt
+    const [localPrompt, setLocalPrompt] = React.useState(additionalPrompt);
+
+    // Sync local state when external prop changes (e.g. project load)
+    React.useEffect(() => {
+        setLocalPrompt(additionalPrompt);
+    }, [additionalPrompt]);
+
+    // Debounce sync to parent
+    React.useEffect(() => {
+        const timer = setTimeout(() => {
+            if (localPrompt !== additionalPrompt) {
+                setAdditionalPrompt(localPrompt);
+            }
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [localPrompt, additionalPrompt, setAdditionalPrompt]);
+
     // Options
     const timeOptions = [{ label: 'Mañana', value: 'morning' }, { label: 'Mediodía', value: 'noon' }, { label: 'Tarde', value: 'afternoon' }, { label: 'Hora Dorada', value: 'golden_hour' }, { label: 'Noche', value: 'night' }];
     const weatherOptions = [{ label: 'Soleado', value: 'sunny' }, { label: 'Nublado', value: 'overcast' }, { label: 'Lluvia', value: 'rainy' }, { label: 'Niebla', value: 'foggy' }];
@@ -279,8 +297,8 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = ({
                 <div className="space-y-2">
                     <label className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider">Detalles Adicionales</label>
                     <textarea
-                        value={additionalPrompt}
-                        onChange={(e) => setAdditionalPrompt(e.target.value)}
+                        value={localPrompt}
+                        onChange={(e) => setLocalPrompt(e.target.value)}
                         placeholder="Ej: Fachada de madera..."
                         className="w-full h-20 bg-theme-bg-primary border border-theme-bg-tertiary rounded-md p-2 text-xs text-theme-text-primary focus:border-theme-accent-primary outline-none resize-none placeholder:text-theme-text-tertiary"
                     />
@@ -299,4 +317,4 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = ({
             </div>
         </div>
     );
-};
+});

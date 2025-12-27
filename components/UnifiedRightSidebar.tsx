@@ -18,7 +18,7 @@ interface UnifiedRightSidebarProps {
     overrideContent?: React.ReactNode;
 }
 
-export const UnifiedRightSidebar: React.FC<UnifiedRightSidebarProps> = ({
+export const UnifiedRightSidebar: React.FC<UnifiedRightSidebarProps> = React.memo(({
     isOpen,
     onClose,
     activeTab,
@@ -35,17 +35,17 @@ export const UnifiedRightSidebar: React.FC<UnifiedRightSidebarProps> = ({
 
     if (overrideContent) {
         return (
-            <aside ref={sidebarRef} className="flex-shrink-0 w-80 border-l border-theme-bg-tertiary flex flex-col h-full bg-theme-bg-secondary relative z-30 shadow-xl transition-all duration-300">
+            <div ref={sidebarRef} className="flex flex-col h-full w-full bg-theme-bg-secondary relative z-30 shadow-xl">
                 {/* Override Content (No Tabs) */}
                 <div className="flex-grow flex flex-col min-h-0 relative bg-theme-bg-secondary overflow-hidden">
                     {overrideContent}
                 </div>
-            </aside>
+            </div>
         );
     }
 
     return (
-        <aside ref={sidebarRef} className="flex-shrink-0 w-80 border-l border-theme-bg-tertiary flex flex-col h-full bg-theme-bg-secondary relative z-30 shadow-xl transition-all duration-300">
+        <div ref={sidebarRef} className="flex flex-col h-full w-full bg-theme-bg-secondary relative z-40">
             {/* Header Tabs */}
             <div className="flex items-center border-b border-theme-bg-tertiary bg-theme-bg-primary">
                 <button
@@ -100,6 +100,6 @@ export const UnifiedRightSidebar: React.FC<UnifiedRightSidebarProps> = ({
                     </div>
                 )}
             </div>
-        </aside>
+        </div>
     );
-};
+});

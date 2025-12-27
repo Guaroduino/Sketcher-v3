@@ -8,9 +8,9 @@ import {
     FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon,
     SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon,
     MirrorIcon, OrthogonalIcon, UploadIcon, DownloadIcon, CropIcon,
-    LassoIcon, MarqueeRectIcon, PerspectiveIcon, SquareIcon, CircleIcon, CubeIcon, MoreVerticalIcon,
+    LassoIcon, MarqueeRectIcon, MarqueeCircleIcon, PerspectiveIcon, SquareIcon, CircleIcon, CubeIcon, MoreVerticalIcon,
     ChevronDownIcon, ChevronRightIcon, SolidMarkerIcon, AdvancedMarkerIcon, NaturalMarkerIcon, AirbrushIcon,
-    WatercolorIcon, FXBrushIcon
+    WatercolorIcon, FXBrushIcon, ExpandIcon
 } from './icons';
 
 import type {
@@ -231,6 +231,42 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                     >
                         <BrushIcon className="w-4 h-4" />
                     </button>
+
+                    <div className="w-px h-6 bg-theme-bg-tertiary mx-1 self-center"></div>
+
+                    <button
+                        onClick={() => setTool('marquee-rect')}
+                        className={`w-8 h-8 rounded flex items-center justify-center transition-all ${tool === 'marquee-rect'
+                            ? 'bg-theme-accent-primary text-white shadow-md'
+                            : 'bg-theme-bg-primary text-theme-text-secondary hover:bg-theme-bg-tertiary hover:text-theme-text-primary border border-theme-bg-tertiary'
+                            }`}
+                        title="Selección Rectangular"
+                    >
+                        <MarqueeRectIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={() => setTool('marquee-circle')}
+                        className={`w-8 h-8 rounded flex items-center justify-center transition-all ${tool === 'marquee-circle'
+                            ? 'bg-theme-accent-primary text-white shadow-md'
+                            : 'bg-theme-bg-primary text-theme-text-secondary hover:bg-theme-bg-tertiary hover:text-theme-text-primary border border-theme-bg-tertiary'
+                            }`}
+                        title="Selección Circular"
+                    >
+                        <MarqueeCircleIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={() => setTool('lasso')}
+                        className={`w-8 h-8 rounded flex items-center justify-center transition-all ${tool === 'lasso'
+                            ? 'bg-theme-accent-primary text-white shadow-md'
+                            : 'bg-theme-bg-primary text-theme-text-secondary hover:bg-theme-bg-tertiary hover:text-theme-text-primary border border-theme-bg-tertiary'
+                            }`}
+                        title="Lazo"
+                    >
+                        <LassoIcon className="w-4 h-4" />
+                    </button>
+
+                    <div className="w-px h-6 bg-theme-bg-tertiary mx-1 self-center"></div>
+
                     <button
                         onClick={() => setTool('eraser')}
                         className={`w-8 h-8 rounded flex items-center justify-center transition-all ${tool === 'eraser'
@@ -327,59 +363,10 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                     </section>
                 </div>
             </section>
+            <div className="h-px bg-theme-bg-tertiary opacity-50 my-2"></div>
 
-            <div className="h-px bg-theme-bg-tertiary opacity-50"></div>
-
-            {/* ESTILO DE TRAZO (Restored Dropdowns) */}
-            <section className="space-y-3">
-                <label className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider block">Estilo de Trazo</label>
-                <div className="grid grid-cols-2 gap-2">
-                    {/* Mode Dropdown */}
-                    <div className="space-y-1">
-                        <label className="text-[10px] text-theme-text-tertiary">Modo</label>
-                        <div className="relative">
-                            <select
-                                value={strokeMode}
-                                onChange={(e) => setStrokeMode(e.target.value)}
-                                className="w-full bg-theme-bg-primary text-[10px] text-theme-text-primary p-2 rounded border border-theme-bg-tertiary focus:border-theme-accent-primary outline-none appearance-none cursor-pointer"
-                            >
-                                {STROKE_MODES.map(m => (
-                                    <option key={m.id} value={m.id}>{m.label}</option>
-                                ))}
-                            </select>
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-theme-text-secondary">
-                                <ChevronDownIcon className="w-3 h-3" />
-                            </div>
-                        </div>
-                    </div>
-                    {/* Style Dropdown */}
-                    <div className="space-y-1">
-                        <label className="text-[10px] text-theme-text-tertiary">Patrón</label>
-                        <div className="relative">
-                            <select
-                                value={strokeModifier.style}
-                                onChange={(e) => setStrokeModifier(prev => ({ ...prev, style: e.target.value }))}
-                                className="w-full bg-theme-bg-primary text-[10px] text-theme-text-primary p-2 rounded border border-theme-bg-tertiary focus:border-theme-accent-primary outline-none appearance-none cursor-pointer"
-                            >
-                                {STROKE_STYLES.map(s => (
-                                    <option key={s.id} value={s.id}>{s.label}</option>
-                                ))}
-                            </select>
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-theme-text-secondary">
-                                <ChevronDownIcon className="w-3 h-3" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <div className="h-px bg-theme-bg-tertiary opacity-50"></div>
-
-            {/* Brush Settings */}
-            <section className="space-y-3">
-                <label className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider block">Ajustes de Pincel</label>
-
-                {/* Size */}
+            {/* Brush Sliders (No Title) */}
+            <section className="space-y-3 px-1">
                 <div>
                     <div className="flex justify-between text-[10px] text-theme-text-secondary mb-1">
                         <span>Tamaño</span>
@@ -388,11 +375,9 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                     <input
                         type="range" min="1" max="100"
                         value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                        className="w-full h-1.5 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary block"
+                        className="w-full h-1 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary"
                     />
                 </div>
-
-                {/* Opacity */}
                 <div>
                     <div className="flex justify-between text-[10px] text-theme-text-secondary mb-1">
                         <span>Opacidad</span>
@@ -401,11 +386,9 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                     <input
                         type="range" min="0" max="1" step="0.01"
                         value={brushOpacity} onChange={(e) => setBrushOpacity(parseFloat(e.target.value))}
-                        className="w-full h-1.5 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary block"
+                        className="w-full h-1 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary"
                     />
                 </div>
-
-                {/* Smoothing */}
                 <div>
                     <div className="flex justify-between text-[10px] text-theme-text-secondary mb-1">
                         <span>Suavizado</span>
@@ -414,12 +397,12 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                     <input
                         type="range" min="0" max="1" step="0.05"
                         value={strokeSmoothing} onChange={(e) => setStrokeSmoothing(parseFloat(e.target.value))}
-                        className="w-full h-1.5 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary block"
+                        className="w-full h-1 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary"
                     />
                 </div>
             </section>
 
-            <div className="h-px bg-theme-bg-tertiary opacity-50"></div>
+            <div className="h-px bg-theme-bg-tertiary opacity-50 my-3"></div>
 
             {/* Colors */}
             <section>
@@ -506,6 +489,9 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                 <button onClick={onCropCanvas} className="w-full flex items-center justify-center gap-2 p-2 bg-theme-bg-primary border border-theme-bg-tertiary rounded hover:bg-theme-bg-hover text-theme-text-secondary text-[10px] mt-1">
                     <CropIcon className="w-3 h-3" /> Recortar Lienzo
                 </button>
+                <button onClick={onOpenCanvasSizeModal} className="w-full flex items-center justify-center gap-2 p-2 bg-theme-bg-primary border border-theme-bg-tertiary rounded hover:bg-theme-bg-hover text-theme-text-secondary text-[10px] mt-1">
+                    <ExpandIcon className="w-3 h-3" /> Cambiar tamaño imagen
+                </button>
 
                 {/* Canvas Controls Moved from Right Sidebar */}
                 <div className="pt-2 border-t border-theme-bg-tertiary mt-2">
@@ -535,12 +521,12 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
 };
 
 // Helper component for individual brush items to manage their own popover state
-function BrushToolItem({ tool, isActive, onSelect, settingsData }: {
+const BrushToolItem: React.FC<{
     tool: any;
     isActive: boolean;
     onSelect: () => void;
     settingsData: { values: any; setter: any } | null;
-}) {
+}> = ({ tool, isActive, onSelect, settingsData }) => {
     const [isPopoverOpen, setIsPopoverOpen] = useState(false);
     const [popoverPos, setPopoverPos] = useState({ top: 0, left: 0 });
     const popoverRef = useRef<HTMLDivElement>(null);

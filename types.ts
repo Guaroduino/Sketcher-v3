@@ -166,7 +166,7 @@ export interface ClipboardData {
 // FIX: Added 'debug-brush' to the Tool type to match its usage in the application.
 // FIX: Added new brush tools to the Tool type.
 // FIX: Renamed 'solid-marker' to 'simple-marker' and added 'advanced-marker'.
-export type Tool = 'select' | 'transform' | 'brush' | 'eraser' | 'pan' | 'simple-marker' | 'crop' | 'free-transform' | 'debug-brush' | 'marquee-rect' | 'lasso' | 'magic-wand' | 'text' | 'natural-marker' | 'airbrush' | 'fx-brush' | 'advanced-marker' | 'watercolor';
+export type Tool = 'select' | 'transform' | 'brush' | 'eraser' | 'pan' | 'simple-marker' | 'crop' | 'free-transform' | 'debug-brush' | 'marquee-rect' | 'marquee-circle' | 'lasso' | 'magic-wand' | 'text' | 'natural-marker' | 'airbrush' | 'fx-brush' | 'advanced-marker' | 'watercolor';
 
 // FIX: Added BrushPreset type for FX brushes.
 export interface BrushPreset {

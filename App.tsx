@@ -1439,14 +1439,26 @@ export function App() {
     }, [backgroundObject, backgroundObject?.canvas, ai]);
 
     useEffect(() => {
-        setIsCropping(false); setCropRect(null); setIsTransforming(false); setTransformState(null); setTransformSourceBbox(null);
-        if (tool === 'crop') {
+        // Reset crop state when switching away from crop tool
+        if (tool !== 'crop') {
+            setIsCropping(false);
+            setCropRect(null);
+        }
+        // Reset transform state when switching away from transform tools
+        if (tool !== 'transform' && tool !== 'free-transform') {
+            setIsTransforming(false);
+            setTransformState(null);
+            setTransformSourceBbox(null);
+        }
+
+        if (tool === 'crop' && !isCropping) {
             setIsCropping(true);
             setCropRect({ x: 0, y: 0, width: canvasSize.width, height: canvasSize.height });
-        } else if ((tool === 'transform' || tool === 'free-transform') && activeItem?.type === 'object' && activeItem.canvas) {
+        } else if ((tool === 'transform' || tool === 'free-transform') && !isTransforming && activeItem?.type === 'object' && activeItem.canvas) {
             const bbox = getContentBoundingBox(activeItem.canvas);
             if (bbox) {
-                setIsTransforming(true); setTransformSourceBbox(bbox);
+                setIsTransforming(true);
+                setTransformSourceBbox(bbox);
                 if (tool === 'transform') {
                     setTransformState({ type: 'affine', x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height, rotation: 0 });
                 } else {
@@ -1456,7 +1468,7 @@ export function App() {
                 setTool('select');
             }
         }
-    }, [tool, canvasSize.width, canvasSize.height, activeItem, setTool]);
+    }, [tool, canvasSize.width, canvasSize.height, activeItem, setTool, isCropping, isTransforming]);
 
 
 
@@ -1592,17 +1604,17 @@ export function App() {
         reader.readAsDataURL(pendingBgFile);
     };
 
-    const handleImportRenderToSketch = useCallback(() => {
-        if (!lastRenderedImage) return;
+    const handleImportRenderToSketch = useCallback((url?: string) => {
+        const targetUrl = url || lastRenderedImage;
+        if (!targetUrl) return;
 
         // Convert DataURL to File to reuse the existing import logic (Resize vs Fit)
-        fetch(lastRenderedImage)
+        fetch(targetUrl)
             .then(res => res.blob())
             .then(blob => {
                 const file = new File([blob], `Render_${Date.now()}.png`, { type: "image/png" });
 
-                // For Render Import, we ALMOST ALWAYS want to resize the canvas to match the render
-                // to avoid stretching/borders.
+                // For Render Import, we show the import modal to ask for adjustment
                 setPendingBgFile(file);
                 setIsBgImportModalOpen(true);
             })
@@ -1934,7 +1946,7 @@ export function App() {
         return null;
     }, [canvasSize, scaleFactor, scaleUnit]);
 
-    const drawableObjects = getDrawableObjects();
+    const drawableObjects = useMemo(() => getDrawableObjects(), [getDrawableObjects]);
     // -- 6. RENDER HELPERS --
     const getSketchSnapshot = useCallback(() => {
         const getter = () => drawableObjects;
@@ -2073,6 +2085,154 @@ export function App() {
 
     const itemToDelete = objects.find(item => item.id === ui.deletingItemId);
 
+    // -- Memoized UI Nodes --
+    const visualPromptingNode = useMemo(() => (
+        <VisualPromptingControls
+            regions={vp.regions}
+            onDeleteRegion={vp.deleteRegion}
+            onUpdateRegionPrompt={vp.updateRegionPrompt}
+            onUpdateRegionImage={vp.updateRegionImage}
+            generalInstructions={vp.generalInstructions}
+            onGeneralInstructionsChange={vp.setGeneralInstructions}
+            referenceImage={vp.referenceImage}
+            onReferenceImageChange={vp.setReferenceImage}
+            brushSize={vp.brushSize}
+            onBrushSizeChange={vp.setBrushSize}
+            brushColor={vp.brushColor}
+            onBrushColorChange={vp.setBrushColor}
+            activeTool={vp.activeTool}
+            onToolChange={vp.setActiveTool}
+            onProcessChanges={handleVisualPromptingEnhance}
+            onClearAll={vp.clearAll}
+            isGenerating={renderState.isGenerating}
+            structuredPrompt={vp.structuredPrompt}
+            onStructuredPromptChange={vp.setStructuredPrompt}
+            onResetStructuredPrompt={() => vp.setIsPromptManuallyEdited(false)}
+            isPromptModified={vp.isPromptManuallyEdited}
+        />
+    ), [vp, handleVisualPromptingEnhance, renderState.isGenerating]);
+
+    const drawingToolsNode = useMemo(() => (
+        <DrawingToolsPanel
+            tool={tool} setTool={setTool}
+
+            // Stroke
+            strokeMode={strokeMode}
+            setStrokeMode={setStrokeMode}
+            strokeModifier={strokeModifier}
+            setStrokeModifier={setStrokeModifier}
+
+            brushColor={toolSettings.brushSettings.color}
+            setBrushColor={(c) => toolSettings.setBrushSettings(s => ({ ...s, color: c }))}
+            brushSize={toolSettings.brushSettings.size}
+            setBrushSize={(s) => toolSettings.setBrushSettings(state => ({ ...state, size: s }))}
+            brushOpacity={toolSettings.brushSettings.opacity}
+            setBrushOpacity={(o) => toolSettings.setBrushSettings(state => ({ ...state, opacity: o }))}
+            strokeSmoothing={strokeSmoothing}
+            setStrokeSmoothing={setStrokeSmoothing}
+
+            // Specific Tool Settings
+            brushSettings={toolSettings.brushSettings}
+            setBrushSettings={toolSettings.setBrushSettings}
+            simpleMarkerSettings={toolSettings.simpleMarkerSettings}
+            setSimpleMarkerSettings={toolSettings.setSimpleMarkerSettings}
+            advancedMarkerSettings={toolSettings.advancedMarkerSettings}
+            setAdvancedMarkerSettings={toolSettings.setAdvancedMarkerSettings}
+            naturalMarkerSettings={toolSettings.naturalMarkerSettings}
+            setNaturalMarkerSettings={toolSettings.setNaturalMarkerSettings}
+            airbrushSettings={toolSettings.airbrushSettings}
+            setAirbrushSettings={toolSettings.setAirbrushSettings}
+            watercolorSettings={toolSettings.watercolorSettings}
+            setWatercolorSettings={toolSettings.setWatercolorSettings}
+
+            // Guides
+            isGridVisible={guides.isSnapToGridEnabled}
+            setGridVisible={guides.toggleSnapToGrid}
+            gridSize={guides.gridGuide.spacing}
+            setGridSize={guides.onSetGridSpacing}
+
+            isPerspectiveEnabled={guides.activeGuide === 'perspective'}
+            setPerspectiveEnabled={(enabled) => guides.onSetActiveGuide(enabled ? 'perspective' : 'none')}
+
+            isSymmetryEnabled={guides.activeGuide === 'mirror'}
+            setSymmetryEnabled={(enabled) => guides.onSetActiveGuide(enabled ? 'mirror' : 'none')}
+
+            isOrthogonalEnabled={guides.isOrthogonalVisible}
+            setOrthogonalEnabled={guides.toggleOrthogonal}
+
+            isRulerEnabled={guides.activeGuide === 'ruler'}
+            setRulerEnabled={(enabled) => guides.onSetActiveGuide(enabled ? 'ruler' : 'none')}
+
+            // Canvas Controls
+            onOpenCanvasSizeModal={() => ui.setCanvasSizeModalOpen(true)}
+            onUpdateBackground={handleUpdateBackground}
+            backgroundColor={objects.find(o => o.type === 'object' && o.isBackground)?.color}
+
+            // File
+            onImportBackground={() => setIsBgImportModalOpen(true)}
+            onExportImage={() => ui.setExportModalOpen(true)}
+            onCropCanvas={() => setTool(tool === 'crop' ? 'select' : 'crop')}
+
+            onUndo={undo}
+            onRedo={redo}
+            onClearCanvas={() => ui.setShowClearConfirm(true)}
+        />
+    ), [tool, setTool, strokeMode, setStrokeMode, strokeModifier, setStrokeModifier, toolSettings, strokeSmoothing, setStrokeSmoothing, guides, ui, handleUpdateBackground, objects, undo, redo, isCropping]);
+
+    const outlinerNode = useMemo(() => (
+        <Outliner
+            items={visualList}
+            activeItemId={activeItemId}
+            onAddItem={addItem}
+            onCopyItem={copyItem}
+            onDeleteItem={deleteItem}
+            onSelectItem={handleSelectItem}
+            onUpdateItem={updateItem}
+            onMoveItem={handleMoveItem}
+            onMergeItems={handleMergeItems}
+            onUpdateBackground={handleUpdateBackground}
+            onRemoveBackgroundImage={handleRemoveBackgroundImage}
+            onExportItem={() => { if (activeItem) ui.setSingleExportModalOpen(true); }}
+            onOpenCanvasSizeModal={() => ui.setCanvasSizeModalOpen(true)}
+            activeItemState={activeItemState}
+            onMoveItemUpDown={handleMoveItemUpDown}
+            onMergeItemDown={handleMergeItemDown}
+            onMergeItemUp={handleMergeItemUp}
+            onAddObjectAbove={handleAddObjectAbove}
+            onAddObjectBelow={handleAddObjectBelow}
+            lastRenderedImage={renderState.resultImage}
+            onImportRender={handleImportRenderToSketch}
+            onAddAIObject={() => setIsAIPanelOpen(true)}
+            onClearAll={() => ui.setShowClearConfirm(true)}
+        />
+    ), [visualList, activeItemId, addItem, copyItem, deleteItem, handleSelectItem, updateItem, handleMoveItem, handleMergeItems, handleUpdateBackground, handleRemoveBackgroundImage, activeItem, ui, activeItemState, handleMoveItemUpDown, handleMergeItemDown, handleMergeItemUp, handleAddObjectAbove, handleAddObjectBelow, renderState.resultImage, handleImportRenderToSketch, setIsAIPanelOpen]);
+
+    const libraryNode = useMemo(() => (
+        <Library
+            user={user}
+            items={library.libraryItems}
+            onImportImage={library.onImportToLibrary}
+            onCreateFolder={library.onCreateFolder}
+            onEditItem={library.onEditTransparency}
+            onDeleteItem={library.onDeleteLibraryItem}
+            onAddItemToScene={(id) => onDropOnCanvas({ type: 'library-item', id }, activeItemId, setSelectedItemIds)}
+            onMoveItems={library.onMoveItems}
+            onPublish={library.publishToPublicGallery}
+            allowUpload={true}
+            allowPublish={false}
+            onSelectItem={handleSelectItem}
+        />
+    ), [user, library, onDropOnCanvas, activeItemId, setSelectedItemIds, handleSelectItem]);
+
+    const renderNode = useMemo(() => (
+        <ArchitecturalControls
+            {...renderState}
+            onRender={handleTriggerRender}
+            isGenerating={renderState.isGenerating}
+        />
+    ), [renderState, handleTriggerRender]);
+
+
     if (ui.showSplash) {
         return (
             <div className="h-[100dvh] w-screen bg-theme-bg-primary text-theme-text-primary flex items-center justify-center font-sans select-none touch-none overscroll-none">
@@ -2106,7 +2266,7 @@ export function App() {
             {ui.deletingItemId && <ConfirmDeleteModal isOpen={!!ui.deletingItemId} onCancel={() => ui.setDeletingItemId(null)} onConfirm={handleConfirmDelete} itemName={itemToDelete?.name || ''} itemType={itemToDelete?.type === 'group' ? 'group' : 'object'} />}
             {library.deletingLibraryItem && <ConfirmDeleteLibraryItemModal isOpen={!!library.deletingLibraryItem} onCancel={library.onCancelDeleteLibraryItem} onConfirm={library.onConfirmDeleteLibraryItem} itemToDelete={library.deletingLibraryItem} />}
             {ui.showClearConfirm && <ConfirmClearModal isOpen={ui.showClearConfirm} onCancel={() => ui.setShowClearConfirm(false)} onConfirm={handleConfirmClear} />}
-            {ui.isCanvasSizeModalOpen && <CanvasSizeModal isOpen={ui.isCanvasSizeModalOpen} onClose={() => ui.setCanvasSizeModalOpen(false)} currentSize={canvasSize} onApply={(w, h) => { dispatch({ type: 'RESIZE_CANVAS', payload: { width: w, height: h } }); ui.setCanvasSizeModalOpen(false); setTimeout(canvasView.onZoomExtents, 100); }} />}
+            {ui.isCanvasSizeModalOpen && <CanvasSizeModal isOpen={ui.isCanvasSizeModalOpen} onClose={() => ui.setCanvasSizeModalOpen(false)} currentSize={canvasSize} onApply={(w, h, s) => { dispatch({ type: 'RESIZE_CANVAS', payload: { width: w, height: h, scale: s } }); ui.setCanvasSizeModalOpen(false); setTimeout(canvasView.onZoomExtents, 100); }} />}
             {ui.isResetConfirmOpen && <ConfirmResetModal isOpen={ui.isResetConfirmOpen} onCancel={() => ui.setIsResetConfirmOpen(false)} onConfirm={() => { console.log("Resetting preferences..."); ui.setIsResetConfirmOpen(false); }} />}
             <WorkspaceTemplatesPopover isOpen={isWorkspacePopoverOpen} onClose={() => setWorkspacePopoverOpen(false)} templates={templates.templates} onSave={handleSaveWorkspace} onLoad={handleLoadWorkspace} onDelete={templates.deleteTemplate} onResetPreferences={() => ui.setIsResetConfirmOpen(true)} />
             {library.imageToEdit && <TransparencyEditor item={library.imageToEdit} onApply={library.onApplyTransparency} onCancel={library.onCancelEditTransparency} />}
@@ -2330,97 +2490,8 @@ export function App() {
                             vp.setActiveTool('pan'); // Reset to safe state when entering
                         }
                     }}
-                    visualPromptingNode={
-                        <VisualPromptingControls
-                            regions={vp.regions}
-                            onDeleteRegion={vp.deleteRegion}
-                            onUpdateRegionPrompt={vp.updateRegionPrompt}
-                            onUpdateRegionImage={vp.updateRegionImage}
-                            generalInstructions={vp.generalInstructions}
-                            onGeneralInstructionsChange={vp.setGeneralInstructions}
-                            referenceImage={vp.referenceImage}
-                            onReferenceImageChange={vp.setReferenceImage}
-                            brushSize={vp.brushSize}
-                            onBrushSizeChange={vp.setBrushSize}
-                            brushColor={vp.brushColor}
-                            onBrushColorChange={vp.setBrushColor}
-                            activeTool={vp.activeTool}
-                            onToolChange={vp.setActiveTool}
-                            onProcessChanges={handleVisualPromptingEnhance}
-                            onClearAll={vp.clearAll}
-                            isGenerating={renderState.isGenerating}
-                            structuredPrompt={vp.structuredPrompt}
-                            onStructuredPromptChange={vp.setStructuredPrompt}
-                            onResetStructuredPrompt={() => vp.setIsPromptManuallyEdited(false)}
-                            isPromptModified={vp.isPromptManuallyEdited}
-                        />
-                    }
-                    drawingToolsNode={
-                        <DrawingToolsPanel
-                            tool={tool} setTool={setTool}
-
-                            // Stroke
-                            strokeMode={strokeMode}
-                            setStrokeMode={setStrokeMode}
-                            strokeModifier={strokeModifier}
-                            setStrokeModifier={setStrokeModifier}
-
-                            brushColor={toolSettings.brushSettings.color}
-                            setBrushColor={(c) => toolSettings.setBrushSettings(s => ({ ...s, color: c }))}
-                            brushSize={toolSettings.brushSettings.size}
-                            setBrushSize={(s) => toolSettings.setBrushSettings(state => ({ ...state, size: s }))}
-                            brushOpacity={toolSettings.brushSettings.opacity}
-                            setBrushOpacity={(o) => toolSettings.setBrushSettings(state => ({ ...state, opacity: o }))}
-                            strokeSmoothing={strokeSmoothing}
-                            setStrokeSmoothing={setStrokeSmoothing}
-
-                            // Specific Tool Settings
-                            brushSettings={toolSettings.brushSettings}
-                            setBrushSettings={toolSettings.setBrushSettings}
-                            simpleMarkerSettings={toolSettings.simpleMarkerSettings}
-                            setSimpleMarkerSettings={toolSettings.setSimpleMarkerSettings}
-                            advancedMarkerSettings={toolSettings.advancedMarkerSettings}
-                            setAdvancedMarkerSettings={toolSettings.setAdvancedMarkerSettings}
-                            naturalMarkerSettings={toolSettings.naturalMarkerSettings}
-                            setNaturalMarkerSettings={toolSettings.setNaturalMarkerSettings}
-                            airbrushSettings={toolSettings.airbrushSettings}
-                            setAirbrushSettings={toolSettings.setAirbrushSettings}
-                            watercolorSettings={toolSettings.watercolorSettings}
-                            setWatercolorSettings={toolSettings.setWatercolorSettings}
-
-                            // Guides
-                            isGridVisible={guides.isSnapToGridEnabled}
-                            setGridVisible={guides.toggleSnapToGrid}
-                            gridSize={guides.gridGuide.spacing}
-                            setGridSize={guides.onSetGridSpacing}
-
-                            isPerspectiveEnabled={guides.activeGuide === 'perspective'}
-                            setPerspectiveEnabled={(enabled) => guides.onSetActiveGuide(enabled ? 'perspective' : 'none')}
-
-                            isSymmetryEnabled={guides.activeGuide === 'mirror'}
-                            setSymmetryEnabled={(enabled) => guides.onSetActiveGuide(enabled ? 'mirror' : 'none')}
-
-                            isOrthogonalEnabled={guides.isOrthogonalVisible}
-                            setOrthogonalEnabled={guides.toggleOrthogonal}
-
-                            isRulerEnabled={guides.activeGuide === 'ruler'}
-                            setRulerEnabled={(enabled) => guides.onSetActiveGuide(enabled ? 'ruler' : 'none')}
-
-                            // Canvas Controls
-                            onOpenCanvasSizeModal={() => ui.setCanvasSizeModalOpen(true)}
-                            onUpdateBackground={handleUpdateBackground}
-                            backgroundColor={objects.find(o => o.type === 'object' && o.isBackground)?.color}
-
-                            // File
-                            onImportBackground={() => setIsBgImportModalOpen(true)}
-                            onExportImage={() => ui.setExportModalOpen(true)}
-                            onCropCanvas={() => setIsCropping(!isCropping)}
-
-                            onUndo={undo}
-                            onRedo={redo}
-                            onClearCanvas={() => ui.setShowClearConfirm(true)}
-                        />
-                    }
+                    visualPromptingNode={visualPromptingNode}
+                    drawingToolsNode={drawingToolsNode}
                 />
             </aside>
 
@@ -2584,7 +2655,10 @@ export function App() {
                         <FreeModeView
                             ref={freeModeRef}
                             user={user}
-                            onImportFromSketch={() => { if (canvasRef.current) return canvasRef.current.getCanvas()?.toDataURL() || null; return null; }}
+                            onImportFromSketch={() => {
+                                const compositeCanvas = getCompositeCanvas(true, canvasSize, getDrawableObjects, backgroundObject);
+                                return compositeCanvas ? compositeCanvas.toDataURL('image/png') : null;
+                            }}
                             lastRenderedImage={renderState.resultImage}
                             onSaveToLibrary={handleSaveItemToLibrary}
                             deductCredit={deductCredit}
@@ -2592,7 +2666,6 @@ export function App() {
                             libraryItems={library.libraryItems}
                             selectedModel={selectedModel}
                             onSendToSketch={(url) => handleImportRenderToSketch(url)}
-                            onSendToRender={(url) => renderState.setResultImage(url)}
                         />
                     </div>
                 </main>
@@ -2658,25 +2731,8 @@ export function App() {
                                 <button
                                     onClick={() => {
                                         if (renderState.resultImage) {
-                                            const img = new Image();
-                                            img.onload = () => {
-                                                const finalCanvas = document.createElement('canvas');
-                                                finalCanvas.width = canvasSize.width;
-                                                finalCanvas.height = canvasSize.height;
-                                                const fCtx = finalCanvas.getContext('2d');
-                                                if (fCtx) {
-                                                    // Draw result scaled to canvas size
-                                                    fCtx.drawImage(img, 0, 0, canvasSize.width, canvasSize.height);
-                                                    const finalImg = new Image();
-                                                    finalImg.onload = () => {
-                                                        dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: finalImg } });
-                                                        renderState.setResultImage(null);
-                                                        setTimeout(canvasView.onZoomExtents, 100);
-                                                    };
-                                                    finalImg.src = finalCanvas.toDataURL('image/png');
-                                                }
-                                            };
-                                            img.src = renderState.resultImage;
+                                            handleImportRenderToSketch(renderState.resultImage);
+                                            renderState.setResultImage(null);
                                         }
                                     }}
                                     className="px-6 py-2 bg-theme-accent-primary hover:bg-theme-accent-hover text-white rounded-md font-bold shadow-lg transition flex items-center gap-2"
@@ -2689,8 +2745,10 @@ export function App() {
                     </div>
                 )}
 
-
-                {activeView !== 'free' && (
+                {/* Right Sidebar: Unified (Outliner, Library, Render) */}
+                <aside
+                    className={`fixed right-0 bottom-0 z-40 transition-transform duration-300 w-80 shadow-xl ${(ui.isRightSidebarVisible && activeView !== 'free') ? 'translate-x-0' : 'translate-x-full'} ${ui.isHeaderVisible ? 'top-16' : 'top-0'}`}
+                >
                     <UnifiedRightSidebar
                         isOpen={ui.isRightSidebarVisible}
                         onClose={() => ui.setIsRightSidebarVisible(false)}
@@ -2735,7 +2793,7 @@ export function App() {
                         }
                         overrideContent={undefined}
                     />
-                )}
+                </aside>
 
                 {/* Toggle Button for Right Sidebar */}
                 {activeView !== 'free' && (
