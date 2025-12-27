@@ -32,6 +32,7 @@ interface VisualPromptingControlsProps {
     activeTool: 'pen' | 'eraser' | 'region' | 'polygon' | 'pan';
     onToolChange: (tool: 'pen' | 'eraser' | 'region' | 'polygon' | 'pan') => void;
     onProcessChanges: () => void;
+    onClearAll: () => void;
     isGenerating?: boolean;
 
     // Structured Prompt Editor
@@ -57,6 +58,7 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
     activeTool,
     onToolChange,
     onProcessChanges,
+    onClearAll,
     isGenerating = false,
     structuredPrompt,
     onStructuredPromptChange,
@@ -67,37 +69,18 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
         <div className="flex flex-col h-full bg-theme-bg-secondary border-r border-theme-bg-tertiary">
             {/* Header & Tools */}
             <div className="p-4 border-b border-theme-bg-tertiary space-y-4">
-                <div>
-                    <h2 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider mb-1">Herramientas</h2>
-                    <div className="text-[10px] text-theme-text-secondary">Selecciona una herramienta para editar.</div>
-                </div>
+                {/* Tools Grid */}
 
                 {/* Tools Grid */}
-                <div className="flex bg-theme-bg-primary p-1 rounded-lg gap-1 border border-theme-bg-tertiary">
-                    <ToolButton
-                        active={activeTool === 'pan'}
-                        onClick={() => onToolChange('pan')}
-                        icon={<CursorClickIcon className="w-4 h-4" />}
-                        title="Mover (Pan)"
-                    />
-                    <ToolButton
-                        active={activeTool === 'pen'}
-                        onClick={() => onToolChange('pen')}
-                        icon={<PencilIcon className="w-4 h-4" />}
-                        title="Lápiz"
-                    />
-                    <ToolButton
-                        active={activeTool === 'eraser'}
-                        onClick={() => onToolChange('eraser')}
-                        icon={<EraserIcon className="w-4 h-4" />}
-                        title="Borrador"
-                    />
-                    <div className="w-px bg-theme-bg-tertiary mx-1"></div>
+                {/* Tools Grid for Annotations */}
+                {/* Tools Grid for Annotations */}
+                <div className="flex bg-theme-bg-primary p-1 rounded-lg gap-1 border border-theme-bg-tertiary justify-start">
+
                     <ToolButton
                         active={activeTool === 'region'}
                         onClick={() => onToolChange('region')}
                         icon={<SquareIcon className="w-4 h-4" />}
-                        title="Rectángulo"
+                        title="Añadir Región (Rectángulo)"
                     />
                     <ToolButton
                         active={activeTool === 'polygon'}
@@ -107,8 +90,15 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a2 2 0 110 4h-1a1 1 0 00-1 1v3a2 2 0 11-4 0v-1a1 1 0 00-1-1H7a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3z" />
                             </svg>
                         }
-                        title="Polígono"
+                        title="Dibujar Polígono (Lazo)"
                     />
+                    <button
+                        onClick={onClearAll}
+                        className="bg-theme-bg-tertiary p-2 rounded hover:bg-red-500/20 hover:text-red-400 text-theme-text-secondary transition-all border border-transparent hover:border-red-500/50 ml-auto"
+                        title="Limpiar todas las anotaciones"
+                    >
+                        <TrashIcon className="w-4 h-4" />
+                    </button>
                 </div>
             </div>
 
@@ -158,40 +148,6 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
                 </div>
             </div>
 
-            {/* Contextual Settings (Brush) */}
-            {activeTool === 'pen' && (
-                <div className="p-4 border-b border-theme-bg-tertiary bg-theme-bg-tertiary/50">
-                    <h3 className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider mb-3">Ajustes de Lápiz</h3>
-                    <div className="space-y-4">
-                        <div>
-                            <div className="flex justify-between text-[10px] text-theme-text-secondary mb-1">
-                                <span>Tamaño</span>
-                                <span>{brushSize}px</span>
-                            </div>
-                            <input
-                                type="range"
-                                min="1" max="50"
-                                value={brushSize}
-                                onChange={(e) => onBrushSizeChange(parseInt(e.target.value))}
-                                className="w-full h-1 bg-theme-bg-hover rounded-lg appearance-none cursor-pointer accent-theme-accent-primary"
-                            />
-                        </div>
-                        <div>
-                            <div className="text-[10px] text-theme-text-secondary mb-1">Color</div>
-                            <div className="flex gap-2">
-                                {['#FF0000', '#00FF00', '#0000FF', '#FFFFFF', '#000000'].map(c => (
-                                    <button
-                                        key={c}
-                                        onClick={() => onBrushColorChange(c)}
-                                        className={`w-6 h-6 rounded-full border-2 ${brushColor === c ? 'border-theme-text-primary scale-110' : 'border-transparent'}`}
-                                        style={{ backgroundColor: c }}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* Regions List */}
             <div className="flex-grow overflow-y-auto p-4">
@@ -332,7 +288,7 @@ const ToolButton: React.FC<{ active: boolean, onClick: () => void, icon: React.R
     <button
         onClick={onClick}
         title={title}
-        className={`flex-1 aspect-square rounded flex items-center justify-center transition-all ${active
+        className={`w-8 h-8 rounded flex items-center justify-center transition-all ${active
             ? 'bg-theme-accent-primary text-white shadow-md'
             : 'text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary'
             }`}

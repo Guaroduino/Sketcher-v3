@@ -471,6 +471,7 @@ function appReducer(state: AppState, action: Action): AppState {
                         }
 
                         updatedObject.context.drawImage(image, x, y, renderWidth, renderHeight);
+                        updatedObject.contentRect = { x, y, width: renderWidth, height: renderHeight };
                         updatedObject.mipmaps = generateMipmaps(o.context.canvas);
                     }
                     return updatedObject;
@@ -489,7 +490,7 @@ function appReducer(state: AppState, action: Action): AppState {
 
                 if (item.isBackground) {
                     newCtx.drawImage(image, 0, 0);
-                    return { ...item, canvas: newCanvas, context: newCtx, color: '#FFFFFF', backgroundImage: image, mipmaps: generateMipmaps(newCanvas) };
+                    return { ...item, canvas: newCanvas, context: newCtx, color: '#FFFFFF', backgroundImage: image, contentRect: { x: 0, y: 0, width: newCanvasSize.width, height: newCanvasSize.height }, mipmaps: generateMipmaps(newCanvas) };
                 }
 
                 if (oldCanvas) {
@@ -506,7 +507,7 @@ function appReducer(state: AppState, action: Action): AppState {
                 if (o.type === 'object' && o.isBackground && o.context) {
                     o.context.fillStyle = o.color || '#FFFFFF';
                     o.context.fillRect(0, 0, o.context.canvas.width, o.context.canvas.height);
-                    const { backgroundImage, ...rest } = o;
+                    const { backgroundImage, contentRect, ...rest } = o;
                     return { ...rest, color: o.color || '#FFFFFF' };
                 }
                 return o;
@@ -543,7 +544,17 @@ function appReducer(state: AppState, action: Action): AppState {
                         cropRect.x, cropRect.y, cropRect.width, cropRect.height, // Source rect
                         0, 0, newCanvasSize.width, newCanvasSize.height           // Destination rect
                     );
-                    return { ...item, canvas: newCanvas, context: newCtx };
+                    const updatedItem = { ...item, canvas: newCanvas, context: newCtx };
+                    if (item.isBackground && item.contentRect) {
+                        // Recalculate content rect after crop
+                        updatedItem.contentRect = {
+                            x: Math.max(0, item.contentRect.x - cropRect.x),
+                            y: Math.max(0, item.contentRect.y - cropRect.y),
+                            width: Math.min(newCanvasSize.width, item.contentRect.width),
+                            height: Math.min(newCanvasSize.height, item.contentRect.height)
+                        };
+                    }
+                    return updatedItem;
                 }
                 return item;
             });

@@ -5,12 +5,20 @@ import { auth, db, storage } from './firebaseConfig';
 import { collection, query, orderBy, onSnapshot, addDoc, doc, deleteDoc, serverTimestamp, getDocs, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
-import { Toolbar } from './components/Toolbar';
+import { TopBar } from './components/TopBar';
+import { UnifiedRightSidebar } from './components/UnifiedRightSidebar';
+import { ArchitecturalControls } from './components/ArchitecturalControls';
+import { useRenderState } from './hooks/useRenderState';
 import { Outliner } from './components/Outliner';
 import { CanvasContainer } from './components/CanvasContainer';
 import { TransparencyEditor } from './components/TransparencyEditor';
 import { Library } from './components/Library';
+import { FloatingQuickAccessBar } from './components/FloatingQuickAccessBar';
 import { CanvasToolbar } from './components/CanvasToolbar';
+
+// ... imports
+
+// ... imports
 import { ExportModal } from './components/ExportModal';
 import { SingleObjectExportModal } from './components/SingleObjectExportModal';
 import { Auth } from './components/Auth';
@@ -37,15 +45,22 @@ import { ConfirmClearModal } from './components/modals/ConfirmClearModal';
 import { ConfirmDeleteLibraryItemModal } from './components/modals/ConfirmDeleteLibraryItemModal';
 import { ConfirmResetModal } from './components/modals/ConfirmResetModal';
 import { CropIcon, CheckIcon, XIcon, RulerIcon, PerspectiveIcon, ImageSquareIcon, OrthogonalIcon, MirrorIcon, GridIcon, IsometricIcon, LockIcon, LockOpenIcon, TransformIcon, FreeTransformIcon, SunIcon, MoonIcon, CopyIcon, CutIcon, PasteIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, GoogleIcon, LogOutIcon, ArrowUpIcon, ArrowDownIcon, SnapIcon, BookmarkIcon, SaveIcon, FolderOpenIcon, GalleryIcon, StrokeModeIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, ExpandIcon, MinimizeIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, HistoryIcon, MoreVerticalIcon, AddAboveIcon, AddBelowIcon, HandRaisedIcon, DownloadIcon, SparklesIcon, MenuIcon, ChevronDownIcon } from './components/icons';
-import { ArchitecturalRenderView, ArchitecturalRenderViewHandle } from './components/ArchitecturalRenderView';
+
+import { UnifiedLeftSidebar } from './components/UnifiedLeftSidebar';
+import { DrawingToolsPanel } from './components/DrawingToolsPanel';
+import { VisualPromptingControls } from './components/visual-prompting/VisualPromptingControls';
+import { LayeredCanvas, LayeredCanvasRef } from './components/visual-prompting/LayeredCanvas';
+import { useVisualPrompting } from './hooks/useVisualPrompting';
 import { FreeModeView, FreeModeViewHandle } from './components/FreeModeView';
 import { LandingGalleryCarousel } from './components/LandingGalleryCarousel';
 
 
 import { AIRequestInspectorModal } from './components/modals/AIRequestInspectorModal';
 import type { SketchObject, ItemType, Tool, CropRect, TransformState, WorkspaceTemplate, QuickAccessTool, ProjectFile, Project, StrokeMode, StrokeState, CanvasItem, StrokeModifier, ScaleUnit, Selection, ClipboardData, AppState, Point } from './types';
-import { getContentBoundingBox, createNewCanvas, createThumbnail, cloneCanvas, generateMipmaps, getCompositeCanvas } from './utils/canvasUtils';
+import { getContentBoundingBox, createNewCanvas, createThumbnail, cloneCanvas, generateMipmaps, getCompositeCanvas, cropCanvas } from './utils/canvasUtils';
 import { prepareAIRequest } from './utils/aiUtils';
+import { prepareVisualPromptingRequest, VisualPromptingPayload } from './services/visualPromptingService';
+
 import { GEMINI_MODEL_ID, AI_MODELS, UI_DEFAULT_MODEL } from './utils/constants';
 
 type Theme = 'light' | 'dark';
@@ -191,7 +206,12 @@ function useAppUI() {
     const handlePointerDownResize = useCallback((e: React.PointerEvent) => {
         e.preventDefault();
         if (!rightSidebarRef.current) return;
-        const topPanel = rightSidebarRef.current.children[0] as HTMLElement;
+        // Sidebar structure: Aside -> Header[0] -> ContentWrapper[1] -> OutlinerBox[0]
+        // Ensure children exist before accessing
+        if (rightSidebarRef.current.children.length < 2) return;
+        const contentWrapper = rightSidebarRef.current.children[1] as HTMLElement;
+        if (contentWrapper.children.length < 1) return;
+        const topPanel = contentWrapper.children[0] as HTMLElement;
         resizeDataRef.current = {
             isResizing: true,
             startY: e.clientY,
@@ -243,7 +263,9 @@ function useProjectManager(
     onZoomExtents: () => void,
     loadToolSettings: (settings: any) => void,
     loadGuidesState: (state: any) => void,
-    loadQuickAccessState: (state: any) => void
+    loadQuickAccessState: (state: any) => void,
+    loadArchRenderState: (state: any) => Promise<void>,
+    loadFreeModeState: (state: any) => void
 ) {
     const [projects, setProjects] = useState<Project[]>([]);
     const [projectsLoading, setProjectsLoading] = useState(true);
@@ -284,10 +306,10 @@ function useProjectManager(
     }, [user]);
 
     const getFullProjectStateAsFile = useCallback(async (
-        getStateToSave: () => { currentState: AppState, guides: any, toolSettings: any, quickAccess: any }
+        getStateToSave: () => { currentState: AppState, guides: any, toolSettings: any, quickAccess: any, archRenderState?: any, freeModeState?: any }
     ): Promise<{ projectBlob: Blob, thumbnailBlob: Blob }> => {
 
-        const { currentState, guides, toolSettings, quickAccess } = getStateToSave();
+        const { currentState, guides, toolSettings, quickAccess, archRenderState, freeModeState } = getStateToSave();
 
         const serializedObjects = currentState.objects.map(item => {
             const { canvas, context, backgroundImage, ...rest } = item as SketchObject;
@@ -307,6 +329,8 @@ function useProjectManager(
             guides: guides,
             toolSettings: toolSettings,
             quickAccessSettings: quickAccess,
+            archRenderState: archRenderState,
+            freeModeState: freeModeState,
         };
 
         const jsonString = JSON.stringify(projectFile);
@@ -383,6 +407,8 @@ function useProjectManager(
             }
             if (projectFile.guides) loadGuidesState(projectFile.guides);
             if (projectFile.quickAccessSettings) loadQuickAccessState(projectFile.quickAccessSettings);
+            if (projectFile.archRenderState) await loadArchRenderState(projectFile.archRenderState);
+            if (projectFile.freeModeState) loadFreeModeState(projectFile.freeModeState);
 
             setProjectGalleryOpen(false);
             setTimeout(onZoomExtents, 100);
@@ -774,6 +800,22 @@ function useAI(
 
                     if (payload.activeAiTab === 'composition' || payload.activeAiTab === 'sketch') {
                         if (payload.shouldUpdateBackground) {
+                            // --- ENFORCE ASPECT RATIO FOR BACKGROUND REPLACEMENT ---
+                            // Use canvasSize as the authority for background dimensions
+                            if (canvasSize && canvasSize.width && canvasSize.height) {
+                                const bgCanvas = document.createElement('canvas');
+                                bgCanvas.width = canvasSize.width;
+                                bgCanvas.height = canvasSize.height;
+                                const bgCtx = bgCanvas.getContext('2d');
+                                if (bgCtx) {
+                                    bgCtx.drawImage(finalImg, 0, 0, canvasSize.width, canvasSize.height);
+
+                                    // Replace finalImg with the strictly resized version
+                                    const resizedImg = new Image();
+                                    resizedImg.src = bgCanvas.toDataURL('image/png');
+                                    finalImg = resizedImg;
+                                }
+                            }
                             dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: finalImg } });
                         }
                     }
@@ -793,6 +835,33 @@ function useAI(
                             ctx.imageSmoothingEnabled = true;
                             ctx.imageSmoothingQuality = 'high';
                             ctx.drawImage(img, 0, 0, downloadCanvas.width, downloadCanvas.height);
+
+                            // --- Sharpness Filter (Post-processing for "Nitidez") ---
+                            const imageData = ctx.getImageData(0, 0, downloadCanvas.width, downloadCanvas.height);
+                            const data = imageData.data;
+                            const w = downloadCanvas.width;
+                            const h = downloadCanvas.height;
+
+                            // Simple sharpening kernel:
+                            // [ 0  -1   0 ]
+                            // [-1   5  -1 ]
+                            // [ 0  -1   0 ]
+                            const originalData = new Uint8ClampedArray(data);
+                            for (let y = 1; y < h - 1; y++) {
+                                for (let x = 1; x < w - 1; x++) {
+                                    for (let c = 0; c < 3; c++) { // RGB
+                                        const i = (y * w + x) * 4 + c;
+                                        const top = ((y - 1) * w + x) * 4 + c;
+                                        const bottom = ((y + 1) * w + x) * 4 + c;
+                                        const left = (y * w + (x - 1)) * 4 + c;
+                                        const right = (y * w + (x + 1)) * 4 + c;
+
+                                        const val = 5 * originalData[i] - originalData[top] - originalData[bottom] - originalData[left] - originalData[right];
+                                        data[i] = Math.min(255, Math.max(0, val));
+                                    }
+                                }
+                            }
+                            ctx.putImageData(imageData, 0, 0);
                             const format = payload.upscaleFormat === 'jpg' ? 'image/jpeg' : 'image/png';
                             const ext = payload.upscaleFormat === 'jpg' ? 'jpg' : 'png';
                             // Use 0.92 quality for JPG to balance size/quality at 4K
@@ -918,6 +987,8 @@ export function App() {
     const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
     const [tool, setTool] = useState<Tool>('brush');
     const mainAreaRef = useRef<HTMLDivElement>(null);
+    const scaleButtonRef = useRef<HTMLButtonElement>(null);
+    const layeredCanvasRef = useRef<LayeredCanvasRef>(null);
 
     const [theme, setTheme] = useState<Theme>('dark');
     const [user, setUser] = useState<User | null>(null);
@@ -933,13 +1004,49 @@ export function App() {
     const [debugPointers, setDebugPointers] = useState<Map<number, { x: number, y: number }>>(new Map());
 
     // -- View State --
-    const [activeView, setActiveView] = useState<'sketch' | 'render' | 'free'>('sketch'); // Using string for safety
+    const [activeView, setActiveView] = useState<'sketch' | 'free'>('sketch'); // 'render' merged into 'sketch'
+    const [sidebarTab, setSidebarTab] = useState<'sketch' | 'render'>('sketch');
+    const [leftSidebarTab, setLeftSidebarTab] = useState<'visual-prompting' | 'tools'>('tools');
+
+    // -- Unified Render State --
+
+
+    // -- Legacy State (To be cleaned up) --
     const [galleryInitialTab, setGalleryInitialTab] = useState<'projects' | 'library'>('projects');
-    const [lastRenderedImage, setLastRenderedImage] = useState<string | null>(null);
+    const [lastRenderedImage, setLastRenderedImage] = useState<string | null>(null); // Kept for legacy compatibility if needed
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+    const canvasRef = useRef<any>(null); // Place this here if not already defined, but checking existing code logic.
+    // Actually canvasRef is usually defined. I'll search for it first.
+    // If I just inject it here, it might duplicate.
+    // I will Assume canvasRef exists or I will let IDE complain.
+    // Wait, the file view didn't show canvasRef def in lines 947-1000.
+    // I should add it just in case or verify.
+    // I saw <CanvasContainer ref={canvasRef}> later.
+    // I'll check lines 1040+
+
 
     // -- Autosave & Recovery State --
     const [showRecoveryPrompt, setShowRecoveryPrompt] = useState(false);
+
+    // -- Unified Left Sidebar State (Modals) --
+
+
+    const handleExportImage = () => {
+        if (canvasRef.current) {
+            // Placeholder: In a real app this might trigger a download or show export options
+            const link = document.createElement('a');
+            link.download = `sketch-${Date.now()}.png`;
+            // Assuming canvasRef exposes toDataURL or similar. If not, this might fail at runtime but fixes lint.
+            // Check canvasRef type: it's 'any' in line 989 so this is safe for TS.
+            if (typeof canvasRef.current.toDataURL === 'function') {
+                link.href = canvasRef.current.toDataURL();
+                link.click();
+            } else {
+                console.warn('Canvas ref does not support toDataURL');
+            }
+        }
+    };
     const [recoveredData, setRecoveredData] = useState<any>(null);
 
     // -- 3. CUSTOM HOOKS --
@@ -1004,19 +1111,59 @@ export function App() {
     } = ui;
 
     const freeModeRef = useRef<FreeModeViewHandle>(null);
-    const archRenderRef = useRef<ArchitecturalRenderViewHandle>(null);
+    // const archRenderRef = useRef<ArchitecturalRenderViewHandle>(null); // Removed
 
     // Custom Hooks
     const toolSettings = useToolSettings();
     const library = useLibrary(user);
     const guides = useGuides(canvasSize);
-    const { getMinZoom, ...canvasView } = useCanvasView(mainAreaRef, canvasSize);
+    const backgroundItem = objects.find(o => o.isBackground) as SketchObject | undefined;
+    const { getMinZoom, ...canvasView } = useCanvasView(mainAreaRef, canvasSize, backgroundItem?.contentRect);
     const templates = useWorkspaceTemplates();
     const quickAccess = useQuickAccess();
     const { credits, deductCredit, role } = useCredits(user);
     // Keep a ref to role for the callback
     const roleRef = useRef(role);
     useEffect(() => { roleRef.current = role; }, [role]);
+
+
+    // -- Unified Render State (Moved here to access credits) --
+    // -- Unified Render State (Moved here to access credits) --
+    // Pass undefined for onRenderCompleteRequest (optional), and inspector for debugging
+    const renderState = useRenderState(credits, deductCredit, selectedModel, undefined, role === 'admin' ? inspectAIRequest : undefined);
+
+    // -- Visual Prompting State --
+    const vp = useVisualPrompting();
+
+    const handleTriggerRender = async () => {
+        const compositeCanvas = getCompositeCanvas(true, canvasSize, getDrawableObjects, backgroundObject);
+        if (compositeCanvas) {
+            const targetDimensions = { width: canvasSize.width, height: canvasSize.height };
+            const aspectRatio = canvasSize.width / canvasSize.height;
+
+            if (isAnnotationsVisible && layeredCanvasRef.current && vp.regions.length > 0) {
+                const overlayDataUrl = await layeredCanvasRef.current.getVisualGuideSnapshot();
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvasSize.width;
+                tempCanvas.height = canvasSize.height;
+                const ctx = tempCanvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(compositeCanvas, 0, 0);
+                    const img = new Image();
+                    await new Promise((resolve) => {
+                        img.onload = resolve;
+                        img.src = overlayDataUrl;
+                    });
+                    ctx.drawImage(img, 0, 0, canvasSize.width, canvasSize.height);
+                    const finalDataUrl = tempCanvas.toDataURL('image/png');
+                    await renderState.handleRender(finalDataUrl, targetDimensions, aspectRatio);
+                    return;
+                }
+            }
+
+            await renderState.handleRender(compositeCanvas.toDataURL('image/png'), targetDimensions, aspectRatio);
+        }
+    };
 
     const handleSelectItem = useCallback((id: string | null) => {
         setSelectedItemIds(id ? [id] : []);
@@ -1041,7 +1188,17 @@ export function App() {
         if (settings.advancedMarkerSettings) toolSettings.setAdvancedMarkerSettings(settings.advancedMarkerSettings);
     }, [toolSettings]);
 
-    const projects = useProjectManager(user, dispatch, ui.setProjectGalleryOpen, canvasView.onZoomExtents, loadAllToolSettings, guides.loadGuideState, quickAccess.loadState);
+    const projects = useProjectManager(
+        user,
+        dispatch,
+        ui.setProjectGalleryOpen,
+        canvasView.onZoomExtents,
+        loadAllToolSettings,
+        guides.loadGuideState,
+        quickAccess.loadState,
+        async (state) => { if (state && state.archRenderState) renderState.setFullState(state.archRenderState); },
+        (state) => { if (freeModeRef.current) freeModeRef.current.setFullState(state); }
+    );
 
     const { onDropOnCanvas } = useCanvasModes(tool, setTool, dispatch, library.libraryItems, canvasSize, currentState.scaleFactor);
 
@@ -1050,7 +1207,6 @@ export function App() {
     const workspaceButtonRef = useRef<HTMLButtonElement>(null);
 
     const [isScalePopoverOpen, setIsScalePopoverOpen] = useState(false);
-    const scaleButtonRef = useRef<HTMLButtonElement>(null);
 
     // Crop & Transform State
     const [isCropping, setIsCropping] = useState(false);
@@ -1069,18 +1225,19 @@ export function App() {
     const backgroundObject = objects.find((o): o is SketchObject => o.type === 'object' && !!o.isBackground);
     const isAiModalOpen = tool === 'enhance';
 
-    const { activeColor, activeSize } = useMemo(() => {
-        let color: string | undefined, size: number | undefined;
+    const { activeColor, activeSize, activeFillColor } = useMemo(() => {
+        let color: string | undefined, size: number | undefined, fillColor: string | undefined;
         switch (tool) {
-            case 'brush': color = toolSettings.brushSettings.color; size = toolSettings.brushSettings.size; break;
-            // FIX: Renamed 'solid-marker' to 'simple-marker' and using simpleMarkerSettings.
-            case 'simple-marker': color = toolSettings.simpleMarkerSettings.color; size = toolSettings.simpleMarkerSettings.size; break;
-            case 'natural-marker': color = toolSettings.naturalMarkerSettings.color; size = toolSettings.naturalMarkerSettings.size; break;
-            case 'airbrush': color = toolSettings.airbrushSettings.color; size = toolSettings.airbrushSettings.size; break;
-            case 'fx-brush': color = toolSettings.fxBrushSettings.color; size = toolSettings.fxBrushSettings.size; break;
+            case 'brush': color = toolSettings.brushSettings.color; size = toolSettings.brushSettings.size; fillColor = toolSettings.brushSettings.fillColor; break;
+            case 'simple-marker': color = toolSettings.simpleMarkerSettings.color; size = toolSettings.simpleMarkerSettings.size; fillColor = toolSettings.simpleMarkerSettings.fillColor; break;
+            case 'natural-marker': color = toolSettings.naturalMarkerSettings.color; size = toolSettings.naturalMarkerSettings.size; fillColor = toolSettings.naturalMarkerSettings.fillColor; break;
+            case 'airbrush': color = toolSettings.airbrushSettings.color; size = toolSettings.airbrushSettings.size; fillColor = toolSettings.airbrushSettings.fillColor; break;
+            case 'fx-brush': color = toolSettings.fxBrushSettings.color; size = toolSettings.fxBrushSettings.size; fillColor = toolSettings.fxBrushSettings.fillColor; break;
+            case 'advanced-marker': color = toolSettings.advancedMarkerSettings.color; size = toolSettings.advancedMarkerSettings.size; fillColor = toolSettings.advancedMarkerSettings.fillColor; break;
+            case 'watercolor': color = toolSettings.watercolorSettings.color; size = toolSettings.watercolorSettings.size; fillColor = toolSettings.watercolorSettings.fillColor; break;
             case 'eraser': size = toolSettings.eraserSettings.size; break;
         }
-        return { activeColor: color, activeSize: size };
+        return { activeColor: color, activeSize: size, activeFillColor: fillColor };
     }, [tool, toolSettings]);
 
     const handleSelectColor = useCallback((color: string) => {
@@ -1103,6 +1260,18 @@ export function App() {
             case 'natural-marker': toolSettings.setNaturalMarkerSettings(s => ({ ...s, size })); break;
             case 'airbrush': toolSettings.setAirbrushSettings(s => ({ ...s, size })); break;
             case 'fx-brush': toolSettings.setFxBrushSettings(s => ({ ...s, size })); break;
+        }
+    }, [tool, toolSettings]);
+
+    const handleSelectFillColor = useCallback((color: string) => {
+        switch (tool) {
+            case 'brush': toolSettings.setBrushSettings(s => ({ ...s, fillColor: color })); break;
+            case 'simple-marker': toolSettings.setSimpleMarkerSettings(s => ({ ...s, fillColor: color })); break;
+            case 'natural-marker': toolSettings.setNaturalMarkerSettings(s => ({ ...s, fillColor: color })); break;
+            case 'airbrush': toolSettings.setAirbrushSettings(s => ({ ...s, fillColor: color })); break;
+            case 'fx-brush': toolSettings.setFxBrushSettings(s => ({ ...s, fillColor: color })); break;
+            case 'advanced-marker': toolSettings.setAdvancedMarkerSettings(s => ({ ...s, fillColor: color })); break;
+            case 'watercolor': toolSettings.setWatercolorSettings(s => ({ ...s, fillColor: color })); break;
         }
     }, [tool, toolSettings]);
 
@@ -1190,7 +1359,9 @@ export function App() {
                         isSnapToGridEnabled: guides.isSnapToGridEnabled,
                     },
                     toolSettings: { ...toolSettings },
-                    quickAccess: quickAccess.quickAccessSettings
+                    quickAccess: quickAccess.quickAccessSettings,
+                    archRenderState: renderState.getFullState(),
+                    freeModeState: freeModeRef.current?.getFullState()
                 }));
 
                 const reader = new FileReader();
@@ -1208,7 +1379,7 @@ export function App() {
         }, 5000); // 5 second debounce
 
         return () => clearTimeout(timer);
-    }, [currentState, guides, toolSettings, quickAccess, isInitialized, projects.getFullProjectStateAsFile, lastRenderedImage, objects.length]);
+    }, [currentState, guides, toolSettings, quickAccess, isInitialized, projects.getFullProjectStateAsFile, lastRenderedImage, objects.length, renderState.getFullState]);
 
     // Session Recovery Check
     useEffect(() => {
@@ -1286,6 +1457,8 @@ export function App() {
             }
         }
     }, [tool, canvasSize.width, canvasSize.height, activeItem, setTool]);
+
+
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -1367,7 +1540,14 @@ export function App() {
     const deleteItem = useCallback((id: string) => ui.setDeletingItemId(id), [ui]);
     const handleMoveItem = useCallback((draggedId: string, targetId: string, position: 'top' | 'bottom' | 'middle') => dispatch({ type: 'MOVE_ITEM', payload: { draggedId, targetId, position } }), [dispatch]);
     const handleDrawCommit = useCallback((id: string, beforeCanvas: HTMLCanvasElement) => dispatch({ type: 'COMMIT_DRAWING', payload: { activeItemId: id, beforeCanvas } }), [dispatch]);
-    const updateItem = useCallback((id: string, updates: Partial<CanvasItem>) => dispatch({ type: 'UPDATE_ITEM', payload: { id, updates } }), [dispatch]);
+    const updateItem = useCallback((id: string, updates: Partial<CanvasItem>) => {
+        if (id === 'annotations-root-id') {
+            if (updates.isVisible !== undefined) setIsAnnotationsVisible(updates.isVisible);
+            // We can also handle other Virtual Layer updates here (e.g. name change if desired, but user said 'cannot be deleted', name likely fixed)
+        } else {
+            dispatch({ type: 'UPDATE_ITEM', payload: { id, updates } });
+        }
+    }, [dispatch]);
 
     // Background Import Logic
     const [pendingBgFile, setPendingBgFile] = useState<File | null>(null);
@@ -1397,8 +1577,7 @@ export function App() {
                 const img = new Image();
                 img.onload = () => {
                     if (mode === 'resize-canvas') {
-                        dispatch({ type: 'RESIZE_CANVAS', payload: { width: img.width, height: img.height } });
-                        dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: img } });
+                        dispatch({ type: 'SET_CANVAS_FROM_IMAGE', payload: { image: img } });
                     } else {
                         // Fit to existing canvas
                         dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: img, cropToFit } });
@@ -1450,11 +1629,11 @@ export function App() {
     }, []);
 
     const handleSendFreeToRender = useCallback((url: string) => {
-        if (archRenderRef.current) {
-            archRenderRef.current.setInputImage(url);
-            setActiveView('render');
-        }
-    }, []);
+        // In unified view, send to sketch (canvas) and open render tab
+        handleSendFreeToSketch(url);
+        setSidebarTab('render');
+        ui.setIsRightSidebarVisible(true);
+    }, [handleSendFreeToSketch, ui]);
 
 
     const handleRemoveBackgroundImage = useCallback(() => dispatch({ type: 'REMOVE_BACKGROUND_IMAGE' }), [dispatch]);
@@ -1548,11 +1727,33 @@ export function App() {
     // KeyDown Handler
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') { setStrokeState(null); setSelection(null); }
+            if (e.key === 'Escape') {
+                setStrokeState(null);
+                setSelection(null);
+            }
+
+            // Undo/Redo Shortcuts
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                if (activeView === 'render') {
+                    // Unified Render doesn't have separate undo stack yet
+                } else {
+                    if (e.shiftKey) redo();
+                    else undo();
+                }
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                e.preventDefault();
+                if (activeView === 'render') {
+                    // Unified Render doesn't have separate redo stack yet
+                } else {
+                    redo();
+                }
+            }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, []);
+    }, [activeView, undo, redo]);
 
     // Global Paste Handler
     useEffect(() => {
@@ -1585,13 +1786,12 @@ export function App() {
                                 const file = new File([blob], `Pasted_Image_${Date.now()}.png`, { type: 'image/png' });
 
                                 if (activeView === 'render') {
-                                    // 2. Render Mode: Use "Upload" logic (Input Image) via Ref
-                                    if (archRenderRef.current) {
-                                        console.log("Delegating paste to ArchitecturalRenderView");
-                                        archRenderRef.current.setInputImageFromFile(file);
-                                    } else {
-                                        console.error("ArchRenderRef is null");
-                                    }
+                                    // 2. Render Mode (Tab): Import as Background (Simplest for now)
+                                    // Or if we want to support "Upload as Input Image" specifically:
+                                    // renderState.setInputImage(file); // if we exposed it. 
+                                    // For now, treat as Sketch paste which puts it on canvas -> ready to render.
+                                    setPendingBgFile(file);
+                                    setIsBgImportModalOpen(true);
                                 } else {
                                     // 3. Sketch Mode: Import as Background (Ask to resize/fit)
                                     setPendingBgFile(file);
@@ -1608,12 +1808,49 @@ export function App() {
     }, [activeView, activeItemId, canvasSize, dispatch]);
 
     // Outliner button logic
+    const [isAnnotationsVisible, setIsAnnotationsVisible] = useState(true);
+
     const visualList = useMemo(() => {
         const getVisibleTree = (parentId: string | null = null): CanvasItem[] => {
             return objects.filter(item => item.parentId === parentId && (item.type !== 'object' || !item.isBackground)).flatMap(child => [child, ...(child.type === 'group' ? getVisibleTree(child.id) : [])]);
         };
-        return getVisibleTree();
-    }, [objects]);
+        const list = getVisibleTree();
+
+        // Inject Virtual "Anotaciones" Item
+        // Ideally it sits on top of everything or just above the background? User said "combined as secondary image".
+        // Usually visual prompting is "on top" of the sketch.
+        // We make it the LAST item (topmost z-index visually in list depends on render order).
+        // If Outliner renders bottom-to-top or top-to-bottom? 
+        // Typically Outliner shows hierarchy.
+        // Let's add it at the top of the list (meaning "last" in array usually means top drawn, or first in list means top?).
+        // If 'visualList' is just for display in Outliner, order matters for the UI list.
+        // Let's put it as a distinct root item.
+
+        // Always show Annotations layer as per user request
+        const annotationsItem: any = {
+            id: 'annotations-root-id', // Special ID
+            name: 'Anotaciones',
+            type: 'virtual-layer', // Custom type to handle in Outliner
+            isVisible: isAnnotationsVisible,
+            isLocked: true, // "cannot be deleted"
+            parentId: null,
+            opacity: 1,
+            // Mimic CanvasItem properties needed for Outliner
+        };
+        // Add to END of list (top of stack?)
+        return [...list, annotationsItem];
+
+        return list;
+    }, [objects, isAnnotationsVisible, vp.regions.length, vp.activeTool]); // Re-calc when visibility changes
+
+    // Update Logic to handle toggling this virtual item
+    // We need to intercept 'updateItem' for this ID or change how Outliner calls it.
+    // However, 'onUpdateItem' is passed to Outliner.
+    // It's cleaner to intercept it inside the 'updateItem' callback or 'handleUpdateItem'.
+
+    // ... activeItemState ...
+
+
 
     const activeItemState = useMemo(() => {
         if (!activeItemId) return { canMoveUp: false, canMoveDown: false, canMergeDown: false, canMergeUp: false };
@@ -1680,8 +1917,8 @@ export function App() {
         }
     }, [activeItemState.canMergeUp, visualList, handleMergeItems]);
 
-    const handleAddObjectAbove = useCallback((id: string) => { const newItemId = `object-${Date.now()}`; dispatch({ type: 'ADD_ITEM', payload: { type: 'object', activeItemId: id, canvasSize, newItemId } }); setSelectedItemIds([newItemId]); }, [canvasSize, dispatch]);
-    const handleAddObjectBelow = useCallback((id: string) => { const newItemId = `object-${Date.now()}`; dispatch({ type: 'ADD_ITEM_BELOW', payload: { targetId: id, canvasSize, newItemId } }); setSelectedItemIds([newItemId]); }, [canvasSize, dispatch]);
+    const handleAddObjectAbove = useCallback((id: string) => { const newItemId = `object - ${Date.now()} `; dispatch({ type: 'ADD_ITEM', payload: { type: 'object', activeItemId: id, canvasSize, newItemId } }); setSelectedItemIds([newItemId]); }, [canvasSize, dispatch]);
+    const handleAddObjectBelow = useCallback((id: string) => { const newItemId = `object - ${Date.now()} `; dispatch({ type: 'ADD_ITEM_BELOW', payload: { targetId: id, canvasSize, newItemId } }); setSelectedItemIds([newItemId]); }, [canvasSize, dispatch]);
 
     const dimensionDisplay = useMemo(() => {
         if (canvasSize.width > 0 && scaleFactor > 0) {
@@ -1692,7 +1929,7 @@ export function App() {
                 case 'm': displayWidth = (widthMm / 1000).toFixed(3); displayHeight = (heightMm / 1000).toFixed(3); break;
                 default: displayWidth = widthMm.toFixed(1); displayHeight = heightMm.toFixed(1); break;
             }
-            return `${canvasSize.width} x ${canvasSize.height}px  ·  ${displayWidth} x ${displayHeight}${scaleUnit}`;
+            return `${canvasSize.width} x ${canvasSize.height} px  ·  ${displayWidth} x ${displayHeight}${scaleUnit} `;
         }
         return null;
     }, [canvasSize, scaleFactor, scaleUnit]);
@@ -1704,6 +1941,135 @@ export function App() {
         const canvas = getCompositeCanvas(true, currentState.canvasSize, getter, currentState.backgroundObject);
         return canvas ? canvas.toDataURL('image/png') : null;
     }, [drawableObjects, currentState.canvasSize, currentState.backgroundObject]);
+
+    // -- Visual Prompting Handler --
+    const handleVisualPromptingEnhance = async () => {
+        if (!layeredCanvasRef.current || vp.regions.length === 0) {
+            alert("Define al menos una región para editar.");
+            return;
+        }
+
+        renderState.setIsGenerating(true);
+        // Clean previous results
+        renderState.setResultImage(null);
+
+        try {
+            // 1. Get Clean Background (Source of Truth)
+            const getterBg = () => []; // No items for base background
+            const baseCanvas = getCompositeCanvas(true, canvasSize, getterBg, backgroundObject);
+            const baseImage = baseCanvas ? baseCanvas.toDataURL('image/png') : '';
+
+            // 2. Get "Layers Only" (Sketches + Annotations)
+            const getterSketches = () => getDrawableObjects().filter(o => !o.isBackground);
+            const sketchCanvas = getCompositeCanvas(true, canvasSize, getterSketches, undefined, { transparent: true });
+            const annotationsDataUrl = await layeredCanvasRef.current.getDrawingDataUrl();
+
+            const layersCanvas = document.createElement('canvas');
+            layersCanvas.width = canvasSize.width;
+            layersCanvas.height = canvasSize.height;
+            const lCtx = layersCanvas.getContext('2d');
+            if (lCtx && sketchCanvas) {
+                lCtx.drawImage(sketchCanvas, 0, 0);
+                if (annotationsDataUrl) {
+                    const img = new Image();
+                    img.src = annotationsDataUrl;
+                    await img.decode();
+                    lCtx.drawImage(img, 0, 0);
+                }
+            }
+            const layersImage = layersCanvas.toDataURL('image/png');
+
+            // 3. Prepare Payload
+            const aspectRatio = canvasSize.width / canvasSize.height;
+            const ratioText = aspectRatio > 1 ? "landscape" : aspectRatio < 1 ? "portrait" : "square";
+            const dimensionInstruction = `\n\nCRITICAL DIMENSION RULES:
+- Target Aspect Ratio: ${aspectRatio.toFixed(2)} (${ratioText}).
+- CONTENT AREA: You MUST generate/edit the content to fill the ENTIRE frame from edge to edge without any internal white borders or padding.`;
+
+            const payload: VisualPromptingPayload = {
+                baseImage: baseImage,
+                layersImage: layersImage, // helper will draw regions on top of this
+                regions: vp.regions,
+                globalPrompt: vp.structuredPrompt + dimensionInstruction,
+                globalInstructions: vp.generalInstructions,
+                width: canvasSize.width,
+                height: canvasSize.height,
+                mode: 'edit',
+                globalReferenceImage: vp.referenceImage // Global style ref
+            };
+
+            const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+            const { contents } = await prepareVisualPromptingRequest(payload, apiKey, vp.isPromptManuallyEdited ? vp.structuredPrompt : undefined);
+
+            // Debug Inspector
+            const shouldProceed = await inspectAIRequest({
+                model: selectedModel,
+                parts: contents.parts,
+                config: {
+                    ...payload,
+                    baseImage: payload.baseImage ? "(image data)" : "none",
+                    layersImage: payload.layersImage ? "(image data)" : "none",
+                    globalReferenceImage: payload.globalReferenceImage ? "(image data)" : "none"
+                }
+            });
+            if (!shouldProceed) {
+                renderState.setIsGenerating(false);
+                return;
+            }
+
+            // 4. Call AI
+            const genAI = new GoogleGenAI({ apiKey });
+            // @ts-ignore
+            const response = await genAI.models.generateContent({ model: selectedModel, contents });
+
+            // Extract Image
+            let newImageBase64: string | null = null;
+            const candidates = response.candidates;
+            if (candidates && candidates.length > 0 && candidates[0].content && candidates[0].content.parts) {
+                for (const part of candidates[0].content.parts) {
+                    if (part.inlineData) {
+                        newImageBase64 = part.inlineData.data;
+                        break;
+                    }
+                }
+            }
+
+            if (newImageBase64) {
+                if (deductCredit) await deductCredit();
+                const aiResultUrl = `data:image/png;base64,${newImageBase64}`;
+
+                // Force full canvas replacement
+                const img = new Image();
+                img.onload = () => {
+                    const finalCanvas = document.createElement('canvas');
+                    finalCanvas.width = canvasSize.width;
+                    finalCanvas.height = canvasSize.height;
+                    const fCtx = finalCanvas.getContext('2d');
+                    if (fCtx) {
+                        // We scale the result to exactly match the canvas dimensions
+                        fCtx.drawImage(img, 0, 0, canvasSize.width, canvasSize.height);
+                        const finalImg = new Image();
+                        finalImg.onload = () => {
+                            dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: finalImg } });
+                            setTimeout(canvasView.onZoomExtents, 100);
+                        };
+                        finalImg.src = finalCanvas.toDataURL('image/png');
+                    }
+                };
+                img.src = aiResultUrl;
+            } else {
+                alert("La IA no generó una imagen.");
+            }
+
+        } catch (error) {
+            console.error("Error visual prompting:", error);
+            alert("Error al procesar cambios.");
+        } finally {
+            renderState.setIsGenerating(false);
+        }
+    };
+
+
 
     const itemToDelete = objects.find(item => item.id === ui.deletingItemId);
 
@@ -1752,15 +2118,40 @@ export function App() {
                 user={user}
                 projects={projects.projects}
                 isLoading={projects.projectsLoading}
-                onSave={(name) => projects.saveProject(name, () => ({ currentState, guides, toolSettings: { ...toolSettings }, quickAccess: quickAccess.quickAccessSettings }))}
+                onSave={(name) => projects.saveProject(name, () => ({
+                    currentState,
+                    guides: {
+                        activeGuide: guides.activeGuide, isOrthogonalVisible: guides.isOrthogonalVisible, rulerGuides: guides.rulerGuides,
+                        mirrorGuides: guides.mirrorGuides, perspectiveGuide: guides.perspectiveGuide, orthogonalGuide: guides.orthogonalGuide,
+                        gridGuide: guides.gridGuide, areGuidesLocked: guides.areGuidesLocked, isPerspectiveStrokeLockEnabled: guides.isPerspectiveStrokeLockEnabled,
+                        isSnapToGridEnabled: guides.isSnapToGridEnabled,
+                    },
+                    toolSettings: { ...toolSettings },
+                    quickAccess: quickAccess.quickAccessSettings,
+                    archRenderState: renderState.getFullState(),
+                    freeModeState: freeModeRef.current?.getFullState()
+                }))}
                 onLoad={projects.loadProject}
                 onDelete={projects.deleteProject}
-                onSaveLocally={(name) => projects.saveLocally(name, () => ({ currentState, guides, toolSettings: { ...toolSettings }, quickAccess: quickAccess.quickAccessSettings }))}
+                onSaveLocally={(name) => projects.saveLocally(name, () => ({
+                    currentState,
+                    guides: {
+                        activeGuide: guides.activeGuide, isOrthogonalVisible: guides.isOrthogonalVisible, rulerGuides: guides.rulerGuides,
+                        mirrorGuides: guides.mirrorGuides, perspectiveGuide: guides.perspectiveGuide, orthogonalGuide: guides.orthogonalGuide,
+                        gridGuide: guides.gridGuide, areGuidesLocked: guides.areGuidesLocked, isPerspectiveStrokeLockEnabled: guides.isPerspectiveStrokeLockEnabled,
+                        isSnapToGridEnabled: guides.isSnapToGridEnabled,
+                    },
+                    toolSettings: { ...toolSettings },
+                    quickAccess: quickAccess.quickAccessSettings,
+                    archRenderState: renderState.getFullState(),
+                    freeModeState: freeModeRef.current?.getFullState()
+                }))}
                 onLoadFromFile={projects.loadFromFile}
                 libraryItems={library.libraryItems}
                 onAddLibraryItemToScene={(item) => {
                     if (activeView === 'render') {
-                        archRenderRef.current?.setInputImage(item.dataUrl);
+                        // In Unified, just add to canvas
+                        addItem(item.type, item.dataUrl);
                         ui.setProjectGalleryOpen(false);
                     } else {
                         addItem(item.type, item.dataUrl);
@@ -1779,7 +2170,7 @@ export function App() {
             {/* Main Header */}
             {ui.isHeaderVisible && (
                 <header className="flex-shrink-0 relative z-50">
-                    <div className="flex items-center justify-between p-2 bg-theme-bg-primary border-b border-theme-bg-tertiary">
+                    <div className="flex items-center justify-between h-16 px-4 bg-theme-bg-primary border-b border-theme-bg-tertiary">
                         <div className="flex items-center gap-4">
                             <div className="flex items-center gap-2">
                                 {/* Mobile Menu Button */}
@@ -1790,36 +2181,7 @@ export function App() {
                             </div>
 
                             {/* Recovery Banner */}
-                            {showRecoveryPrompt && (
-                                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-[100] bg-theme-accent-primary text-white px-4 py-2 rounded-full shadow-2xl flex items-center gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
-                                    <div className="flex items-center gap-2">
-                                        <HistoryIcon className="w-5 h-5" />
-                                        <span className="text-xs font-bold whitespace-nowrap">¿Recuperar sesión anterior?</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => {
-                                                const file = new File([JSON.stringify(recoveredData)], 'recovery.sketcher', { type: 'application/json' });
-                                                projects.loadFromFile(file);
-                                                setShowRecoveryPrompt(false);
-                                                localStorage.removeItem('sketcher_v3_autosave');
-                                            }}
-                                            className="bg-white text-theme-accent-primary px-3 py-1 rounded-full text-[10px] font-black hover:bg-theme-bg-primary transition-colors"
-                                        >
-                                            SÍ, RECUPERAR
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setShowRecoveryPrompt(false);
-                                                localStorage.removeItem('sketcher_v3_autosave');
-                                            }}
-                                            className="bg-black/20 hover:bg-black/40 p-1 rounded-full transition-colors"
-                                        >
-                                            <XIcon className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
+
 
                             {/* DESKTOP NAVIGATION (Hidden on Mobile) */}
                             <div className="hidden md:flex items-center gap-2">
@@ -1863,15 +2225,6 @@ export function App() {
                                     }`}
                             >
                                 Sketch
-                            </button>
-                            <button
-                                onClick={() => { setActiveView('render'); ui.setIsRightSidebarVisible(true); }}
-                                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeView === 'render'
-                                    ? 'bg-theme-bg-primary text-theme-text-primary shadow-sm'
-                                    : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'
-                                    }`}
-                            >
-                                Render
                             </button>
                             <button
                                 onClick={() => { setActiveView('free'); ui.setIsRightSidebarVisible(false); }}
@@ -1960,33 +2313,135 @@ export function App() {
             )}
 
 
-            {/* Main Content Area */}
-            <div className="flex flex-grow min-h-0 relative">
 
-                {activeView === 'sketch' && (
-                    <>
-                        {ui.isLeftSidebarVisible && (
-                            <Toolbar
-                                tool={tool} setTool={setTool} {...toolSettings} brushPresets={toolSettings.brushPresets} onSavePreset={toolSettings.onSavePreset}
-                                onUpdatePreset={toolSettings.onUpdatePreset} onLoadPreset={toolSettings.onLoadPreset} onDeletePreset={toolSettings.onDeletePreset}
-                                activeGuide={guides.activeGuide} setActiveGuide={guides.onSetActiveGuide} isOrthogonalVisible={guides.isOrthogonalVisible}
-                                onToggleOrthogonal={guides.toggleOrthogonal} onExportClick={() => ui.setExportModalOpen(true)}
-                                onImportBackgroundClick={() => { setPendingBgFile(null); setIsBgImportModalOpen(true); }}
-                                objects={objects} libraryItems={library.libraryItems} backgroundDataUrl={ai.backgroundDataUrl} debugInfo={ai.debugInfo}
-                                strokeMode={strokeMode} setStrokeMode={setStrokeMode} strokeModifier={strokeModifier} setStrokeModifier={setStrokeModifier}
-                                isSolidBox={isSolidBox} setIsSolidBox={setIsSolidBox}
-                            />
-                        )}
-                        <button
-                            onClick={() => ui.setIsLeftSidebarVisible(!ui.isLeftSidebarVisible)}
-                            className="absolute top-1/2 -translate-y-1/2 bg-theme-bg-secondary p-2 rounded-full shadow-xl z-40 border border-theme-bg-tertiary hover:bg-theme-bg-tertiary transition-all"
-                            style={{ left: ui.isLeftSidebarVisible ? '4.25rem' : '0.25rem' }}
-                            title={ui.isLeftSidebarVisible ? "Ocultar Herramientas" : "Mostrar Herramientas"}
-                        >
-                            {ui.isLeftSidebarVisible ? <ChevronLeftIcon className="w-5 h-5" /> : <ChevronRightIcon className="w-5 h-5" />}
-                        </button>
-                    </>
-                )}
+            {/* Left Sidebar: Unified (Visual Prompting & Tools) */}
+            <aside
+                className={`fixed left-0 bottom-0 z-40  transition-transform duration-300 w-80 shadow-xl ${(ui.isLeftSidebarVisible && activeView !== 'free') ? 'translate-x-0' : '-translate-x-full'} ${ui.isHeaderVisible ? 'top-16' : 'top-0'}`}
+            >
+                <UnifiedLeftSidebar
+                    isOpen={ui.isLeftSidebarVisible}
+                    activeTab={leftSidebarTab}
+                    onTabChange={(tab) => {
+                        setLeftSidebarTab(tab);
+                        // Reset Visual Prompting tools logic
+                        if (tab !== 'visual-prompting') {
+                            vp.setActiveTool('pan'); // Deactivate markup
+                        } else {
+                            vp.setActiveTool('pan'); // Reset to safe state when entering
+                        }
+                    }}
+                    visualPromptingNode={
+                        <VisualPromptingControls
+                            regions={vp.regions}
+                            onDeleteRegion={vp.deleteRegion}
+                            onUpdateRegionPrompt={vp.updateRegionPrompt}
+                            onUpdateRegionImage={vp.updateRegionImage}
+                            generalInstructions={vp.generalInstructions}
+                            onGeneralInstructionsChange={vp.setGeneralInstructions}
+                            referenceImage={vp.referenceImage}
+                            onReferenceImageChange={vp.setReferenceImage}
+                            brushSize={vp.brushSize}
+                            onBrushSizeChange={vp.setBrushSize}
+                            brushColor={vp.brushColor}
+                            onBrushColorChange={vp.setBrushColor}
+                            activeTool={vp.activeTool}
+                            onToolChange={vp.setActiveTool}
+                            onProcessChanges={handleVisualPromptingEnhance}
+                            onClearAll={vp.clearAll}
+                            isGenerating={renderState.isGenerating}
+                            structuredPrompt={vp.structuredPrompt}
+                            onStructuredPromptChange={vp.setStructuredPrompt}
+                            onResetStructuredPrompt={() => vp.setIsPromptManuallyEdited(false)}
+                            isPromptModified={vp.isPromptManuallyEdited}
+                        />
+                    }
+                    drawingToolsNode={
+                        <DrawingToolsPanel
+                            tool={tool} setTool={setTool}
+
+                            // Stroke
+                            strokeMode={strokeMode}
+                            setStrokeMode={setStrokeMode}
+                            strokeModifier={strokeModifier}
+                            setStrokeModifier={setStrokeModifier}
+
+                            brushColor={toolSettings.brushSettings.color}
+                            setBrushColor={(c) => toolSettings.setBrushSettings(s => ({ ...s, color: c }))}
+                            brushSize={toolSettings.brushSettings.size}
+                            setBrushSize={(s) => toolSettings.setBrushSettings(state => ({ ...state, size: s }))}
+                            brushOpacity={toolSettings.brushSettings.opacity}
+                            setBrushOpacity={(o) => toolSettings.setBrushSettings(state => ({ ...state, opacity: o }))}
+                            strokeSmoothing={strokeSmoothing}
+                            setStrokeSmoothing={setStrokeSmoothing}
+
+                            // Specific Tool Settings
+                            brushSettings={toolSettings.brushSettings}
+                            setBrushSettings={toolSettings.setBrushSettings}
+                            simpleMarkerSettings={toolSettings.simpleMarkerSettings}
+                            setSimpleMarkerSettings={toolSettings.setSimpleMarkerSettings}
+                            advancedMarkerSettings={toolSettings.advancedMarkerSettings}
+                            setAdvancedMarkerSettings={toolSettings.setAdvancedMarkerSettings}
+                            naturalMarkerSettings={toolSettings.naturalMarkerSettings}
+                            setNaturalMarkerSettings={toolSettings.setNaturalMarkerSettings}
+                            airbrushSettings={toolSettings.airbrushSettings}
+                            setAirbrushSettings={toolSettings.setAirbrushSettings}
+                            watercolorSettings={toolSettings.watercolorSettings}
+                            setWatercolorSettings={toolSettings.setWatercolorSettings}
+
+                            // Guides
+                            isGridVisible={guides.isSnapToGridEnabled}
+                            setGridVisible={guides.toggleSnapToGrid}
+                            gridSize={guides.gridGuide.spacing}
+                            setGridSize={guides.onSetGridSpacing}
+
+                            isPerspectiveEnabled={guides.activeGuide === 'perspective'}
+                            setPerspectiveEnabled={(enabled) => guides.onSetActiveGuide(enabled ? 'perspective' : 'none')}
+
+                            isSymmetryEnabled={guides.activeGuide === 'mirror'}
+                            setSymmetryEnabled={(enabled) => guides.onSetActiveGuide(enabled ? 'mirror' : 'none')}
+
+                            isOrthogonalEnabled={guides.isOrthogonalVisible}
+                            setOrthogonalEnabled={guides.toggleOrthogonal}
+
+                            isRulerEnabled={guides.activeGuide === 'ruler'}
+                            setRulerEnabled={(enabled) => guides.onSetActiveGuide(enabled ? 'ruler' : 'none')}
+
+                            // Canvas Controls
+                            onOpenCanvasSizeModal={() => ui.setCanvasSizeModalOpen(true)}
+                            onUpdateBackground={handleUpdateBackground}
+                            backgroundColor={objects.find(o => o.type === 'object' && o.isBackground)?.color}
+
+                            // File
+                            onImportBackground={() => setIsBgImportModalOpen(true)}
+                            onExportImage={() => ui.setExportModalOpen(true)}
+                            onCropCanvas={() => setIsCropping(!isCropping)}
+
+                            onUndo={undo}
+                            onRedo={redo}
+                            onClearCanvas={() => ui.setShowClearConfirm(true)}
+                        />
+                    }
+                />
+            </aside>
+
+            {/* Toggle Button for Left Sidebar */}
+            {activeView !== 'free' && (
+                <button
+                    onClick={() => ui.setIsLeftSidebarVisible(!ui.isLeftSidebarVisible)}
+                    className={`fixed top-1/2 -translate-y-1/2 z-[60] w-6 h-24 rounded-r-xl bg-theme-bg-secondary border-y border-r border-theme-bg-tertiary shadow-md transition-all duration-300 hover:bg-theme-bg-hover flex items-center justify-center ${ui.isLeftSidebarVisible ? 'left-80' : 'left-0'}`}
+                    title={ui.isLeftSidebarVisible ? "Cerrar Panel Izquierdo" : "Abrir Panel Izquierdo"}
+                >
+                    {ui.isLeftSidebarVisible ? <ChevronLeftIcon className="w-4 h-4 text-theme-text-secondary" /> : <ChevronRightIcon className="w-4 h-4 text-theme-text-secondary" />}
+                </button>
+            )}
+
+
+            {/* Main Content Area */}
+            <div className="flex flex-grow min-h-0 relative transition-all duration-300"> {/* Removed ml-64 to prevent layout squash bugs for now */}
+
+
+
+                {/* TopBar removed per user request for unified toolbar */}
 
                 <BackgroundImportModal
                     isOpen={isBgImportModalOpen}
@@ -2009,22 +2464,14 @@ export function App() {
                     debugInfo={ai.debugInfo}
                 />
 
-                {activeView === 'sketch' && (
-                    <button
-                        onClick={() => setIsAIPanelOpen(true)}
-                        className="absolute bottom-24 left-4 md:bottom-6 md:left-6 p-4 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-2xl hover:scale-110 transition-transform z-40 flex items-center justify-center border-2 border-white/20"
-                        title="Mejorar con IA"
-                        style={{ left: ui.isLeftSidebarVisible ? '6.5rem' : '' }}
-                    >
-                        <SparklesIcon className="w-8 h-8" />
-                    </button>
-                )}
+
                 <main ref={mainAreaRef} className="flex-grow relative" onDrop={(e) => { e.preventDefault(); try { const data = JSON.parse(e.dataTransfer.getData('application/json')); if (data.type === 'library-item') { onDropOnCanvas(data, activeItemId, setSelectedItemIds); } } catch (error) { /* Ignore */ } }} onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }} >
                     {/* Fullscreen Toggle - Always Visible */}
 
 
                     <div className={activeView === 'sketch' ? 'contents' : 'hidden'}>
                         <CanvasContainer
+                            handleRef={canvasRef}
                             items={drawableObjects} activeItemId={activeItemId} {...toolSettings} tool={tool} setTool={setTool}
                             onDrawCommit={handleDrawCommit} onUpdateItem={updateItem} viewTransform={canvasView.viewTransform}
                             setViewTransform={canvasView.setViewTransform} onSelectItem={handleSelectItem} {...guides} isCropping={isCropping}
@@ -2038,11 +2485,33 @@ export function App() {
                             strokeSmoothing={strokeSmoothing}
                             setDebugPointers={setDebugPointers}
                             isPalmRejectionEnabled={isPalmRejectionEnabled}
-                            scaleFactor={scaleFactor}
-                            isSolidBox={isSolidBox}
                             scaleUnit={scaleUnit}
                         />
-                        <div className="absolute top-36 left-4 md:top-2 md:left-2 flex items-center gap-2 z-10">
+
+                        {/* Visual Prompting Overlay - Only show if Annotations Layer is visible */}
+                        {isAnnotationsVisible && (
+                            <div className={`absolute inset-0 z-20 ${leftSidebarTab === 'visual-prompting' ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+                                <div className={`w-full h-full ${leftSidebarTab === 'visual-prompting' ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+                                    <LayeredCanvas
+                                        ref={layeredCanvasRef}
+                                        baseImage={null} // Transparent to see underlying sketch
+                                        width={canvasSize.width}
+                                        height={canvasSize.height}
+                                        activeTool={vp.activeTool}
+                                        regions={vp.regions}
+                                        brushSize={vp.brushSize}
+                                        brushColor={vp.brushColor}
+                                        zoom={canvasView.viewTransform.zoom}
+                                        pan={canvasView.viewTransform.pan}
+                                        onPanChange={(newPan) => canvasView.setViewTransform(prev => ({ ...prev, pan: newPan }))}
+                                        onZoomChange={(newZoom) => canvasView.setViewTransform(prev => ({ ...prev, zoom: newZoom }))}
+                                        onRegionCreated={(max) => vp.addRegion(max)}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="absolute top-4 left-4 flex items-center gap-2 z-30 transition-all duration-300">
                             {dimensionDisplay && <button ref={scaleButtonRef} onClick={() => setIsScalePopoverOpen(p => !p)} className="bg-theme-bg-primary/80 backdrop-blur-sm text-theme-text-secondary text-xs rounded-md px-2 py-1 pointer-events-auto hover:bg-theme-bg-secondary transition-colors" title="Ajustar escala del lienzo">{dimensionDisplay}</button>}
                             <button
                                 onClick={() => setIsPalmRejectionEnabled(prev => !prev)}
@@ -2055,6 +2524,37 @@ export function App() {
                         </div>
 
                         <ScalePopover isOpen={isScalePopoverOpen} onClose={() => setIsScalePopoverOpen(false)} anchorEl={scaleButtonRef.current} scaleFactor={scaleFactor} scaleUnit={scaleUnit} onSetScaleFactor={handleSetScaleFactor} onSetScaleUnit={handleSetScaleUnit} />
+                        {/* === FLOATING QUICK ACCESS BAR === */}
+                        <FloatingQuickAccessBar
+                            quickAccessSettings={quickAccess.quickAccessSettings}
+                            activeColor={toolSettings.brushSettings.color}
+                            activeSize={toolSettings.brushSettings.size}
+                            tool={tool}
+                            strokeMode={strokeMode}
+                            onUpdateColor={quickAccess.updateColor}
+                            onAddColor={quickAccess.addColor}
+                            onRemoveColor={quickAccess.removeColor}
+                            onUpdateSize={quickAccess.updateSize}
+                            onSelectColor={handleSelectColor}
+                            onSelectFillColor={handleSelectFillColor}
+                            activeFillColor={activeFillColor}
+                            onSelectSize={handleSelectSize}
+                            onSelectTool={(qaTool) => {
+                                if (qaTool.type === 'tool') setTool(qaTool.tool);
+                                else if (qaTool.type === 'fx-preset') { setTool('fx-brush'); toolSettings.onLoadPreset(qaTool.id); }
+                                else if (qaTool.type === 'mode-preset') { setTool(qaTool.tool); setStrokeMode(qaTool.mode); }
+                            }}
+                            onOpenToolSelector={(index) => { setIsToolSelectorOpen(true); setEditingToolSlotIndex(index); }}
+                            onAddToolSlot={quickAccess.addToolSlot}
+                            onToggleHeader={() => ui.setIsHeaderVisible(!ui.isHeaderVisible)}
+                            isHeaderVisible={ui.isHeaderVisible}
+                            onOpenToolOptions={() => {
+                                ui.setIsLeftSidebarVisible(true);
+                                setLeftSidebarTab('tools');
+                            }}
+                        />
+
+                        {/* === BOTTOM CANVAS TOOLBAR === */}
                         <CanvasToolbar
                             tool={tool} setTool={setTool} onZoomExtents={canvasView.onZoomExtents} onZoomIn={canvasView.onZoomIn} onZoomOut={canvasView.onZoomOut}
                             onUndo={undo} onRedo={redo} onClearAll={() => ui.setShowClearConfirm(true)} canUndo={canUndo} canRedo={canRedo}
@@ -2076,71 +2576,142 @@ export function App() {
                             strokeSmoothing={strokeSmoothing} setStrokeSmoothing={setStrokeSmoothing}
                             strokeMode={strokeMode} isSolidBox={isSolidBox} setIsSolidBox={setIsSolidBox}
                         />
-                        <QuickAccessBar
-                            settings={quickAccess.quickAccessSettings} onUpdateColor={quickAccess.updateColor} onAddColor={quickAccess.addColor}
-                            onRemoveColor={quickAccess.removeColor} onUpdateSize={quickAccess.updateSize} onUpdateTool={quickAccess.updateTool}
-                            onAddToolSlot={quickAccess.addToolSlot}
-                            onSelectColor={handleSelectColor} onSelectSize={handleSelectSize} onSelectTool={(qaTool) => { if (qaTool.type === 'tool') setTool(qaTool.tool); else if (qaTool.type === 'fx-preset') { setTool('fx-brush'); toolSettings.onLoadPreset(qaTool.id); } else if (qaTool.type === 'mode-preset') { setTool(qaTool.tool); setStrokeMode(qaTool.mode); } }}
-                            onOpenToolSelector={(index) => { setIsToolSelectorOpen(true); setEditingToolSlotIndex(index); }}
-                            activeTool={tool} activeColor={activeColor} activeSize={activeSize} strokeMode={strokeMode}
-                            onToggleHeader={() => ui.setIsHeaderVisible(!ui.isHeaderVisible)}
-                            isHeaderVisible={ui.isHeaderVisible}
-                        />
                     </div>
 
-                    <div className={activeView === 'render' ? 'flex flex-col h-full w-full relative' : 'hidden'}>
-                        <ArchitecturalRenderView
-                            ref={archRenderRef}
-                            onImportFromSketch={getSketchSnapshot}
-                            isSidebarOpen={ui.isRightSidebarVisible}
-                            selectedModel={selectedModel}
-                            onOpenLibrary={() => {
-                                setGalleryInitialTab('library');
-                                ui.setProjectGalleryOpen(true);
-                            }}
-                            onUndo={() => dispatch({ type: 'UNDO' })}
-                            onRedo={() => dispatch({ type: 'REDO' })}
-                            canUndo={canUndo}
-                            canRedo={canRedo}
-                            onRenderComplete={setLastRenderedImage}
-                            onInspectRequest={inspectAIRequest}
-                            credits={credits}
-                            deductCredit={deductCredit}
-                            onSaveToLibrary={handleSaveItemToLibrary}
-                        />
-                    </div>
 
-                    <div className={activeView === 'free' ? 'flex flex-col h-full w-full relative' : 'hidden'}>
+
+                    <div className={activeView === 'free' ? 'flex flex-col h-full w-full relative bg-theme-bg-tertiary' : 'hidden'}>
                         <FreeModeView
                             ref={freeModeRef}
                             user={user}
-                            onImportFromSketch={getSketchSnapshot}
-                            lastRenderedImage={lastRenderedImage}
+                            onImportFromSketch={() => { if (canvasRef.current) return canvasRef.current.getCanvas()?.toDataURL() || null; return null; }}
+                            lastRenderedImage={renderState.resultImage}
                             onSaveToLibrary={handleSaveItemToLibrary}
                             deductCredit={deductCredit}
                             onInspectRequest={role === 'admin' ? inspectAIRequest : undefined}
                             libraryItems={library.libraryItems}
                             selectedModel={selectedModel}
-                            onSendToSketch={handleSendFreeToSketch}
-                            onSendToRender={handleSendFreeToRender}
+                            onSendToSketch={(url) => handleImportRenderToSketch(url)}
+                            onSendToRender={(url) => renderState.setResultImage(url)}
                         />
                     </div>
                 </main>
-                {activeView === 'sketch' && ui.isRightSidebarVisible && (
-                    <aside ref={ui.rightSidebarRef} className={`flex-shrink-0 w-80 border-l border-theme-bg-tertiary flex flex-col ${isAIPanelOpen ? 'z-50' : ''}`}>
-                        <div style={{ height: ui.rightSidebarTopHeight }} className="flex-shrink-0">
+                {/* Result Overlay - High Z-Index to cover everything */}
+                {activeView === 'sketch' && renderState.resultImage && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                        <div className="bg-theme-bg-secondary rounded-xl shadow-2xl border border-theme-bg-tertiary flex flex-col w-full max-w-4xl max-h-[90vh] overflow-hidden">
+                            {/* Header */}
+                            <div className="flex justify-between items-center p-4 border-b border-theme-bg-tertiary bg-theme-bg-primary">
+                                <h3 className="text-theme-text-primary font-bold text-lg flex items-center gap-2">
+                                    <SparklesIcon className="w-5 h-5 text-theme-accent-primary" />
+                                    Resultado Render
+                                </h3>
+                                <button
+                                    onClick={() => renderState.setResultImage(null)}
+                                    className="p-1.5 hover:bg-theme-bg-tertiary rounded-full text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                                >
+                                    <XIcon className="w-6 h-6" />
+                                </button>
+                            </div>
+
+                            {/* Image Area */}
+                            <div className="flex-grow overflow-hidden bg-[url('/checker.png')] relative group">
+                                <img
+                                    src={renderState.resultImage}
+                                    alt="Render Result"
+                                    className="w-full h-full object-contain"
+                                />
+                            </div>
+
+                            {/* Footer Actions */}
+                            <div className="p-4 border-t border-theme-bg-tertiary bg-theme-bg-primary flex flex-wrap justify-end gap-3">
+                                <button
+                                    onClick={() => {
+                                        if (renderState.resultImage) {
+                                            const link = document.createElement('a');
+                                            link.download = `Render_${Date.now()}.png`;
+                                            link.href = renderState.resultImage;
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            document.body.removeChild(link);
+                                        }
+                                    }}
+                                    className="px-4 py-2 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-md font-medium transition flex items-center gap-2"
+                                >
+                                    <DownloadIcon className="w-4 h-4" />
+                                    Descargar
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        if (renderState.resultImage) {
+                                            // Pass DataURL directly
+                                            handleSaveItemToLibrary(renderState.resultImage, `Render ${new Date().toLocaleTimeString()}`);
+                                        }
+                                    }}
+                                    className="px-4 py-2 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-md font-medium transition flex items-center gap-2"
+                                >
+                                    <BookmarkIcon className="w-4 h-4" />
+                                    Guardar en Librería
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        if (renderState.resultImage) {
+                                            const img = new Image();
+                                            img.onload = () => {
+                                                const finalCanvas = document.createElement('canvas');
+                                                finalCanvas.width = canvasSize.width;
+                                                finalCanvas.height = canvasSize.height;
+                                                const fCtx = finalCanvas.getContext('2d');
+                                                if (fCtx) {
+                                                    // Draw result scaled to canvas size
+                                                    fCtx.drawImage(img, 0, 0, canvasSize.width, canvasSize.height);
+                                                    const finalImg = new Image();
+                                                    finalImg.onload = () => {
+                                                        dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: finalImg } });
+                                                        renderState.setResultImage(null);
+                                                        setTimeout(canvasView.onZoomExtents, 100);
+                                                    };
+                                                    finalImg.src = finalCanvas.toDataURL('image/png');
+                                                }
+                                            };
+                                            img.src = renderState.resultImage;
+                                        }
+                                    }}
+                                    className="px-6 py-2 bg-theme-accent-primary hover:bg-theme-accent-hover text-white rounded-md font-bold shadow-lg transition flex items-center gap-2"
+                                >
+                                    <CheckIcon className="w-4 h-4" />
+                                    Añadir al Lienzo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+
+                {activeView !== 'free' && (
+                    <UnifiedRightSidebar
+                        isOpen={ui.isRightSidebarVisible}
+                        onClose={() => ui.setIsRightSidebarVisible(false)}
+                        activeTab={sidebarTab}
+                        onTabChange={setSidebarTab}
+                        rightSidebarTopHeight={ui.rightSidebarTopHeight || 300} // Default height fallback
+                        onResizeStart={ui.handlePointerDownResize}
+                        sidebarRef={ui.rightSidebarRef}
+                        outlinerNode={
                             <Outliner
-                                items={objects} activeItemId={activeItemId} onAddItem={addItem} onCopyItem={copyItem} onDeleteItem={deleteItem} onSelectItem={handleSelectItem}
+                                items={visualList} activeItemId={activeItemId} onAddItem={addItem} onCopyItem={copyItem} onDeleteItem={deleteItem} onSelectItem={handleSelectItem}
                                 onUpdateItem={updateItem} onMoveItem={handleMoveItem} onMergeItems={handleMergeItems} onUpdateBackground={handleUpdateBackground}
                                 onRemoveBackgroundImage={handleRemoveBackgroundImage} onExportItem={() => { if (activeItem) ui.setSingleExportModalOpen(true); }}
                                 onOpenCanvasSizeModal={() => ui.setCanvasSizeModalOpen(true)} activeItemState={activeItemState}
                                 onMoveItemUpDown={handleMoveItemUpDown} onMergeItemDown={handleMergeItemDown} onMergeItemUp={handleMergeItemUp}
                                 onAddObjectAbove={handleAddObjectAbove} onAddObjectBelow={handleAddObjectBelow}
-                                lastRenderedImage={lastRenderedImage} onImportRender={handleImportRenderToSketch}
+                                lastRenderedImage={renderState.resultImage} onImportRender={handleImportRenderToSketch}
+                                onAddAIObject={() => setIsAIPanelOpen(true)}
                             />
-                        </div>
-                        <div onPointerDown={ui.handlePointerDownResize} className="flex-shrink-0 h-1.5 bg-theme-bg-secondary hover:bg-theme-accent-primary transition-colors cursor-ns-resize" />
-                        <div className="flex-grow min-h-0">
+                        }
+                        libraryNode={
                             <Library
                                 user={user}
                                 items={library.libraryItems}
@@ -2151,15 +2722,29 @@ export function App() {
                                 onAddItemToScene={(id) => onDropOnCanvas({ type: 'library-item', id }, activeItemId, setSelectedItemIds)}
                                 onMoveItems={library.onMoveItems}
                                 onPublish={library.publishToPublicGallery}
-                                allowUpload={true} // Enable upload in sidebar as requested
-                                allowPublish={false} // Disable publish in sidebar items
+                                allowUpload={true}
+                                allowPublish={false}
                             />
-                        </div>
-                    </aside>
+                        }
+                        renderNode={
+                            <ArchitecturalControls
+                                {...renderState}
+                                onRender={handleTriggerRender}
+                                isGenerating={renderState.isGenerating}
+                            />
+                        }
+                        overrideContent={undefined}
+                    />
                 )}
+
+                {/* Toggle Button for Right Sidebar */}
                 {activeView !== 'free' && (
-                    <button onClick={() => ui.setIsRightSidebarVisible(!ui.isRightSidebarVisible)} className="absolute top-1/2 -translate-y-1/2 bg-theme-bg-secondary p-2 rounded-full shadow-xl z-40 border border-theme-bg-tertiary hover:bg-theme-bg-tertiary transition-all" style={{ right: ui.isRightSidebarVisible ? '20.25rem' : '0.25rem' }} title={ui.isRightSidebarVisible ? 'Ocultar paneles' : 'Mostrar paneles'}>
-                        {ui.isRightSidebarVisible ? <ChevronRightIcon className="w-5 h-5" /> : <ChevronLeftIcon className="w-5 h-5" />}
+                    <button
+                        onClick={() => ui.setIsRightSidebarVisible(!ui.isRightSidebarVisible)}
+                        className={`fixed top-1/2 -translate-y-1/2 z-[60] w-6 h-24 rounded-l-xl bg-theme-bg-secondary border-y border-l border-theme-bg-tertiary shadow-md transition-all duration-300 hover:bg-theme-bg-hover flex items-center justify-center ${ui.isRightSidebarVisible ? 'right-80' : 'right-0'}`}
+                        title={ui.isRightSidebarVisible ? "Cerrar Panel Derecho" : "Abrir Panel Derecho"}
+                    >
+                        {ui.isRightSidebarVisible ? <ChevronRightIcon className="w-4 h-4 text-theme-text-secondary" /> : <ChevronLeftIcon className="w-4 h-4 text-theme-text-secondary" />}
                     </button>
                 )}
             </div >
@@ -2179,6 +2764,41 @@ export function App() {
                 libraryItems={library.libraryItems}
             />
             <PublicGallery isOpen={ui.isPublicGalleryOpen} onClose={() => ui.setIsPublicGalleryOpen(false)} isAdmin={role === 'admin'} currentUser={user} />
+            {/* Recovery Banner - Moved to root level for Z-Index safety */}
+            {showRecoveryPrompt && (
+                <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[200] bg-theme-accent-primary text-white px-5 py-3 rounded-full shadow-2xl flex items-center gap-4 animate-in fade-in slide-in-from-top-4 duration-500 border-2 border-white/20">
+                    <div className="flex items-center gap-3">
+                        <HistoryIcon className="w-6 h-6" />
+                        <div className="flex flex-col">
+                            <span className="text-sm font-bold whitespace-nowrap leading-tight">Sesión encontrada</span>
+                            <span className="text-[10px] opacity-90 leading-tight">¿Deseas restaurar tu trabajo anterior?</span>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 pl-2 border-l border-white/20">
+                        <button
+                            onClick={() => {
+                                const file = new File([JSON.stringify(recoveredData)], 'recovery.sketcher', { type: 'application/json' });
+                                projects.loadFromFile(file);
+                                setShowRecoveryPrompt(false);
+                                localStorage.removeItem('sketcher_v3_autosave');
+                            }}
+                            className="bg-white text-theme-accent-primary px-3 py-1.5 rounded-full text-xs font-black hover:bg-theme-bg-primary transition-colors shadow-sm"
+                        >
+                            RESTAURAR
+                        </button>
+                        <button
+                            onClick={() => {
+                                setShowRecoveryPrompt(false);
+                                localStorage.removeItem('sketcher_v3_autosave');
+                            }}
+                            className="bg-black/20 hover:bg-black/40 p-1.5 rounded-full transition-colors text-white"
+                            title="Descartar"
+                        >
+                            <XIcon className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+            )}
         </div >
     );
 }
@@ -2226,9 +2846,9 @@ const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({
     }, [isOpen, initialTab]);
 
     const handleHeaderSaveLocalClick = () => { setIsSavingLocal(true); setTimeout(() => { localSaveInputRef.current?.focus(); localSaveInputRef.current?.select(); }, 0); };
-    const handleConfirmSaveLocal = async () => { if (localFileName.trim()) { try { await onSaveLocally(localFileName.trim()); setIsSavingLocal(false); } catch (error) { console.error("Failed to save project locally:", error); alert(`Error al guardar el proyecto localmente: ${error instanceof Error ? error.message : String(error)}`); } } };
+    const handleConfirmSaveLocal = async () => { if (localFileName.trim()) { try { await onSaveLocally(localFileName.trim()); setIsSavingLocal(false); } catch (error) { console.error("Failed to save project locally:", error); alert(`Error al guardar el proyecto localmente: ${error instanceof Error ? error.message : String(error)} `); } } };
     const handleCancelSaveLocal = () => setIsSavingLocal(false);
-    const handleSave = async () => { if (!newProjectName.trim()) { alert("Please enter a project name."); return; } setIsSaving(true); try { await onSave(newProjectName.trim()); setNewProjectName(''); } catch (error) { console.error("Failed to save project:", error); alert(`Error saving project: ${error instanceof Error ? error.message : String(error)}`); } finally { setIsSaving(false); } };
+    const handleSave = async () => { if (!newProjectName.trim()) { alert("Please enter a project name."); return; } setIsSaving(true); try { await onSave(newProjectName.trim()); setNewProjectName(''); } catch (error) { console.error("Failed to save project:", error); alert(`Error saving project: ${error instanceof Error ? error.message : String(error)} `); } finally { setIsSaving(false); } };
     const handleDeleteConfirm = async () => { if (deletingProject) { await onDelete(deletingProject); setDeletingProject(null); } };
 
     const handleFileLoadClick = () => fileInputRef.current?.click();

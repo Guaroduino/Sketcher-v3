@@ -33,6 +33,7 @@ export interface ArchitecturalRenderOptions {
     creativeFreedom: number;
     additionalPrompt?: string;
     hasStyleReference?: boolean;
+    canvasAspectRatio?: number; // Width / Height
 }
 
 const getRoleDefinition = (style: RenderStyleMode) => {
@@ -215,13 +216,23 @@ export const buildArchitecturalPrompt = (options: ArchitecturalRenderOptions): s
     // 1. Role
     promptParts.push(getRoleDefinition(options.renderStyle));
 
-    // 2. Input Analysis (Universal logic applied style-aware)
+    // 2. Aspect Ratio and Full-Frame Instruction (HIGH PRIORITY)
+    if (options.canvasAspectRatio) {
+        const ratioText = options.canvasAspectRatio > 1 ? "landscape" : options.canvasAspectRatio < 1 ? "portrait" : "square";
+        promptParts.push(`CRITICAL DIMENSION RULES:
+- Target Aspect Ratio: ${options.canvasAspectRatio.toFixed(2)} (${ratioText}).
+- CONTENT AREA: You MUST generate the architectural scene to fill the ENTIRE ${options.canvasAspectRatio.toFixed(2)} frame from edge to edge.
+- NO BORDERS: Do not include internal white borders, letterboxing, padding, or frames.
+- EDGE-TO-EDGE: The building and landscape must touch or extend beyond all boundaries of the image.`);
+    }
+
+    // 3. Input Analysis (Universal logic applied style-aware)
     promptParts.push(getUniversalInputAnalysis(options.renderStyle));
 
-    // 3. Render Style (Technique) - PRIMARY INSTRUCTION
+    // 4. Render Style (Technique) - PRIMARY INSTRUCTION
     promptParts.push(getRenderStyleInstruction(options.renderStyle));
 
-    // 3. Scene Content (Subject matter)
+    // 5. Scene Content (Subject matter)
     if (options.sceneType === 'exterior') promptParts.push(getExteriorPrompts(options));
     else if (options.sceneType === 'interior') promptParts.push(getInteriorPrompts(options));
     else if (options.sceneType === 'studio') promptParts.push(getStudioPrompts(options));
@@ -229,29 +240,29 @@ export const buildArchitecturalPrompt = (options: ArchitecturalRenderOptions): s
     else if (options.sceneType === 'object_interior') promptParts.push(getObjectPrompts(options, 'interior'));
     else if (options.sceneType === 'object_exterior') promptParts.push(getObjectPrompts(options, 'exterior'));
 
-    // 4. Architectural/Subject Style (Content description)
-    // This is distinct from Render Style. E.g "Modern" house painted in "Watercolor"
+    // 6. Architectural/Subject Style (Content description)
     if (options.archStyle && options.archStyle !== 'none') {
         promptParts.push(`SUBJECT STYLE: ${options.archStyle.replace(/_/g, ' ').toUpperCase()}. Apply the physical characteristics of this design style to the subject.`);
     }
 
-    // 5. Additional User Prompt
+    // 7. Additional User Prompt
     if (options.additionalPrompt?.trim()) {
         promptParts.push("ADDITIONAL USER DETAILS:\n" + options.additionalPrompt);
     }
 
-    // 6. Style Reference Guide
+    // 8. Style Reference Guide
     if (options.hasStyleReference) {
         promptParts.push("REFERENCE IMAGE: A style reference image is attached. Mimic the color palette, lighting mood, and texture execution of this reference exactly.");
     }
 
-    // 7. Negative Prompt (Dynamic based on Render Style)
-    // 7. Negative Prompt (Dynamic based on Render Style)
-    // Note: The specific negative prompt for photorealistic is now part of its style instruction above.
-    if (options.renderStyle !== 'photorealistic') {
-        // If artistic, we don't want it to look like a photo
-        promptParts.push("NEGATIVE PROMPT: Photorealistic, 3d render, photograph, shiny 3d, plastic looking. Do NOT make it look like a photo. Keep the artistic medium texture.");
-    }
+    // 9. Negative Prompt (ALWAYS APPLY)
+    const baseNegative = "NEGATIVE PROMPT: blurry, low quality, distorted, watermark, signature, text, bad anatomy, deformed.";
+    const dimensionNegative = "white borders, internal frames, letterboxing, padding, margins, canvas edge, vignette.";
+    const styleNegative = options.renderStyle !== 'photorealistic'
+        ? "photorealistic, 3d render, photograph, shiny 3d, realistic photograph."
+        : "";
+
+    promptParts.push(`${baseNegative} ${dimensionNegative} ${styleNegative}`);
 
     return promptParts.join("\n\n");
 };

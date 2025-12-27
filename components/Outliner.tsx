@@ -26,6 +26,7 @@ interface OutlinerProps {
   onAddObjectBelow: (id: string) => void;
   lastRenderedImage?: string | null;
   onImportRender?: () => void;
+  onAddAIObject?: () => void;
 }
 
 export const Outliner: React.FC<OutlinerProps> = React.memo(({
@@ -50,6 +51,7 @@ export const Outliner: React.FC<OutlinerProps> = React.memo(({
   onAddObjectBelow,
   lastRenderedImage,
   onImportRender,
+  onAddAIObject,
 }) => {
   const [isAddMenuOpen, setAddMenuOpen] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
@@ -201,7 +203,7 @@ export const Outliner: React.FC<OutlinerProps> = React.memo(({
                 <EyeClosedIcon className="w-4 h-4 text-gray-500" />
               )}
             </button>
-            {!(item.type === 'object' && item.isBackground) && (
+            {!(item.type === 'object' && item.isBackground) && !item.isLocked && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -216,8 +218,8 @@ export const Outliner: React.FC<OutlinerProps> = React.memo(({
         </div>
         {isActive && (item.type === 'object') && (
           <div className="mt-2 space-y-2">
-            <div>
-              <label htmlFor={`opacity-${item.id}`} className="text-xs text-theme-text-secondary">Opacidad</label>
+            <div className="flex items-center gap-3">
+              <label htmlFor={`opacity-${item.id}`} className="text-xs text-theme-text-secondary whitespace-nowrap">Opacidad</label>
               <input
                 id={`opacity-${item.id}`}
                 type="range"
@@ -226,7 +228,8 @@ export const Outliner: React.FC<OutlinerProps> = React.memo(({
                 value={item.opacity * 100}
                 onClick={(e) => e.stopPropagation()}
                 onChange={(e) => onUpdateItem(item.id, { opacity: parseInt(e.target.value, 10) / 100 })}
-                className="w-full h-1 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer"
+                className="flex-grow h-1.5 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer"
+                title={`Opacidad: ${Math.round(item.opacity * 100)}%`}
               />
             </div>
             <div className="flex items-center flex-wrap gap-1 border-t border-theme-bg-tertiary pt-2">
@@ -322,6 +325,10 @@ export const Outliner: React.FC<OutlinerProps> = React.memo(({
               <div className="absolute right-0 mt-2 w-40 bg-theme-bg-tertiary rounded-md shadow-lg z-10">
                 <button onClick={() => { onAddItem('group'); setAddMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-theme-text-primary hover:bg-theme-bg-hover">Nueva Carpeta</button>
                 <button onClick={() => { onAddItem('object'); setAddMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-theme-text-primary hover:bg-theme-bg-hover">Nuevo Objeto</button>
+                <div className="h-px bg-theme-bg-tertiary my-1" />
+                <button onClick={() => { if (onAddAIObject) onAddAIObject(); setAddMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-theme-accent-primary font-bold hover:bg-theme-bg-hover flex items-center gap-2">
+                  <SparklesIcon className="w-4 h-4" /> Objeto con AI
+                </button>
               </div>
             )}
           </div>
@@ -331,66 +338,7 @@ export const Outliner: React.FC<OutlinerProps> = React.memo(({
         {renderTree()}
       </div>
 
-      {/* Canvas Controls */}
-      <div className="flex-shrink-0 border-t border-theme-bg-tertiary mt-4 pt-4">
-        <h3 className="text-sm font-bold uppercase text-theme-text-secondary mb-3">Canvas</h3>
-        <div className="space-y-2">
-          <div className="flex items-center space-x-2">
-            <input
-              type="color"
-              id="canvas-color"
-              value={(backgroundObject?.type === 'object' && backgroundObject.color) || '#FFFFFF'}
-              onChange={(e) => onUpdateBackground({ color: e.target.value })}
-              className="w-10 h-10 p-0.5 bg-theme-bg-tertiary border border-theme-bg-hover rounded-md cursor-pointer flex-shrink-0"
-              title="Color de fondo"
-            />
-            <button
-              onDoubleClick={onOpenCanvasSizeModal}
-              className="h-10 px-3 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover cursor-pointer text-theme-text-secondary text-sm flex-grow"
-              title="Tamaño del lienzo (doble clic)"
-            >
-              Personalizado
-            </button>
-            {backgroundObject && (
-              <button
-                onClick={() => onUpdateItem(backgroundObject.id, { isVisible: !backgroundObject.isVisible })}
-                className="h-10 w-10 flex-shrink-0 p-2 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover cursor-pointer text-theme-text-secondary"
-                title={backgroundObject.isVisible ? "Ocultar fondo" : "Mostrar fondo"}
-              >
-                {backgroundObject.isVisible ? <EyeOpenIcon className="w-5 h-5" /> : <EyeClosedIcon className="w-5 h-5" />}
-              </button>
-            )}
-            <label htmlFor="canvas-image-upload" className="h-10 w-10 flex items-center justify-center p-2 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover cursor-pointer text-theme-text-secondary flex-shrink-0" title="Importar imagen de fondo">
-              <UploadIcon className="w-5 h-5" />
-            </label>
-            <input
-              id="canvas-image-upload"
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleFileChange}
-            />
-            {lastRenderedImage && (
-              <button
-                onClick={onImportRender}
-                className="h-10 w-10 flex items-center justify-center p-2 rounded-lg bg-theme-accent-primary hover:bg-theme-accent-hover cursor-pointer text-white flex-shrink-0 animate-pulse border border-white/20"
-                title="Importar último render de la pestaña Render"
-              >
-                <SparklesIcon className="w-5 h-5" />
-              </button>
-            )}
-            {hasBackgroundImage && (
-              <button
-                onClick={onRemoveBackgroundImage}
-                className="h-10 w-10 flex-shrink-0 p-2 rounded-lg bg-red-800 hover:bg-red-700 cursor-pointer text-gray-200"
-                title="Eliminar imagen de fondo"
-              >
-                <TrashIcon className="w-5 h-5" />
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+
     </div>
   );
 });

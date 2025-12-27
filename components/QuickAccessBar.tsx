@@ -37,7 +37,6 @@ const toolIconMap: Record<Tool, React.FC<{ className?: string }>> = {
   'fx-brush': FXBrushIcon,
   'transform': TransformIcon,
   'free-transform': FreeTransformIcon,
-  'enhance': SparklesIcon,
   'crop': CropIcon,
   'pan': () => null, // Pan tool doesn't have a permanent slot
   'marquee-rect': MarqueeRectIcon,

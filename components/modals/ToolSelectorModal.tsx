@@ -30,7 +30,6 @@ const standardTools: { name: Tool, icon: React.FC<{ className?: string }> }[] = 
     { name: 'fx-brush', icon: FXBrushIcon },
     { name: 'transform', icon: TransformIcon },
     { name: 'free-transform', icon: FreeTransformIcon },
-    { name: 'enhance', icon: SparklesIcon },
     { name: 'crop', icon: CropIcon },
 ];
 

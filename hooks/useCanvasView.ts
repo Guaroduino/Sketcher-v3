@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import type { CropRect } from '../types';
 
 export type ViewTransform = { zoom: number, pan: { x: number, y: number } };
 
@@ -6,7 +7,8 @@ export const MAX_ZOOM = 3;
 
 export function useCanvasView(
     mainAreaRef: React.RefObject<HTMLDivElement>,
-    canvasSize: { width: number, height: number }
+    canvasSize: { width: number, height: number },
+    contentRect?: CropRect
 ) {
     const [viewTransform, setViewTransform] = useState<ViewTransform>({ zoom: window.innerWidth < 640 ? 0.6 : 1, pan: { x: 0, y: 0 } });
 
@@ -17,10 +19,15 @@ export function useCanvasView(
         const viewWidth = mainAreaRef.current.offsetWidth;
         const viewHeight = mainAreaRef.current.offsetHeight;
         const padding = 0.9;
-        const scaleX = viewWidth / canvasSize.width;
-        const scaleY = viewHeight / canvasSize.height;
+
+        // Use contentRect if available, otherwise fallback to full canvas size
+        const targetWidth = contentRect?.width || canvasSize.width;
+        const targetHeight = contentRect?.height || canvasSize.height;
+
+        const scaleX = viewWidth / targetWidth;
+        const scaleY = viewHeight / targetHeight;
         return Math.max(0.01, Math.min(scaleX, scaleY) * padding);
-    }, [mainAreaRef, canvasSize.width, canvasSize.height]);
+    }, [mainAreaRef, canvasSize.width, canvasSize.height, contentRect]);
 
     useEffect(() => {
         const updateSizeAndCenter = () => {
@@ -50,11 +57,18 @@ export function useCanvasView(
 
         const newZoom = getMinZoom();
 
-        const newPanX = (viewWidth - canvasSize.width * newZoom) / 2;
-        const newPanY = (viewHeight - canvasSize.height * newZoom) / 2;
+        // If contentRect is available, we center on it. 
+        // Otherwise we center on the full canvas.
+        const targetX = contentRect ? contentRect.x : 0;
+        const targetY = contentRect ? contentRect.y : 0;
+        const targetWidth = contentRect ? contentRect.width : canvasSize.width;
+        const targetHeight = contentRect ? contentRect.height : canvasSize.height;
+
+        const newPanX = (viewWidth - targetWidth * newZoom) / 2 - targetX * newZoom;
+        const newPanY = (viewHeight - targetHeight * newZoom) / 2 - targetY * newZoom;
 
         setViewTransform({ zoom: newZoom, pan: { x: newPanX, y: newPanY } });
-    }, [canvasSize.width, canvasSize.height, mainAreaRef, getMinZoom]);
+    }, [canvasSize.width, canvasSize.height, mainAreaRef, getMinZoom, contentRect]);
 
     const handleZoom = useCallback((zoomFactor: number) => {
         if (!mainAreaRef.current) return;

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { PhotoIcon, SparklesIcon, UploadIcon, UndoIcon, RedoIcon, SaveIcon, XIcon as CloseIcon, ZoomInIcon, ZoomOutIcon, MaximizeIcon, DownloadIcon, ChevronLeftIcon, ChevronRightIcon, FolderOpenIcon, GalleryIcon } from './icons';
+import { PhotoIcon, SparklesIcon, UploadIcon, UndoIcon, RedoIcon, SaveIcon, XIcon as CloseIcon, ZoomInIcon, ZoomOutIcon, MaximizeIcon, DownloadIcon, ChevronLeftIcon, ChevronRightIcon, FolderOpenIcon, GalleryIcon, ChevronDownIcon } from './icons';
 import { GoogleGenAI } from "@google/genai";
 import { buildArchitecturalPrompt, ArchitecturalRenderOptions, SceneType, RenderStyleMode } from '../utils/architecturalPromptBuilder';
 import { prepareVisualPromptingRequest, Region, buildVisualPrompt } from '../services/visualPromptingService';
@@ -80,6 +80,10 @@ const CollapsiblePillGroup: React.FC<{ label: string, options: { label: string, 
 export interface ArchitecturalRenderViewHandle {
     setInputImageFromFile: (file: File) => void;
     setInputImage: (url: string) => void;
+    handleLocalUndo: () => void;
+    handleLocalRedo: () => void;
+    getFullState: () => any;
+    setFullState: (state: any) => Promise<void>;
 }
 
 export const ArchitecturalRenderView = React.memo(React.forwardRef<ArchitecturalRenderViewHandle, ArchitecturalRenderViewProps>(({
@@ -96,17 +100,135 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
     const [sceneType, setSceneType] = useState<SceneType>('exterior');
     const [inputImage, setInputImageState] = useState<string | null>(null); // Renamed to avoid conflict
 
+    const [creativeFreedom, setCreativeFreedom] = useState(50);
+    const [additionalPrompt, setAdditionalPrompt] = useState('');
+    const [manualPrompt, setManualPrompt] = useState('');
+    const [savedPrompts, setSavedPrompts] = useState<string[]>([]);
+    const [vpGeneralInstructions, setVpGeneralInstructions] = useState('');
+    const [vpReferenceImage, setVpReferenceImage] = useState<string | null>(null);
+    const [aiStructuredPrompt, setAiStructuredPrompt] = useState('');
+    const [isPromptManuallyEdited, setIsPromptManuallyEdited] = useState(false);
+    const [regions, setRegions] = useState<Region[]>([]);
+    const [canvasDimensions, setCanvasDimensions] = useState({ width: 1024, height: 1024 });
+
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [resultImage, setResultImage] = useState<string | null>(null);
+    const [showOriginal, setShowOriginal] = useState(false);
+
+    // -- local History State for Generations --
+    interface HistoryEntry {
+        input: string | null;
+        result: string | null;
+        regions: Region[];
+        manualPrompt: string;
+        additionalPrompt: string;
+        vpGeneralInstructions: string;
+        isPromptManuallyEdited: boolean;
+    }
+
+    const [generationHistory, setGenerationHistory] = useState<HistoryEntry[]>([]);
+    const [historyIndex, setHistoryIndex] = useState(-1);
+    const [showImportMenu, setShowImportMenu] = useState(false);
+
+    const pushToHistory = useCallback((customState?: Partial<HistoryEntry>) => {
+        const entry: HistoryEntry = {
+            input: customState?.input !== undefined ? customState.input : inputImage,
+            result: customState?.result !== undefined ? customState.result : resultImage,
+            regions: customState?.regions !== undefined ? [...customState.regions] : [...regions],
+            manualPrompt: customState?.manualPrompt !== undefined ? customState.manualPrompt : manualPrompt,
+            additionalPrompt: customState?.additionalPrompt !== undefined ? customState.additionalPrompt : additionalPrompt,
+            vpGeneralInstructions: customState?.vpGeneralInstructions !== undefined ? customState.vpGeneralInstructions : vpGeneralInstructions,
+            isPromptManuallyEdited: customState?.isPromptManuallyEdited !== undefined ? customState.isPromptManuallyEdited : isPromptManuallyEdited
+        };
+
+        setGenerationHistory(prev => {
+            const newHistory = prev.slice(0, historyIndex + 1);
+            return [...newHistory, entry];
+        });
+        setHistoryIndex(prev => prev + 1);
+    }, [historyIndex, inputImage, resultImage, regions, manualPrompt, additionalPrompt, vpGeneralInstructions, isPromptManuallyEdited]);
+
+    // Initialize history once there is an initial input or component mounts
+    useEffect(() => {
+        if (generationHistory.length === 0) {
+            const initialEntry: HistoryEntry = {
+                input: inputImage,
+                result: resultImage,
+                regions: [...regions],
+                manualPrompt,
+                additionalPrompt,
+                vpGeneralInstructions,
+                isPromptManuallyEdited
+            };
+            setGenerationHistory([initialEntry]);
+            setHistoryIndex(0);
+        }
+    }, []);
+
+    const handleLocalUndo = useCallback(() => {
+        if (historyIndex > 0) {
+            const prev = generationHistory[historyIndex - 1];
+            setInputImageState(prev.input);
+            setResultImage(prev.result);
+            setRegions([...prev.regions]);
+            setManualPrompt(prev.manualPrompt);
+            setAdditionalPrompt(prev.additionalPrompt);
+            setVpGeneralInstructions(prev.vpGeneralInstructions);
+            setIsPromptManuallyEdited(prev.isPromptManuallyEdited);
+            setHistoryIndex(prevIdx => prevIdx - 1);
+        }
+    }, [historyIndex, generationHistory]);
+
+    const handleLocalRedo = useCallback(() => {
+        if (historyIndex < generationHistory.length - 1) {
+            const next = generationHistory[historyIndex + 1];
+            setInputImageState(next.input);
+            setResultImage(next.result);
+            setRegions([...next.regions]);
+            setManualPrompt(next.manualPrompt);
+            setAdditionalPrompt(next.additionalPrompt);
+            setVpGeneralInstructions(next.vpGeneralInstructions);
+            setIsPromptManuallyEdited(next.isPromptManuallyEdited);
+            setHistoryIndex(prev => prev + 1);
+        }
+    }, [historyIndex, generationHistory]);
+
     // Wrapper for setInputImageState to handle common side effects
     // Hard reset for new projects/imports
-    const resetWithNewInput = useCallback((dataUrl: string | null) => {
+    const resetWithNewInput = useCallback((dataUrl: string | null, shouldPushToHistory: boolean = false) => {
+        if (!shouldPushToHistory) {
+            setGenerationHistory([]);
+            setHistoryIndex(-1);
+            // Re-initialization will be handled by useEffect or manually below
+        }
+
         setInputImageState(dataUrl);
         setResultImage(null);
         setShowOriginal(false);
-        setGenerationHistory([]);
-        setHistoryIndex(-1);
-    }, []);
+        // CRITICAL: Clear spatial context to avoid "ghost" references to old images
+        setRegions([]);
+        setManualPrompt('');
+        setAdditionalPrompt('');
+        setVpGeneralInstructions('');
+        setVpReferenceImage(null);
+        setStyleReferenceImage(null);
+        setIsPromptManuallyEdited(false);
+        canvasRef.current?.clearDrawing();
 
-    const processInputImage = useCallback((file: File) => {
+        if (shouldPushToHistory) {
+            pushToHistory({
+                input: dataUrl,
+                result: null,
+                regions: [],
+                manualPrompt: '',
+                additionalPrompt: '',
+                vpGeneralInstructions: '',
+                isPromptManuallyEdited: false
+            });
+        }
+    }, [pushToHistory]);
+
+    const processInputImage = useCallback((file: File, isPaste: boolean = false) => {
         const reader = new FileReader();
         reader.onload = (e) => {
             if (e.target?.result) {
@@ -129,7 +251,8 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                     if (ctx) {
                         ctx.drawImage(img, 0, 0, w, h);
                         const bakedUrl = canvas.toDataURL('image/png'); // Strip EXIF
-                        resetWithNewInput(bakedUrl); // Use the reset wrapper
+                        setCanvasDimensions({ width: w, height: h });
+                        resetWithNewInput(bakedUrl, isPaste); // Preserve history if it's a paste/import
                     }
                 };
                 img.src = result;
@@ -138,12 +261,96 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
         reader.readAsDataURL(file);
     }, [resetWithNewInput]);
 
+    const handleClearAllAnnotations = useCallback(() => {
+        if (window.confirm('¿Estás seguro de que deseas borrar todas las anotaciones (dibujos y regiones)?')) {
+            setRegions([]);
+            canvasRef.current?.clearDrawing();
+        }
+    }, [setRegions]);
+
     useImperativeHandle(ref, () => ({
         setInputImageFromFile: (file: File) => {
-            processInputImage(file);
+            processInputImage(file, true); // Treat internal file setting as "undoable" action
         },
         setInputImage: (url: string) => {
-            resetWithNewInput(url);
+            resetWithNewInput(url, true); // Treat programmatic setting as "undoable" action
+        },
+        handleLocalUndo,
+        handleLocalRedo,
+        getFullState: () => {
+            return {
+                inputImage,
+                resultImage,
+                styleReferenceImage,
+                renderStyle,
+                sceneType,
+                timeOfDay,
+                weather,
+                archStyle,
+                roomType,
+                lighting,
+                studioLighting,
+                studioBackground,
+                studioShot,
+                carAngle,
+                carEnvironment,
+                carColor,
+                objectMaterial,
+                objectDoF,
+                objectContext,
+                creativeFreedom,
+                additionalPrompt,
+                manualPrompt,
+                savedPrompts,
+                regions,
+                vpGeneralInstructions,
+                vpReferenceImage,
+                aiStructuredPrompt,
+                isPromptManuallyEdited,
+                drawingData: canvasRef.current?.getDrawingDataUrl(),
+                generationHistory,
+                historyIndex
+            };
+        },
+        setFullState: async (state: any) => {
+            if (!state) return;
+            setInputImageState(state.inputImage);
+            setResultImage(state.resultImage);
+            setStyleReferenceImage(state.styleReferenceImage);
+            if (state.renderStyle) setRenderStyle(state.renderStyle);
+            if (state.sceneType) setSceneType(state.sceneType);
+            if (state.timeOfDay) setTimeOfDay(state.timeOfDay);
+            if (state.weather) setWeather(state.weather);
+            if (state.archStyle) setArchStyle(state.archStyle);
+            if (state.roomType) setRoomType(state.roomType);
+            if (state.lighting) setLighting(state.lighting);
+            if (state.studioLighting) setStudioLighting(state.studioLighting);
+            if (state.studioBackground) setStudioBackground(state.studioBackground);
+            if (state.studioShot) setStudioShot(state.studioShot);
+            if (state.carAngle) setCarAngle(state.carAngle);
+            if (state.carEnvironment) setCarEnvironment(state.carEnvironment);
+            if (state.carColor) setCarColor(state.carColor);
+            if (state.objectMaterial) setObjectMaterial(state.objectMaterial);
+            if (state.objectDoF) setObjectDoF(state.objectDoF);
+            if (state.objectContext) setObjectContext(state.objectContext);
+            if (state.creativeFreedom !== undefined) setCreativeFreedom(state.creativeFreedom);
+            if (state.additionalPrompt !== undefined) setAdditionalPrompt(state.additionalPrompt);
+            if (state.manualPrompt !== undefined) setManualPrompt(state.manualPrompt);
+            if (state.savedPrompts) setSavedPrompts(state.savedPrompts);
+            if (state.regions) setRegions(state.regions);
+            if (state.vpGeneralInstructions !== undefined) setVpGeneralInstructions(state.vpGeneralInstructions);
+            if (state.vpReferenceImage !== undefined) setVpReferenceImage(state.vpReferenceImage);
+            if (state.aiStructuredPrompt !== undefined) setAiStructuredPrompt(state.aiStructuredPrompt);
+            if (state.isPromptManuallyEdited !== undefined) setIsPromptManuallyEdited(state.isPromptManuallyEdited);
+            if (state.generationHistory) setGenerationHistory(state.generationHistory);
+            if (state.historyIndex !== undefined) setHistoryIndex(state.historyIndex);
+
+            if (state.drawingData) {
+                // Wait for dimensions to settle or force them
+                setTimeout(() => {
+                    canvasRef.current?.loadDrawingDataUrl(state.drawingData);
+                }, 100);
+            }
         }
     }));
 
@@ -161,7 +368,6 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
     const [lastGuideImage, setLastGuideImage] = useState<string | null>(null); // To debug what we sent
     const [lastSentPrompt, setLastSentPrompt] = useState<string | null>(null); // To debug exact text sent
     const [activeTool, setActiveTool] = useState<'pen' | 'eraser' | 'region' | 'polygon' | 'pan'>('pan');
-    const [regions, setRegions] = useState<Region[]>([]);
     const [brushSize, setBrushSize] = useState(5);
     const [brushColor, setBrushColor] = useState('#FF0000');
 
@@ -200,26 +406,9 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
     const [objectDoF, setObjectDoF] = useState('macro_focus');
     const [objectContext, setObjectContext] = useState('table_top'); // NEW
 
-    // Creativity now 0-200
-    const [creativeFreedom, setCreativeFreedom] = useState(50);
-    const [additionalPrompt, setAdditionalPrompt] = useState('');
-
-    // -- Prompt Management State --
-    const [manualPrompt, setManualPrompt] = useState('');
-    const [savedPrompts, setSavedPrompts] = useState<string[]>([]);
-
     // -- Refs for Handler Access (Closure Fix) --
     const resultImageRef = useRef<string | null>(null);
     const inputImageRef = useRef<string | null>(null);
-
-    // -- Canvas State --
-    const [canvasDimensions, setCanvasDimensions] = useState({ width: 1024, height: 1024 });
-
-    // -- Visual Prompting State --
-    const [vpGeneralInstructions, setVpGeneralInstructions] = useState('');
-    const [vpReferenceImage, setVpReferenceImage] = useState<string | null>(null);
-    const [aiStructuredPrompt, setAiStructuredPrompt] = useState('');
-    const [isPromptManuallyEdited, setIsPromptManuallyEdited] = useState(false);
 
     // ... (rest of state)
 
@@ -236,10 +425,6 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
             img.src = inputImage;
         }
     }, [inputImage]);
-
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [resultImage, setResultImage] = useState<string | null>(null);
-    const [showOriginal, setShowOriginal] = useState(false);
 
     // Upscale State
     const [isUpscaling, setIsUpscaling] = useState(false);
@@ -271,57 +456,7 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
         }
     }, [displayedImage, canvasDimensions.width, canvasDimensions.height]);
 
-    // -- local History State for Generations --
-    const [generationHistory, setGenerationHistory] = useState<{ input: string | null, result: string | null }[]>([]);
-    const [historyIndex, setHistoryIndex] = useState(-1);
-
-    const pushToHistory = useCallback((input: string | null, result: string | null) => {
-        setGenerationHistory(prev => {
-            const newHistory = prev.slice(0, historyIndex + 1);
-            return [...newHistory, { input, result }];
-        });
-        setHistoryIndex(prev => prev + 1);
-    }, [historyIndex]);
-
-    const handleLocalUndo = useCallback(() => {
-        if (historyIndex > 0) {
-            const prev = generationHistory[historyIndex - 1];
-            setInputImageState(prev.input);
-            setResultImage(prev.result);
-            setHistoryIndex(prevIdx => prevIdx - 1);
-        } else if (historyIndex === 0) {
-            // Back to initial state (null result)
-            const initial = generationHistory[0];
-            setInputImageState(initial.input);
-            setResultImage(null);
-            setHistoryIndex(-1);
-        }
-    }, [historyIndex, generationHistory, setInputImageState]);
-
-    const handleLocalRedo = useCallback(() => {
-        if (historyIndex < generationHistory.length - 1) {
-            const next = generationHistory[historyIndex + 1];
-            setInputImageState(next.input);
-            setResultImage(next.result);
-            setHistoryIndex(prev => prev + 1);
-        }
-    }, [historyIndex, generationHistory, setInputImageState]);
-
-    // Keyboard Listeners for Undo/Redo within the tab
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-                if (e.shiftKey) handleLocalRedo();
-                else handleLocalUndo();
-                e.preventDefault();
-            } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
-                handleLocalRedo();
-                e.preventDefault();
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleLocalUndo, handleLocalRedo]);
+    // Keyboard Listeners removed here, handled globally in App.tsx
 
     // Navigation State
     const [transform, setTransform] = useState({ zoom: 1, x: 0, y: 0 });
@@ -720,17 +855,20 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                         }
 
                         const blendedDataUrl = blendCanvas.toDataURL('image/png');
-                        updateResult(blendedDataUrl);
-                        pushToHistory(activeBaseImage, blendedDataUrl);
+                        pushToHistory(); // Save state BEFORE updating with new result
+                        setIsGenerating(false);
+                        pushToHistory({ result: blendedDataUrl });
                     } else {
                         // Fallback to simple update if canvas fails
                         updateResult(newResultDataUrl);
-                        pushToHistory(activeBaseImage, newResultDataUrl);
+                        setIsGenerating(false);
+                        pushToHistory({ result: newResultDataUrl });
                     }
                 } else {
                     // Global Edit (No Regions): Just update as usual
                     updateResult(newResultDataUrl);
-                    pushToHistory(activeBaseImage, newResultDataUrl);
+                    setIsGenerating(false);
+                    pushToHistory({ result: newResultDataUrl });
                 }
             } else {
                 alert("La IA no generó una imagen.");
@@ -815,9 +953,11 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
 
             if (newImageBase64) {
                 if (deductCredit) await deductCredit();
-                const newResult = `data:image/png;base64,${newImageBase64}`;
-                updateResult(newResult);
-                pushToHistory(activeBaseImage, newResult);
+                const newResultUrl = `data:image/png;base64,${newImageBase64}`;
+                // 4. Update result & history
+                updateResult(newResultUrl);
+                setIsGenerating(false);
+                pushToHistory({ result: newResultUrl });
             } else {
                 alert("La IA no generó una imagen.");
             }
@@ -864,7 +1004,7 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
 
             if (newImageBase64) {
                 updateResult(upscaleSource);
-                pushToHistory(resultImage, upscaleSource);
+                pushToHistory({ result: upscaleSource });
             }
 
             // --- 4K Processing with Smart AR Correction ---
@@ -1065,6 +1205,7 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                     activeTool={activeTool}
                     onToolChange={setActiveTool}
                     onProcessChanges={handleProcessChanges}
+                    onClearAll={handleClearAllAnnotations}
                     isGenerating={isGenerating}
                     generalInstructions={vpGeneralInstructions}
                     onGeneralInstructionsChange={setVpGeneralInstructions}
@@ -1133,6 +1274,50 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                     {/* Bottom Toolbar (Floating Navigation) */}
                     {/* Bottom Toolbar (Floating Navigation) */}
                     <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-1 p-1 bg-theme-bg-primary/80 backdrop-blur-sm rounded-lg shadow-lg z-20">
+                        {/* Import Dropdown */}
+                        <div className="relative">
+                            <div className="flex items-center bg-theme-accent-primary rounded-md overflow-hidden">
+                                <button
+                                    onClick={handleImport}
+                                    className="px-2 py-1.5 text-xs font-bold text-white hover:bg-theme-accent-secondary transition-colors flex items-center gap-1.5"
+                                    title="Importar desde Sketch"
+                                >
+                                    <UndoIcon className="w-3 h-3 rotate-180" />
+                                    Importar
+                                </button>
+                                <div className="w-px h-4 bg-white/20"></div>
+                                <button
+                                    onClick={() => setShowImportMenu(!showImportMenu)}
+                                    className="px-1 py-1.5 text-white hover:bg-theme-accent-secondary transition-colors"
+                                >
+                                    <ChevronDownIcon className="w-3 h-3" />
+                                </button>
+                            </div>
+
+                            {showImportMenu && (
+                                <div className="absolute bottom-full left-0 mb-2 w-48 bg-theme-bg-secondary border border-theme-bg-tertiary rounded-lg shadow-xl overflow-hidden flex flex-col z-50">
+                                    <button
+                                        onClick={() => { setShowImportMenu(false); handleImport(); }}
+                                        className="px-3 py-2 text-left text-xs text-theme-text-primary hover:bg-theme-bg-hover flex items-center gap-2"
+                                    >
+                                        <UndoIcon className="w-3 h-3 rotate-180" /> Importar Sketch
+                                    </button>
+                                    <button
+                                        onClick={() => { setShowImportMenu(false); onOpenLibrary(); }}
+                                        className="px-3 py-2 text-left text-xs text-theme-text-primary hover:bg-theme-bg-hover flex items-center gap-2"
+                                    >
+                                        <GalleryIcon className="w-3 h-3" /> De Librería
+                                    </button>
+                                    <label className="px-3 py-2 text-left text-xs text-theme-text-primary hover:bg-theme-bg-hover flex items-center gap-2 cursor-pointer w-full">
+                                        <UploadIcon className="w-3 h-3" /> Subir Imagen
+                                        <input type="file" accept="image/*" onChange={(e) => { setShowImportMenu(false); handleFileUpload(e); }} className="hidden" />
+                                    </label>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="h-4 w-px bg-theme-bg-tertiary"></div>
+
                         {/* Zoom Controls */}
                         <div className="flex items-center gap-1">
                             <button onClick={() => setTransform(p => ({ ...p, zoom: p.zoom / 1.2 }))} className="p-1.5 hover:bg-theme-bg-hover rounded-md text-theme-text-primary transition-colors" title="Zoom Out"><ZoomOutIcon className="w-4 h-4" /></button>

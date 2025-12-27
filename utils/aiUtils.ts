@@ -149,7 +149,47 @@ export const prepareAIRequest = (
                 debugImages.push({ name: 'Referencia de Estilo', url: payload.styleRef.url });
                 parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(payload.styleRef.url) } });
             }
-            finalPrompt = payload.compositionPrompt || '';
+
+
+            const userStyleInstruction = payload.compositionPrompt || "realistic materialization";
+
+            finalPrompt = `SYSTEM ROLE: You are an Expert AI in "Sketch-to-Reality Inpainting" using a dual-image reference system. Your goal is to transform a specific sketched element into a photorealistic object.
+
+INPUTS:
+
+IMAGE_SOURCE (Clean Base): The original, clean photograph (e.g., the house without the red box).
+
+IMAGE_GUIDE (Annotation): The same photograph containing a Red Markup Box. Inside this box is a sketch or drawing that needs to be materialized.
+
+STYLE_INSTRUCTION (Text): The user's description of the desired material or style for the sketched object.
+
+CRITICAL EXECUTION PROCEDURE:
+
+1. LOCATE & IDENTIFY (The "What" and "Where"):
+
+Look at IMAGE_GUIDE. Find the Red Markup Box.
+
+Focus exclusively on the sketched content directly inside that red box. Do NOT read the STYLE_INSTRUCTION text as content to be generated.
+
+2. MATERIALIZE (The "How"):
+
+Take the identified sketch.
+
+Transform this shape into a photorealistic 3D object.
+
+Apply the material, texture, and style described in the STYLE_INSTRUCTION.
+
+3. INTEGRATE & CLEAN (The Final Image):
+
+Place the newly created photorealistic object onto the IMAGE_SOURCE (the clean base image) at the exact coordinates where the red box was.
+
+Ensure the new object is perfectly lit by the scene's existing light sources (shadows, highlights).
+
+CRITICAL: The final output must be utterly clean. Completely remove the Red Markup Box and any UI elements.
+
+USER STYLE_INSTRUCTION: "${userStyleInstruction}"
+
+NEGATIVE PROMPT: The text "${userStyleInstruction}" rendered literally, red box, red outline, UI elements, annotations, flat sketch, drawing marks, low quality, blurred edges.`;
             break;
         }
 
@@ -189,23 +229,24 @@ export const prepareAIRequest = (
             if (creativity < 30) {
                 // Tier 1: Strict Fidelity
                 baseScalerPrompt += `
-                MODO: FIEL AL ORIGINAL.
-                Mejora la nitidez y elimina el ruido, pero NO añadas elementos nuevos ni cambies texturas drásticamente.
-                El objetivo es que se vea limpia y profesional, respetando al 100% la intención original.`;
+                MODO: RE-RENDERIZADO DE ALTA FIDELIDAD.
+                Mantén la geometría, colores e iluminación exactos.
+                Tu objetivo es eliminar el ruido y artefactos de compresión, definiendo los bordes con precisión quirúrgica.
+                Añade micro-texturas sutiles que solo se aprecian en alta resolución (porosidad del hormigón, vetas de madera, reflejos nítidos).`;
             } else if (creativity <= 80) {
                 // Tier 2: Balanced Detail
                 baseScalerPrompt += `
-                MODO: MEJORA DE DETALLE (BALANCEADO).
-                La imagen original puede estar borrosa o tener baja resolución.
-                TU TRABAJO ES "ALUCINAR" TEXTURAS REALISTAS para piel, telas, materiales y follaje.
-                Inyecta micro-detalles para que parezca una foto 4K nativa, pero mantén la iluminación y formas generales.`;
+                MODO: ENRIQUECIMIENTO DE DETALLE FOTORREALISTA.
+                La imagen original es solo una guía de volumen.
+                PROYECTA nuevas texturas de alta frecuencia: añade imperfecciones realistas, suciedad sutil en juntas, reflejos complejos en vidrios y detalle individual en hojas de plantas.
+                El resultado debe parecer una fotografía tomada con una lente profesional 4K nítida.`;
             } else {
                 // Tier 3: High Imagination
                 baseScalerPrompt += `
-                MODO: RE-IMAGINACIÓN CREATIVA (MAXIMO DETALLE).
-                Libertad total para mejorar la imagen. Si hay texturas planas, cámbialas por materiales ultra-realistas.
-                Mejora la iluminación para que sea dramática y cinemática (estilo render Unreal Engine 5).
-                Prioriza que se vea "increíble" y "súper nítida" por encima de la fidelidad estricta puntapíxel.`;
+                MODO: RE-IMAGINACIÓN ULTRA-REALISTA.
+                Trata la entrada como un borrador. Reconstruye la escena con el máximo realismo posible.
+                Usa iluminación volumétrica, cáusticas nítidas y materiales de catálogo premium.
+                No tengas miedo de "alucinar" detalles que no están en el original si eso hace que la imagen se vea espectacularmente nítida y profesional.`;
             }
 
             finalPrompt = baseScalerPrompt;

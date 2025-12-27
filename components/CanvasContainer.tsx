@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useLayoutEffect, useReducer } from 'react';
+import React, { useRef, useEffect, useState, useLayoutEffect, useReducer, useImperativeHandle } from 'react';
 // FIX: Corrected relative import paths for modules outside the components directory.
 import type {
     CanvasItem,
@@ -121,8 +121,17 @@ type GuideDragState =
     | null;
 
 
-export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
+export interface CanvasHandle {
+    getCanvas: () => HTMLCanvasElement | null;
+}
+
+interface CanvasContainerPropsWithRef extends CanvasContainerProps {
+    handleRef?: React.Ref<CanvasHandle>;
+}
+
+export const CanvasContainer: React.FC<CanvasContainerPropsWithRef> = (props) => {
     const {
+        handleRef,
         items, activeItemId, tool, viewTransform, setViewTransform,
         onDrawCommit, onSelectItem, onUpdateItem,
         activeGuide, isOrthogonalVisible, rulerGuides, setRulerGuides, mirrorGuides, setMirrorGuides,
@@ -163,6 +172,10 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
     const selectionCanvasRef = useRef<HTMLCanvasElement>(null);
     const guideCanvasRef = useRef<HTMLCanvasElement>(null);
     const textAreaRef = useRef<HTMLTextAreaElement>(null);
+
+    useImperativeHandle(handleRef, () => ({
+        getCanvas: () => mainCanvasRef.current
+    }));
 
     const [renderTrigger, forceRender] = useReducer(c => c + 1, 0);
     const [pointerPosition, setPointerPosition] = useState<Point | null>(null);
@@ -582,12 +595,14 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = (props) => {
             <canvas ref={guideCanvasRef} className="absolute inset-0 pointer-events-none" />
             <canvas ref={previewCanvasRef} className="absolute inset-0 pointer-events-none" />
 
-            <img
-                src={transformPreviewDataUrl || ''}
-                alt="Transform preview"
-                className="pointer-events-none"
-                style={transformPreviewStyle}
-            />
+            {transformPreviewDataUrl && (
+                <img
+                    src={transformPreviewDataUrl}
+                    alt="Transform preview"
+                    className="pointer-events-none"
+                    style={transformPreviewStyle}
+                />
+            )}
 
             <canvas ref={uiCanvasRef} className="absolute inset-0 pointer-events-none" />
             <canvas ref={selectionCanvasRef} className="absolute inset-0 pointer-events-none" />

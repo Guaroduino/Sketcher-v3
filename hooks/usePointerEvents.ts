@@ -595,6 +595,20 @@ export function usePointerEvents({
             }
         }
 
+
+
+        if (tool === 'pan' || (e.button === 1 && e.pointerType === 'mouse')) {
+            setDragAction({
+                type: 'pan',
+                startX: e.clientX,
+                startY: e.clientY,
+                startPan: viewTransform.pan,
+            });
+            if (e.currentTarget) e.currentTarget.style.cursor = 'grabbing';
+            return;
+        }
+
+
         if (isDrawingTool && ['line'].includes(strokeMode)) {
             setDragAction({ type: 'draw' });
             if (!strokeState) {
@@ -849,11 +863,7 @@ export function usePointerEvents({
             return;
         }
 
-        if (tool === 'pan' || (e.button === 1 && e.pointerType === 'mouse')) {
-            setDragAction({ type: 'pan', startX: e.clientX, startY: e.clientY, startPan: viewTransform.pan });
-            e.currentTarget.style.cursor = 'grabbing';
-            return;
-        }
+
 
         if (isDrawingTool && activeItem && activeItem.type === 'object' && strokeMode === 'freehand') {
             if (tool === 'eraser') {
@@ -909,28 +919,46 @@ export function usePointerEvents({
             const dy = p2.y - p1.y;
             const distance = Math.hypot(dx, dy);
 
-            // Initialize gesture base if it's the first move
             if (!gestureBaseRef.current) {
                 gestureBaseRef.current = { distance, midpoint, zoom: viewTransform.zoom, pan: viewTransform.pan };
             }
 
             const base = gestureBaseRef.current;
-            // Compute scale from initial gesture distance
-            const scale = base.distance > 0 ? (distance / base.distance) : 1;
+
+            // Compute scale (Zoom)
+            // Use a small epsilon to avoid division by zero errors if fingers are somehow at same point
+            let scale = 1;
+            if (base.distance > 0.5) {
+                scale = distance / base.distance;
+            }
+
             let newZoom = base.zoom * scale;
             const minZoom = getMinZoom ? getMinZoom() : 0.1;
-            if (newZoom < minZoom) newZoom = minZoom;
-            if (newZoom > MAX_ZOOM) newZoom = MAX_ZOOM;
 
-            // Keep the world point under the gesture midpoint stable while zooming and panning.
-            // Formula: newPan = newMidpoint - ((baseMidpoint - basePan) * (newZoom / baseZoom))
-            const r = base.zoom > 0 ? (newZoom / base.zoom) : 1;
-            const newPanX = midpoint.x - ((base.midpoint.x - base.pan.x) * r);
-            const newPanY = midpoint.y - ((base.midpoint.y - base.pan.y) * r);
+            // Clamp Zoom
+            newZoom = Math.max(minZoom, Math.min(newZoom, MAX_ZOOM));
+
+            // Recompute scale based on clamped zoom to ensure pan stays synced with actual zoom
+            const effectiveScale = base.zoom > 0 ? (newZoom / base.zoom) : 1;
+
+            // Pan Calculation
+            // We want the point under the centroid (midpoint) to remain stationary relative to the screen.
+            // ScreenPoint = (WorldPoint * Zoom) + Pan
+            // WorldPoint = (ScreenPoint - Pan) / Zoom
+            // Initial: WP = (BaseMid - BasePan) / BaseZoom
+            // Current : WP = (CurrMid - NewPan) / NewZoom
+            // (BaseMid - BasePan) / BaseZoom = (CurrMid - NewPan) / NewZoom
+            // (BaseMid - BasePan) * (NewZoom / BaseZoom) = CurrMid - NewPan
+            // NewPan = CurrMid - (BaseMid - BasePan) * effectiveScale
+
+            const worldX = base.midpoint.x - base.pan.x;
+            const worldY = base.midpoint.y - base.pan.y;
+
+            const newPanX = midpoint.x - (worldX * effectiveScale);
+            const newPanY = midpoint.y - (worldY * effectiveScale);
 
             setViewTransform(v => ({ ...v, zoom: newZoom, pan: { x: newPanX, y: newPanY } }));
 
-            // Keep dragAction as 'pan' so pointerup logic can reset it; update wasInGesture
             wasInGestureRef.current = true;
             return;
         }
@@ -1294,7 +1322,15 @@ export function usePointerEvents({
 
 
         if (currentAction.type === 'pan') {
-            setViewTransform(v => ({ ...v, pan: { x: v.pan.x + lastEvent.movementX, y: v.pan.y + lastEvent.movementY } }));
+            const dx = e.clientX - currentAction.startX;
+            const dy = e.clientY - currentAction.startY;
+            setViewTransform(v => ({
+                ...v,
+                pan: {
+                    x: currentAction.startPan.x + dx,
+                    y: currentAction.startPan.y + dy
+                }
+            }));
         }
         if (currentAction.type === 'selection') {
             let newPoints: Point[];

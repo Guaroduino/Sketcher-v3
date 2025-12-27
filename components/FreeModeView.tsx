@@ -42,6 +42,8 @@ interface FreeModeViewProps {
 
 export interface FreeModeViewHandle {
     addAttachment: (dataUrl: string) => void;
+    getFullState: () => any;
+    setFullState: (state: any) => void;
 }
 
 export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
@@ -67,6 +69,17 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
     useImperativeHandle(ref, () => ({
         addAttachment: (dataUrl: string) => {
             setAttachments(prev => [...prev, dataUrl]);
+        },
+        getFullState: () => {
+            return {
+                messages,
+                attachments
+            };
+        },
+        setFullState: (state: any) => {
+            if (!state) return;
+            if (state.messages) setMessages(state.messages);
+            if (state.attachments) setAttachments(state.attachments);
         }
     }));
 
@@ -535,8 +548,8 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
                     </div>
                 </div>
             </div>
-            {/* Saved Prompts Sidebar (Docked) */}
-            <div className={`h-full bg-theme-bg-primary border-l border-theme-bg-tertiary transition-[width] duration-300 flex-shrink-0 z-10 flex flex-col overflow-hidden ${isSidebarOpen ? 'w-64' : 'w-0'}`}>
+            {/* Saved Prompts Sidebar (Overlay) */}
+            <div className={`absolute top-0 right-0 h-full bg-theme-bg-primary border-l border-theme-bg-tertiary transition-transform duration-300 z-20 shadow-2xl ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`} style={{ width: '256px' }}>
                 <div className="flex items-center justify-between p-4 border-b border-theme-bg-tertiary w-64">
                     <h3 className="font-bold">Guardados</h3>
                     <button onClick={() => setIsSidebarOpen(false)}><XIcon className="w-5 h-5" /></button>

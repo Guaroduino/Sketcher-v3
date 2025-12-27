@@ -355,7 +355,13 @@ export const cloneCanvasWithContext = (oldCanvas: HTMLCanvasElement): { canvas: 
     return { canvas: newCanvas, context: newCtx };
 };
 
-export const getCompositeCanvas = (fullResolution: boolean, canvasSize: { width: number, height: number }, getDrawableObjects: () => CanvasItem[], backgroundObject?: CanvasItem): HTMLCanvasElement | null => {
+export const getCompositeCanvas = (
+    fullResolution: boolean,
+    canvasSize: { width: number, height: number },
+    getDrawableObjects: () => CanvasItem[],
+    backgroundObject?: CanvasItem,
+    options: { transparent?: boolean } = {}
+): HTMLCanvasElement | null => {
     const canvas = document.createElement('canvas');
     canvas.width = canvasSize.width;
     canvas.height = canvasSize.height;
@@ -364,10 +370,10 @@ export const getCompositeCanvas = (fullResolution: boolean, canvasSize: { width:
     if (!context) return null;
 
     // 1. Fill Background
-    // If backgroundObject is a SketchObject and has a canvas, draw it.
-    // Otherwise fill white.
-    context.fillStyle = '#ffffff';
-    context.fillRect(0, 0, canvas.width, canvas.height);
+    if (!options.transparent) {
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+    }
 
     if (backgroundObject) {
         // Cast to SketchObject to access potential canvas/opacity
@@ -656,4 +662,19 @@ export const generateMipmaps = (canvas: HTMLCanvasElement): { small?: HTMLCanvas
     }
 
     return mipmaps;
+};
+
+export const cropCanvas = (source: HTMLCanvasElement, rect: CropRect): HTMLCanvasElement => {
+    const canvas = document.createElement('canvas');
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (ctx) {
+        ctx.drawImage(
+            source,
+            rect.x, rect.y, rect.width, rect.height,
+            0, 0, rect.width, rect.height
+        );
+    }
+    return canvas;
 };

@@ -4,6 +4,7 @@ import { Region } from '../../services/visualPromptingService';
 
 export interface LayeredCanvasRef {
     getDrawingDataUrl: () => string;
+    loadDrawingDataUrl: (url: string) => Promise<void>;
     clearDrawing: () => void;
     undo: () => void;
     redo: () => void;
@@ -57,6 +58,7 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
 
     // Drawing Region State (Preview)
     const [drawingRegion, setDrawingRegion] = useState<{ start: { x: number, y: number }, current: { x: number, y: number } } | null>(null);
+    const [isSpacePressed, setIsSpacePressed] = useState(false);
 
     // Initialize Canvas
     useEffect(() => {
@@ -77,7 +79,7 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
 
     // Multi-touch State
     const pointerCache = useRef<Map<number, React.PointerEvent>>(new Map());
-    const prevDiff = useRef<number>(-1);
+    const gestureBaseRef = useRef<{ dist: number; center: { x: number; y: number }; zoom: number; pan: { x: number; y: number } } | null>(null);
 
     // Helper to calculate distance between two points
     const getDistance = (p1: React.PointerEvent, p2: React.PointerEvent) => {
@@ -97,6 +99,24 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
     useImperativeHandle(ref, () => ({
         getDrawingDataUrl: () => {
             return drawingCanvasRef.current?.toDataURL('image/png') || '';
+        },
+        loadDrawingDataUrl: async (url: string) => {
+            if (!drawingCanvasRef.current) return;
+            const canvas = drawingCanvasRef.current;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            const img = new Image();
+            img.src = url;
+            await new Promise<void>((resolve) => {
+                img.onload = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+                    saveHistory();
+                    resolve();
+                };
+                img.onerror = () => resolve();
+            });
         },
         clearDrawing: () => {
             const ctx = drawingCanvasRef.current?.getContext('2d');
@@ -248,17 +268,27 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
         pointerCache.current.set(e.pointerId, e);
 
         if (pointerCache.current.size === 2) {
-            // Start Pinch
+            // Start Pinch/Pan Gesture
             const it = pointerCache.current.values();
             const p1 = it.next().value;
             const p2 = it.next().value;
-            prevDiff.current = getDistance(p1, p2);
-            isPanning.current = false; // Disable single finger pan if pinching
+            const dist = getDistance(p1, p2);
+            const center = getCenter(p1, p2); // relative client coordinates
+
+            // Store initial state for absolute calculation
+            gestureBaseRef.current = {
+                dist,
+                center,
+                zoom, // current zoom
+                pan: { ...pan } // current pan
+            };
+
+            isPanning.current = false;
             isDrawing.current = false;
             return;
         }
 
-        if (activeTool === 'pan' || e.button === 1 || (activeTool !== 'pan' && e.pointerType === 'touch' && !e.isPrimary)) {
+        if (activeTool === 'pan' || isSpacePressed || e.button === 1 || (activeTool !== 'pan' && e.pointerType === 'touch' && !e.isPrimary)) {
             isPanning.current = true;
             lastPos.current = { x: e.clientX, y: e.clientY };
             return;
@@ -301,35 +331,53 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
         }
 
         // Multi-touch Pinch/Pan
-        if (pointerCache.current.size === 2) {
+        if (pointerCache.current.size === 2 && gestureBaseRef.current) {
             const it = pointerCache.current.values();
             const p1 = it.next().value;
             const p2 = it.next().value;
 
-            // 1. Zoom
-            const curDiff = getDistance(p1, p2);
-            if (prevDiff.current > 0) {
-                const delta = curDiff - prevDiff.current;
-                const zoomFactor = delta * 0.005; // Sensitivity
-                const newZoom = Math.max(0.1, Math.min(10, zoom + zoomFactor));
+            // Current state
+            const curDist = getDistance(p1, p2);
+            const curCenter = getCenter(p1, p2);
 
-                // Zoom towards center of pinch
-                const center = getCenter(p1, p2);
-                if (containerRef.current) {
-                    const rect = containerRef.current.getBoundingClientRect();
-                    const mx = center.x - rect.left;
-                    const my = center.y - rect.top;
+            const { dist: startDist, center: startCenter, zoom: startZoom, pan: startPan } = gestureBaseRef.current;
 
-                    // P_new = M - (M - P_old) * (Z_new / Z_old)
-                    const scaleChange = newZoom / zoom;
-                    const newPanX = mx - (mx - pan.x) * scaleChange;
-                    const newPanY = my - (my - pan.y) * scaleChange;
+            // 1. Calculate new Zoom
+            // Avoid division by zero or negative zoom
+            const scaleFactor = curDist / (startDist || 1);
+            const newZoom = Math.max(0.1, Math.min(10, startZoom * scaleFactor));
 
-                    onZoomChange(newZoom);
-                    onPanChange({ x: newPanX, y: newPanY });
-                }
+            // 2. Calculate new Pan
+            // Logic: The point on the canvas that WAS under 'startCenter' (relative to startPan/startZoom)
+            // MUST now be under 'curCenter' (relative to newPan/newZoom).
+            // CanvasPoint = (startCenter_rel - startPan) / startZoom
+            // curCenter_rel = CanvasPoint * newZoom + newPan
+
+            // We need center relative to the container for these calculations.
+            // getCenter returns client coordinates.
+            if (containerRef.current) {
+                const rect = containerRef.current.getBoundingClientRect();
+
+                const scX = startCenter.x - rect.left;
+                const scY = startCenter.y - rect.top;
+
+                const ccX = curCenter.x - rect.left;
+                const ccY = curCenter.y - rect.top;
+
+                // Absolute Pan Calculation
+                // P_canvas_x = (scX - startPan.x) / startZoom;
+                // P_canvas_y = (scY - startPan.y) / startZoom;
+
+                // newPan.x = ccX - P_canvas_x * newZoom;
+                // newPan.y = ccY - P_canvas_y * newZoom;
+
+                // Optimization:
+                const newPanX = ccX - ((scX - startPan.x) / startZoom) * newZoom;
+                const newPanY = ccY - ((scY - startPan.y) / startZoom) * newZoom;
+
+                onZoomChange(newZoom);
+                onPanChange({ x: newPanX, y: newPanY });
             }
-            prevDiff.current = curDiff;
             return;
         }
 
@@ -363,7 +411,7 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
         pointerCache.current.delete(e.pointerId);
 
         if (pointerCache.current.size < 2) {
-            prevDiff.current = -1;
+            gestureBaseRef.current = null;
         }
 
         if (isPanning.current && pointerCache.current.size === 0) {
@@ -446,11 +494,44 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
         ? currentPolygonPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + (currentPolygonPoints.length > 2 ? '' : '') // Don't close yet
         : '';
 
+    // Keyboard Handlers for Space-Pan
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.code === 'Space' && !e.repeat) {
+                // Prevent scrolling if focused
+                if (e.target === document.body) e.preventDefault();
+                setIsSpacePressed(true);
+            }
+        };
+        const handleKeyUp = (e: KeyboardEvent) => {
+            if (e.code === 'Space') {
+                setIsSpacePressed(false);
+                // If we were panning via space, stop panning on release? 
+                // Usually we stop panning on pointer up. 
+                // If user releases space WHILE dragging, behavior varies. 
+                // For safety, we keep isPanning.current true until pointer up.
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('keyup', handleKeyUp);
+        };
+    }, []);
+
+    const getCursor = () => {
+        if (isSpacePressed || activeTool === 'pan') return isPanning.current ? 'grabbing' : 'grab';
+        if (activeTool === 'region') return 'crosshair';
+        if (activeTool === 'polygon') return 'crosshair';
+        return 'default';
+    };
+
     return (
         <div
             ref={containerRef}
-            className="relative overflow-hidden bg-gray-800 select-none"
-            style={{ touchAction: 'none', width: '100%', height: '100%' }}
+            className="relative overflow-hidden select-none"
+            style={{ touchAction: 'none', width: '100%', height: '100%', cursor: getCursor() }}
             onPointerDown={handePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -475,7 +556,7 @@ export const LayeredCanvas = forwardRef<LayeredCanvasRef, LayeredCanvasProps>(({
                     ref={drawingCanvasRef}
                     width={width}
                     height={height}
-                    style={{ position: 'absolute', pointerEvents: 'none' }}
+                    style={{ position: 'absolute', pointerEvents: 'none', background: 'transparent' }}
                 />
 
                 {/* 3. Regions Overlay */}

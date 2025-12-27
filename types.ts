@@ -9,6 +9,7 @@ export interface BaseItem {
   isVisible: boolean;
   opacity: number;
   parentId: string | null;
+  isLocked?: boolean; // New: prevents deletion
 }
 
 export interface SketchObject extends BaseItem {
@@ -23,6 +24,7 @@ export interface SketchObject extends BaseItem {
   fillColor?: string;
   backgroundImage?: HTMLImageElement;
   dataUrl?: string; // For serialization
+  contentRect?: CropRect; // New: tracks the actual area occupied by the background image or content
   mipmaps?: {
     small?: HTMLCanvasElement; // ~ 1/4 resolution (or fixed small size)
     medium?: HTMLCanvasElement; // ~ 1/2 resolution
@@ -164,7 +166,7 @@ export interface ClipboardData {
 // FIX: Added 'debug-brush' to the Tool type to match its usage in the application.
 // FIX: Added new brush tools to the Tool type.
 // FIX: Renamed 'solid-marker' to 'simple-marker' and added 'advanced-marker'.
-export type Tool = 'select' | 'transform' | 'brush' | 'eraser' | 'pan' | 'simple-marker' | 'crop' | 'free-transform' | 'enhance' | 'debug-brush' | 'marquee-rect' | 'lasso' | 'magic-wand' | 'text' | 'natural-marker' | 'airbrush' | 'fx-brush' | 'advanced-marker' | 'watercolor';
+export type Tool = 'select' | 'transform' | 'brush' | 'eraser' | 'pan' | 'simple-marker' | 'crop' | 'free-transform' | 'debug-brush' | 'marquee-rect' | 'lasso' | 'magic-wand' | 'text' | 'natural-marker' | 'airbrush' | 'fx-brush' | 'advanced-marker' | 'watercolor';
 
 // FIX: Added BrushPreset type for FX brushes.
 export interface BrushPreset {
@@ -200,7 +202,7 @@ export type LibraryItem = LibraryImage | LibraryFolder;
 
 // -- New Guide Types --
 // FIX: Removed 'annotation' from ItemType
-export type ItemType = 'group' | 'object';
+export type ItemType = 'group' | 'object' | 'virtual-layer';
 
 // FIX: Update CanvasItem to only be SketchObject
 export type CanvasItem = SketchObject;
@@ -366,6 +368,54 @@ export interface WorkspaceTemplate {
   quickAccessSettings: QuickAccessSettings;
 }
 
+export interface ArchRenderState {
+  inputImage: string | null;
+  resultImage: string | null;
+  styleReferenceImage: string | null;
+  renderStyle: string;
+  sceneType: string;
+  timeOfDay: string;
+  weather: string;
+  archStyle: string;
+  roomType: string;
+  lighting: string;
+  studioLighting: string;
+  studioBackground: string;
+  studioShot: string;
+  carAngle: string;
+  carEnvironment: string;
+  carColor: string;
+  objectMaterial: string;
+  objectDoF: string;
+  objectContext: string;
+  creativeFreedom: number;
+  additionalPrompt: string;
+  manualPrompt: string;
+  savedPrompts: string[];
+  regions: any[];
+  vpGeneralInstructions: string;
+  vpReferenceImage: string | null;
+  aiStructuredPrompt: string;
+  isPromptManuallyEdited: boolean;
+  drawingData?: string; // PNG data url of the LayeredCanvas drawing
+  generationHistory: { input: string | null, result: string | null }[];
+  historyIndex: number;
+}
+
+export interface FreeModeMessage {
+  id: string;
+  role: 'user' | 'model';
+  content: string;
+  attachments?: string[];
+  timestamp: number;
+  isImageOnly?: boolean;
+}
+
+export interface FreeModeState {
+  messages: FreeModeMessage[];
+  attachments: string[];
+}
+
 export interface ProjectFile {
   fileFormatVersion: string;
   canvasSize: { width: number; height: number };
@@ -375,6 +425,8 @@ export interface ProjectFile {
   guides: WorkspaceTemplate['guides'];
   toolSettings: WorkspaceTemplate['toolSettings'];
   quickAccessSettings: QuickAccessSettings;
+  archRenderState?: ArchRenderState;
+  freeModeState?: FreeModeState;
 }
 
 export interface Project {
