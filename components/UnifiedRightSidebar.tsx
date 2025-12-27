@@ -35,7 +35,7 @@ export const UnifiedRightSidebar: React.FC<UnifiedRightSidebarProps> = ({
 
     if (overrideContent) {
         return (
-            <aside ref={sidebarRef} className="flex-shrink-0 w-80 border-l border-theme-bg-tertiary flex flex-col h-full bg-theme-bg-secondary relative z-30 shadow-xl transition-all duration-300">
+            <aside ref={sidebarRef} className="flex-shrink-0 w-80 border-l border-theme-bg-tertiary flex flex-col h-full bg-theme-bg-secondary relative z-[70] shadow-xl transition-all duration-300">
                 {/* Override Content (No Tabs) */}
                 <div className="flex-grow flex flex-col min-h-0 relative bg-theme-bg-secondary overflow-hidden">
                     {overrideContent}
@@ -45,7 +45,7 @@ export const UnifiedRightSidebar: React.FC<UnifiedRightSidebarProps> = ({
     }
 
     return (
-        <aside ref={sidebarRef} className="flex-shrink-0 w-80 border-l border-theme-bg-tertiary flex flex-col h-full bg-theme-bg-secondary relative z-30 shadow-xl transition-all duration-300">
+        <aside ref={sidebarRef} className="flex-shrink-0 w-80 border-l border-theme-bg-tertiary flex flex-col h-full bg-theme-bg-secondary relative z-[70] shadow-xl transition-all duration-300">
             {/* Header Tabs */}
             <div className="flex items-center border-b border-theme-bg-tertiary bg-theme-bg-primary">
                 <button

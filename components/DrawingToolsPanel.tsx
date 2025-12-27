@@ -379,31 +379,74 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
             <section className="space-y-3">
                 <label className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider block">Ajustes de Pincel</label>
 
-                {/* Size */}
-                <div>
-                    <div className="flex justify-between text-[10px] text-theme-text-secondary mb-1">
-                        <span>Tamaño</span>
-                        <span>{brushSize}px</span>
-                    </div>
-                    <input
-                        type="range" min="1" max="100"
-                        value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                        className="w-full h-1.5 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary block"
-                    />
-                </div>
+                {(() => {
+                    // Logic to determine which settings to control
+                    // Priority: Active tool settings -> Default brush settings (as fallback or if active tool is generic)
+                    const activeSettings = getToolSettings(tool);
 
-                {/* Opacity */}
-                <div>
-                    <div className="flex justify-between text-[10px] text-theme-text-secondary mb-1">
-                        <span>Opacidad</span>
-                        <span>{Math.round(brushOpacity * 100)}%</span>
-                    </div>
-                    <input
-                        type="range" min="0" max="1" step="0.01"
-                        value={brushOpacity} onChange={(e) => setBrushOpacity(parseFloat(e.target.value))}
-                        className="w-full h-1.5 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary block"
-                    />
-                </div>
+                    // If the active tool doesn't have specific settings (like 'select'), we might want to disable or show default
+                    // But for now, let's assume if it returns null, we fallback to the main brush props or disable
+
+                    const currentSize = activeSettings ? activeSettings.values.size : brushSize;
+                    const currentOpacity = activeSettings ? activeSettings.values.opacity : brushOpacity;
+                    const isDisabled = !activeSettings && tool !== 'brush' && tool !== 'eraser'; // Enable for eraser if it had size? (Eraser usually has size)
+                    // Eraser isn't in getToolSettings yet? Let's check. 
+                    // Eraser uses setTool('eraser'). It's not in the BRUSH_TOOLS list.
+                    // If tool is 'eraser', we might want to control eraser size. But eraser might use 'brushSize' currently?
+                    // The App.tsx passes 'brushSize' which effectively is the global brush/eraser size if they share it.
+                    // However, user specifically asked for "active tool".
+                    // If activeSettings is available, use it. Otherwise use the props (which are likely the default 'brush' ones).
+
+                    const handleSizeChange = (val: number) => {
+                        if (activeSettings?.setter) {
+                            activeSettings.setter((prev: any) => ({ ...prev, size: val }));
+                        } else {
+                            setBrushSize(val);
+                        }
+                    };
+
+                    const handleOpacityChange = (val: number) => {
+                        if (activeSettings?.setter) {
+                            activeSettings.setter((prev: any) => ({ ...prev, opacity: val }));
+                        } else {
+                            setBrushOpacity(val);
+                        }
+                    };
+
+                    return (
+                        <>
+                            {/* Size */}
+                            <div>
+                                <div className="flex justify-between text-[10px] text-theme-text-secondary mb-1">
+                                    <span>Tamaño</span>
+                                    <span>{currentSize}px</span>
+                                </div>
+                                <input
+                                    type="range" min="1" max="100"
+                                    value={currentSize} onChange={(e) => handleSizeChange(parseInt(e.target.value))}
+                                    className="w-full h-1.5 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary block"
+                                    disabled={isDisabled}
+                                    style={{ opacity: isDisabled ? 0.5 : 1 }}
+                                />
+                            </div>
+
+                            {/* Opacity */}
+                            <div>
+                                <div className="flex justify-between text-[10px] text-theme-text-secondary mb-1">
+                                    <span>Opacidad</span>
+                                    <span>{Math.round(currentOpacity * 100)}%</span>
+                                </div>
+                                <input
+                                    type="range" min="0" max="1" step="0.01"
+                                    value={currentOpacity} onChange={(e) => handleOpacityChange(parseFloat(e.target.value))}
+                                    className="w-full h-1.5 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary block"
+                                    disabled={isDisabled}
+                                    style={{ opacity: isDisabled ? 0.5 : 1 }}
+                                />
+                            </div>
+                        </>
+                    );
+                })()}
 
                 {/* Smoothing */}
                 <div>

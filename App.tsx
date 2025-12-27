@@ -2316,7 +2316,7 @@ export function App() {
 
             {/* Left Sidebar: Unified (Visual Prompting & Tools) */}
             <aside
-                className={`fixed left-0 bottom-0 z-40  transition-transform duration-300 w-80 shadow-xl ${(ui.isLeftSidebarVisible && activeView !== 'free') ? 'translate-x-0' : '-translate-x-full'} ${ui.isHeaderVisible ? 'top-16' : 'top-0'}`}
+                className={`fixed left-0 bottom-0 z-[70]  transition-transform duration-300 w-80 shadow-xl ${(ui.isLeftSidebarVisible && activeView !== 'free') ? 'translate-x-0' : '-translate-x-full'} ${ui.isHeaderVisible ? 'top-16' : 'top-0'}`}
             >
                 <UnifiedLeftSidebar
                     isOpen={ui.isLeftSidebarVisible}
