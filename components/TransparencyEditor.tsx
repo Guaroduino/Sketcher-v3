@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { LibraryImage, RgbColor, Point, ScaleUnit } from '../types';
-import { ZoomInIcon, ZoomOutIcon, HandIcon, CrosshairIcon, UndoIcon, XIcon, EraserIcon, RedoIcon, RefreshCwIcon, HistoryIcon } from './icons';
+import { ZoomInIcon, ZoomOutIcon, HandIcon, CrosshairIcon, UndoIcon, XIcon, EraserIcon, RedoIcon, RefreshCwIcon, HistoryIcon, MaximizeIcon } from './icons';
 import { getCanvasPoint, hexToRgb, rgbToHex } from '../utils/canvasUtils';
 
 interface TransparencyEditorProps {
@@ -31,6 +31,9 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
 
     const [history, setHistory] = useState<HistoryState[]>([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
+    const [renderTrigger, setRenderTrigger] = useState(0);
+
+    const triggerRedraw = useCallback(() => setRenderTrigger(v => v + 1), []);
 
     const dragState = useRef<{ isPanning: boolean; isErasing: boolean; lastPoint: Point | null; }>({ isPanning: false, isErasing: false, lastPoint: null });
 
@@ -73,6 +76,18 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
 
         const transparentCanvas = transparentCanvasRef.current;
         const previewCanvas = previewCanvasRef.current;
+
+        // Safety: check if preview canvas has dimensions, try to recover if missing
+        if (previewCanvas.width === 0 && containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                previewCanvas.width = rect.width;
+                previewCanvas.height = rect.height;
+            }
+        }
+
+        if (previewCanvas.width === 0 || previewCanvas.height === 0) return;
+
         const previewCtx = previewCanvas.getContext('2d');
         if (!previewCtx) return;
 
@@ -161,11 +176,10 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
         transparentCtx.drawImage(eraserMaskCanvas, 0, 0);
         transparentCtx.globalCompositeOperation = 'source-over';
 
-        redraw();
-    }, [redraw]);
+        triggerRedraw();
+    }, [triggerRedraw]);
 
-    // This single effect now handles updating ALL masks and composing the final image.
-    // This fixes the race condition between color mask and eraser mask updates.
+    // Mask Update Effect
     useEffect(() => {
         if (!currentHistoryState || !imageElement) return;
 
@@ -216,6 +230,11 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
 
     }, [currentHistoryState, tolerance, imageElement, composeTransparentImage]);
 
+    // Separate redraw logic to avoid expensive mask re-generation on pan/zoom
+    useEffect(() => {
+        redraw();
+    }, [redraw, renderTrigger, viewTransform, scaleFactor]);
+
 
     useEffect(() => {
         if (!imageElement || !originalCanvasRef.current || !eraserMaskCanvasRef.current || !transparentCanvasRef.current) return;
@@ -246,17 +265,32 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
 
     useEffect(() => {
         if (imageElement && containerRef.current && historyIndex === 0) { // Only center on initial load
-            const viewWidth = containerRef.current.offsetWidth;
-            const viewHeight = containerRef.current.offsetHeight;
-            const padding = 0.9;
-            const scaleX = viewWidth / imageElement.width;
-            const scaleY = viewHeight / imageElement.height;
-            const newZoom = Math.min(scaleX, scaleY) * padding;
-            const newPanX = (viewWidth - imageElement.width * newZoom) / 2;
-            const newPanY = (viewHeight - imageElement.height * newZoom) / 2;
-            setViewTransform({ zoom: newZoom, pan: { x: newPanX, y: newPanY } });
+            const container = containerRef.current;
+            const previewCanvas = previewCanvasRef.current;
+
+            // CRITICAL: Set preview canvas dimensions immediately based on container
+            if (previewCanvas) {
+                const rect = container.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {
+                    previewCanvas.width = rect.width;
+                    previewCanvas.height = rect.height;
+                }
+            }
+
+            const viewWidth = container.offsetWidth;
+            const viewHeight = container.offsetHeight;
+            if (viewWidth > 0 && viewHeight > 0) {
+                const padding = 0.9;
+                const scaleX = viewWidth / imageElement.width;
+                const scaleY = viewHeight / imageElement.height;
+                const newZoom = Math.min(scaleX, scaleY) * padding;
+                const newPanX = (viewWidth - imageElement.width * newZoom) / 2;
+                const newPanY = (viewHeight - imageElement.height * newZoom) / 2;
+                setViewTransform({ zoom: newZoom, pan: { x: newPanX, y: newPanY } });
+                triggerRedraw();
+            }
         }
-    }, [imageElement, historyIndex]);
+    }, [imageElement, historyIndex, triggerRedraw]);
 
     useEffect(() => {
         const resizeObserver = new ResizeObserver(() => {
@@ -264,18 +298,32 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
                 const { width, height } = containerRef.current.getBoundingClientRect();
                 previewCanvasRef.current.width = width;
                 previewCanvasRef.current.height = height;
-                redraw();
+                triggerRedraw();
             }
         });
         if (containerRef.current) resizeObserver.observe(containerRef.current);
         return () => resizeObserver.disconnect();
-    }, [redraw]);
+    }, [triggerRedraw]);
 
-    useEffect(redraw, [redraw]);
+    const handleZoomExtents = useCallback(() => {
+        if (imageElement && containerRef.current) {
+            const container = containerRef.current;
+            const viewWidth = container.offsetWidth;
+            const viewHeight = container.offsetHeight;
+            if (viewWidth > 0 && viewHeight > 0) {
+                const padding = 0.9;
+                const scaleX = viewWidth / imageElement.width;
+                const scaleY = viewHeight / imageElement.height;
+                const newZoom = Math.min(scaleX, scaleY) * padding;
+                const newPanX = (viewWidth - imageElement.width * newZoom) / 2;
+                const newPanY = (viewHeight - imageElement.height * newZoom) / 2;
+                setViewTransform({ zoom: newZoom, pan: { x: newPanX, y: newPanY } });
+                triggerRedraw();
+            }
+        }
+    }, [imageElement, triggerRedraw]);
 
     const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-        // FIX: The original check (e.button !== 0) prevented middle-click panning. 
-        // This is updated to allow both left-click (0) and middle-click (1) to proceed.
         if (e.button !== 0 && e.button !== 1) return;
         if (!currentHistoryState) return;
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -359,18 +407,14 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
     const handleReset = () => (history.length > 0) && setHistoryIndex(0);
 
     const handleFullReset = () => {
-        // This is a destructive action that clears history to a fully opaque state.
         if (!imageElement || !eraserMaskCanvasRef.current) return;
-
         const eraserCtx = eraserMaskCanvasRef.current.getContext('2d');
         if (!eraserCtx) return;
-
         const { width, height } = imageElement;
         eraserCtx.clearRect(0, 0, width, height);
         const initialEraserMaskData = eraserCtx.getImageData(0, 0, width, height);
-
         setHistory([{
-            colors: [], // No transparent colors
+            colors: [],
             eraserMaskData: initialEraserMaskData
         }]);
         setHistoryIndex(0);
@@ -416,6 +460,7 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
                                 <button onClick={() => setActiveTool('pan')} className={toolButtonClasses('pan')} title="Mover"><HandIcon className="w-5 h-5" /></button>
                                 <button onClick={() => setViewTransform(v => ({ ...v, zoom: v.zoom * 1.2 }))} className="p-2 rounded-md bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover" title="Acercar"><ZoomInIcon className="w-5 h-5" /></button>
                                 <button onClick={() => setViewTransform(v => ({ ...v, zoom: v.zoom / 1.2 }))} className="p-2 rounded-md bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover" title="Alejar"><ZoomOutIcon className="w-5 h-5" /></button>
+                                <button onClick={handleZoomExtents} className="p-2 rounded-md bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover" title="Ajustar a Pantalla"><MaximizeIcon className="w-5 h-5" /></button>
                             </div>
                         </div>
 
@@ -519,6 +564,7 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
                         onPointerMove={handlePointerMove}
                         onPointerUp={handlePointerUp}
                         onPointerLeave={handlePointerUp}
+                        onDoubleClick={handleZoomExtents}
                         style={{
                             cursor: activeTool === 'pan' ? (dragState.current.isPanning ? 'grabbing' : 'grab') : 'crosshair',
                             backgroundImage: 'linear-gradient(45deg, #808080 25%, transparent 25%), linear-gradient(-45deg, #808080 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #808080 75%), linear-gradient(-45deg, transparent 75%, #808080 75%)',

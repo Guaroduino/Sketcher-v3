@@ -1204,7 +1204,7 @@ export function App() {
         user,
         dispatch,
         ui.setProjectGalleryOpen,
-        canvasView.onZoomExtents,
+        () => onZoomExtentsRef.current(),
         loadAllToolSettings,
         guides.loadGuideState,
         quickAccess.loadState,

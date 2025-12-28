@@ -569,6 +569,21 @@ function appReducer(state: AppState, action: Action): AppState {
                 if (item.canvas) {
                     const { canvas: newCanvas, context: newCtx } = createNewCanvas(newCanvasSize.width, newCanvasSize.height);
 
+                    if (scale) {
+                        // Scale content to new size
+                        newCtx.drawImage(item.canvas, 0, 0, newCanvasSize.width, newCanvasSize.height);
+                    } else {
+                        // Center old content on new canvas (Canvas size change)
+                        if (item.isBackground) {
+                            newCtx.fillStyle = item.color || '#FFFFFF';
+                            newCtx.fillRect(0, 0, newCanvasSize.width, newCanvasSize.height);
+                        }
+
+                        const dx = (newCanvasSize.width - item.canvas.width) / 2;
+                        const dy = (newCanvasSize.height - item.canvas.height) / 2;
+                        newCtx.drawImage(item.canvas, dx, dy);
+                    }
+
                     const updatedItem = { ...item, canvas: newCanvas, context: newCtx, mipmaps: generateMipmaps(newCanvas) };
 
                     if (item.isBackground && item.contentRect) {
@@ -592,9 +607,6 @@ function appReducer(state: AppState, action: Action): AppState {
                                 y: item.contentRect.y + dy
                             };
                         }
-                    } else if (item.isBackground && !item.contentRect && !scale) {
-                        // If no contentRect (full color), and not scaling (centering), update size to match new canvas
-                        // though background color usually fills whole canvas anyway.
                     }
 
                     return updatedItem;
