@@ -5,8 +5,7 @@ import type { LibraryItem, LibraryImage } from '../../types';
 interface BackgroundImportModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onResizeCanvas: () => void;
-    onFitImage: (cropToFit: boolean) => void;
+    onConfirm: (mode: 'resize-canvas' | 'fit-image', cropToFit: boolean, importAsObject: boolean) => void;
     pendingFile: File | null;
     onFileSelected: (file: File | null) => void;
     libraryItems: LibraryItem[];
@@ -15,13 +14,13 @@ interface BackgroundImportModalProps {
 export const BackgroundImportModal: React.FC<BackgroundImportModalProps> = ({
     isOpen,
     onClose,
-    onResizeCanvas,
-    onFitImage,
+    onConfirm,
     pendingFile,
     onFileSelected,
     libraryItems = []
 }) => {
     const [cropToFit, setCropToFit] = useState(false);
+    const [importAsObject, setImportAsObject] = useState(false);
     const [step, setStep] = useState<'source-select' | 'actions'>('source-select');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -131,20 +130,20 @@ export const BackgroundImportModal: React.FC<BackgroundImportModalProps> = ({
 
                         <div className="space-y-3">
                             <button
-                                onClick={onResizeCanvas}
+                                onClick={() => onConfirm('resize-canvas', false, importAsObject)}
                                 className="w-full text-left p-3 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover flex flex-col transition-colors"
                             >
                                 <span className="font-bold text-sm">Ajustar Lienzo a Imagen</span>
-                                <span className="text-xs text-theme-text-secondary mt-1">El lienzo cambiará de tamaño para coincidir con la imagen.</span>
+                                <span className="text-xs text-theme-text-secondary mt-1">El lienzo cambiará de tamaño para coincidir con la imagen{importAsObject ? ' (importar como capa)' : ''}.</span>
                             </button>
 
                             <div className="space-y-2">
                                 <button
-                                    onClick={() => onFitImage(cropToFit)}
+                                    onClick={() => onConfirm('fit-image', cropToFit, importAsObject)}
                                     className="w-full text-left p-3 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover flex flex-col transition-colors"
                                 >
                                     <span className="font-bold text-sm">Ajustar Imagen al Lienzo</span>
-                                    <span className="text-xs text-theme-text-secondary mt-1">La imagen se redimensionará para caber dentro del lienzo (manteniendo proporción).</span>
+                                    <span className="text-xs text-theme-text-secondary mt-1">La imagen se redimensionará para caber dentro del lienzo{importAsObject ? ' (importar como capa)' : ''}.</span>
                                 </button>
 
                                 <div className="flex items-center space-x-2 pl-2">
@@ -157,6 +156,18 @@ export const BackgroundImportModal: React.FC<BackgroundImportModalProps> = ({
                                     />
                                     <label htmlFor="crop-to-fit" className="text-xs text-theme-text-secondary cursor-pointer selection:bg-transparent">
                                         Ajustar también el tamaño del lienzo (recortar sobrante)
+                                    </label>
+                                </div>
+                                <div className="flex items-center space-x-2 pl-2 pt-2">
+                                    <input
+                                        type="checkbox"
+                                        id="import-as-object"
+                                        checked={importAsObject}
+                                        onChange={(e) => setImportAsObject(e.target.checked)}
+                                        className="w-4 h-4 rounded border-theme-bg-tertiary text-theme-accent-primary focus:ring-theme-accent-primary"
+                                    />
+                                    <label htmlFor="import-as-object" className="text-xs text-theme-text-secondary cursor-pointer selection:bg-transparent font-medium">
+                                        Importar como objeto (nueva capa)
                                     </label>
                                 </div>
                             </div>

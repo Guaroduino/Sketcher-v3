@@ -1,7 +1,26 @@
 
 import React, { useState } from 'react';
-import { SparklesIcon, ChevronLeftIcon, ChevronRightIcon, UploadIcon } from './icons';
+import { SparklesIcon, ChevronLeftIcon, ChevronRightIcon, UploadIcon, ChevronUpIcon, ChevronDownIcon, SaveIcon, TrashIcon } from './icons';
+import { useInstructionPresets } from '../hooks/useInstructionPresets';
+import { SavedInstruction } from '../types';
+
+const CollapsibleSection = ({ title, children, defaultOpen = false }: { title: string, children: React.ReactNode, defaultOpen?: boolean }) => {
+    const [isOpen, setIsOpen] = useState(defaultOpen);
+    return (
+        <div className="space-y-2 border border-theme-bg-tertiary rounded-lg p-3 bg-theme-bg-primary/20">
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full flex items-center justify-between text-[10px] font-black text-theme-accent-primary uppercase tracking-[0.2em] hover:text-theme-text-primary transition-colors py-1 focus:outline-none group"
+            >
+                <span className="group-hover:translate-x-1 transition-transform">{title}</span>
+                {isOpen ? <ChevronUpIcon className="w-3 h-3 text-theme-text-tertiary" /> : <ChevronDownIcon className="w-3 h-3 text-theme-text-tertiary" />}
+            </button>
+            {isOpen && <div className="space-y-4 pt-2 animate-in slide-in-from-top-1 fade-in duration-200 border-t border-theme-bg-tertiary/50">{children}</div>}
+        </div>
+    );
+};
 import { SceneType, RenderStyleMode } from '../utils/architecturalPromptBuilder';
+import { RenderStyleSettings } from '../types';
 
 interface ArchitecturalControlsProps {
     sceneType: SceneType;
@@ -38,10 +57,17 @@ interface ArchitecturalControlsProps {
     setObjectContext: (v: string) => void;
     creativeFreedom: number;
     setCreativeFreedom: (v: number) => void;
+    renderStyleSettings: RenderStyleSettings;
+    setRenderStyleSettings: (v: RenderStyleSettings) => void;
+    matchMateriality: boolean;
+    setMatchMateriality: (v: boolean) => void;
     additionalPrompt: string;
     setAdditionalPrompt: (v: string) => void;
     styleReferenceImage: string | null;
     setStyleReferenceImage: (v: string | null) => void;
+    styleReferenceDescription?: string;
+    isAnalyzingReference?: boolean;
+    analyzeReferenceImage?: () => void;
     onRender: () => void;
     isGenerating: boolean;
 }
@@ -107,13 +133,34 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = React
     objectDoF, setObjectDoF,
     objectContext, setObjectContext,
     creativeFreedom, setCreativeFreedom,
+    renderStyleSettings, setRenderStyleSettings,
+    matchMateriality, setMatchMateriality,
     additionalPrompt, setAdditionalPrompt,
     styleReferenceImage, setStyleReferenceImage,
+    styleReferenceDescription, isAnalyzingReference, analyzeReferenceImage,
     onRender,
     isGenerating
 }) => {
     // Local state for debouncing additionalPrompt
     const [localPrompt, setLocalPrompt] = React.useState(additionalPrompt);
+
+    // Presets State
+    const { savedInstructions, addPreset, deletePreset } = useInstructionPresets();
+    const [saveName, setSaveName] = useState('');
+    const [isSaveOpen, setIsSaveOpen] = useState(false);
+    const [isPresetsDropdownOpen, setIsPresetsDropdownOpen] = useState(false);
+
+    const handleSavePreset = () => {
+        if (!saveName.trim() || !localPrompt.trim()) return;
+        addPreset(saveName.trim(), localPrompt, 'advanced');
+        setSaveName('');
+        setIsSaveOpen(false);
+    };
+
+    const handleLoadPreset = (preset: SavedInstruction) => {
+        setLocalPrompt(preset.content);
+        // Prompt will sync via effect
+    };
 
     // Sync local state when external prop changes (e.g. project load)
     React.useEffect(() => {
@@ -131,8 +178,9 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = React
     }, [localPrompt, additionalPrompt, setAdditionalPrompt]);
 
     // Options
-    const timeOptions = [{ label: 'Mañana', value: 'morning' }, { label: 'Mediodía', value: 'noon' }, { label: 'Tarde', value: 'afternoon' }, { label: 'Hora Dorada', value: 'golden_hour' }, { label: 'Noche', value: 'night' }];
-    const weatherOptions = [{ label: 'Soleado', value: 'sunny' }, { label: 'Nublado', value: 'overcast' }, { label: 'Lluvia', value: 'rainy' }, { label: 'Niebla', value: 'foggy' }];
+    // Options
+    const timeOptions = [{ label: 'Igualar Referencia', value: 'match_source' }, { label: 'Mañana', value: 'morning' }, { label: 'Mediodía', value: 'noon' }, { label: 'Tarde', value: 'afternoon' }, { label: 'Hora Dorada', value: 'golden_hour' }, { label: 'Noche', value: 'night' }];
+    const weatherOptions = [{ label: 'Igualar Referencia', value: 'match_source' }, { label: 'Soleado', value: 'sunny' }, { label: 'Nublado', value: 'overcast' }, { label: 'Lluvia', value: 'rainy' }, { label: 'Niebla', value: 'foggy' }];
     const sceneTypeOptions = [
         { label: 'Exterior Arquitectónico', value: 'exterior' },
         { label: 'Interior Arquitectónico', value: 'interior' },
@@ -143,15 +191,101 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = React
     ];
     const renderStyleOptions = [
         { label: 'Fotorealista', value: 'photorealistic' },
-        { label: 'Acuarela', value: 'watercolor' },
-        { label: 'Lápiz de Color', value: 'colored_pencil' },
-        { label: 'Grafito', value: 'graphite' },
-        { label: 'Marcador', value: 'ink_marker' },
+        { label: 'Boceto Digital', value: 'digital_painting' },
+        { label: 'Tinta y Acuarela', value: 'watercolor' },
+        { label: 'Plano Técnico', value: 'technical_plan' },
         { label: 'Carboncillo', value: 'charcoal' },
-        { label: 'Pintura Digital', value: 'digital_painting' },
+        { label: 'Maqueta de Arcilla', value: 'clay_model' },
+        { label: 'Lápiz de Color', value: 'colored_pencil' },
+        { label: 'Marcador', value: 'ink_marker' },
         { label: 'Cartoon 3D', value: '3d_cartoon' }
     ];
+
+    // Helper for Style Specific Options
+    const updateStyleSetting = (key: keyof RenderStyleSettings, val: string) => {
+        setRenderStyleSettings({ ...renderStyleSettings, [key]: val });
+    };
+
+    const getStyleSpecificControls = () => {
+        switch (renderStyle) {
+            case 'photorealistic':
+                return (
+                    <>
+                        <CollapsiblePillGroup label="Cámara" options={[{ l: 'DSLR', v: 'dslr' }, { l: 'Formato Medio', v: 'large_format' }, { l: 'Aérea/Drone', v: 'drone' }, { l: 'Polaroid', v: 'instant' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.phCamera} onChange={(v) => updateStyleSetting('phCamera', v)} />
+                        <CollapsiblePillGroup label="Película" options={[{ l: 'Digital', v: 'digital' }, { l: 'Kodak Portra', v: 'kodak_portra' }, { l: 'Fuji Pro', v: 'fujifilm' }, { l: 'B&W', v: 'bw_film' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.phFilm} onChange={(v) => updateStyleSetting('phFilm', v)} />
+                        <CollapsiblePillGroup label="Efecto de Lente" options={[{ l: 'Limpio', v: 'clean' }, { l: 'Bokeh', v: 'bokeh' }, { l: 'Viñeta', v: 'vignette' }, { l: 'Glow', v: 'cinematic_bloom' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.phEffect} onChange={(v) => updateStyleSetting('phEffect', v)} />
+                    </>
+                );
+            case 'digital_painting':
+                return (
+                    <>
+                        <CollapsiblePillGroup label="Pincel" options={[{ l: 'Óleo', v: 'oil' }, { l: 'Marcador', v: 'marker' }, { l: 'Aerógrafo', v: 'airbrush' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.dsBrush} onChange={(v) => updateStyleSetting('dsBrush', v)} />
+                        <CollapsiblePillGroup label="Acabado" options={[{ l: 'Limpio', v: 'clean' }, { l: 'Sucio', v: 'messy' }, { l: 'Pulido', v: 'polished' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.dsFinish} onChange={(v) => updateStyleSetting('dsFinish', v)} />
+                        <CollapsiblePillGroup label="Trazo" options={[{ l: 'Fino', v: 'fine' }, { l: 'Medio', v: 'medium' }, { l: 'Grueso', v: 'thick' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.dsStroke} onChange={(v) => updateStyleSetting('dsStroke', v)} />
+                    </>
+                );
+            case 'watercolor':
+                return (
+                    <>
+                        <CollapsiblePillGroup label="Técnica" options={[{ l: 'Húmedo', v: 'wet' }, { l: 'Seco', v: 'dry' }, { l: 'Lavado', v: 'wash' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.wcTechnique} onChange={(v) => updateStyleSetting('wcTechnique', v)} />
+                        <CollapsiblePillGroup label="Papel" options={[{ l: 'Grano Fino', v: 'fine_grain' }, { l: 'Rugoso', v: 'rough' }, { l: 'Liso', v: 'smooth' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.wcPaper} onChange={(v) => updateStyleSetting('wcPaper', v)} />
+                        <CollapsiblePillGroup label="Tinta" options={[{ l: 'Estilográfica', v: 'fountain' }, { l: 'Pincel', v: 'brush_pen' }, { l: 'Pluma', v: 'dip_pen' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.wcInk} onChange={(v) => updateStyleSetting('wcInk', v)} />
+                    </>
+                );
+            case 'technical_plan':
+                return (
+                    <>
+                        <CollapsiblePillGroup label="Fondo" options={[{ l: 'Azul Blueprint', v: 'blue' }, { l: 'Blanco', v: 'white' }, { l: 'Gris', v: 'gray' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.tpBackground} onChange={(v) => updateStyleSetting('tpBackground', v)} />
+                        <CollapsiblePillGroup label="Precisión" options={[{ l: 'CAD', v: 'cad' }, { l: 'Mano Alzada', v: 'hand_drawn' }, { l: 'Borrador', v: 'draft' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.tpPrecision} onChange={(v) => updateStyleSetting('tpPrecision', v)} />
+                        <CollapsiblePillGroup label="Detalles" options={[{ l: 'Mínimos', v: 'low' }, { l: 'Ricos', v: 'high' }, { l: 'Solo Masas', v: 'massing' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.tpDetails} onChange={(v) => updateStyleSetting('tpDetails', v)} />
+                    </>
+                );
+            case 'charcoal':
+                return (
+                    <>
+                        <CollapsiblePillGroup label="Difuminado" options={[{ l: 'Suave', v: 'soft' }, { l: 'Rudo', v: 'hard' }, { l: 'Limpio', v: 'clean' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.chSmudge} onChange={(v) => updateStyleSetting('chSmudge', v)} />
+                        <CollapsiblePillGroup label="Contraste" options={[{ l: 'Gris Suave', v: 'soft_gray' }, { l: 'Negro Profundo', v: 'deep_black' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.chContrast} onChange={(v) => updateStyleSetting('chContrast', v)} />
+                        <CollapsiblePillGroup label="Trazado" options={[{ l: 'Cruzado', v: 'cross' }, { l: 'Vertical', v: 'vertical' }, { l: 'Libre', v: 'free' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.chHatch} onChange={(v) => updateStyleSetting('chHatch', v)} />
+                    </>
+                );
+            case 'clay_model':
+                return (
+                    <>
+                        <CollapsiblePillGroup label="Material" options={[{ l: 'Arcilla Blanca', v: 'white_clay' }, { l: 'Resina', v: 'resin' }, { l: 'Terracota', v: 'terracotta' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.cmMaterial} onChange={(v) => updateStyleSetting('cmMaterial', v)} />
+                        <CollapsiblePillGroup label="Superficie" options={[{ l: 'Pulida', v: 'smooth' }, { l: 'Esculpida', v: 'sculpted' }, { l: 'Rugosa', v: 'rough' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.cmSurface} onChange={(v) => updateStyleSetting('cmSurface', v)} />
+                        <CollapsiblePillGroup label="Iluminación" options={[{ l: 'Estudio Soft', v: 'studio_soft' }, { l: 'Contraste', v: 'high_contrast' }, { l: 'Natural', v: 'natural' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.cmLighting} onChange={(v) => updateStyleSetting('cmLighting', v)} />
+                    </>
+                );
+            case 'ink_marker':
+                return (
+                    <>
+                        <CollapsiblePillGroup label="Papel" options={[{ l: 'Bond', v: 'im_bond_paper' }, { l: 'Marker Paper', v: 'im_marker_paper' }, { l: 'Vegetal', v: 'im_tracing_paper' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.imPaper} onChange={(v) => updateStyleSetting('imPaper', v)} />
+                        <CollapsiblePillGroup label="Técnica" options={[{ l: 'Suelto', v: 'im_loose' }, { l: 'Capas', v: 'im_layered' }, { l: 'Preciso', v: 'im_precise' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.imTechnique} onChange={(v) => updateStyleSetting('imTechnique', v)} />
+                        <CollapsiblePillGroup label="Paleta" options={[{ l: 'Vibrante', v: 'im_vibrant' }, { l: 'Grises', v: 'im_grayscale' }, { l: 'Pastel', v: 'im_muted' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.imColor} onChange={(v) => updateStyleSetting('imColor', v)} />
+                    </>
+                );
+            case '3d_cartoon':
+                return (
+                    <>
+                        <CollapsiblePillGroup label="Estilo" options={[{ l: 'Pixar', v: 'tc_pixar' }, { l: 'Clay', v: 'tc_clay' }, { l: 'Juguete', v: 'tc_toy' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.tcStyle} onChange={(v) => updateStyleSetting('tcStyle', v)} />
+                        <CollapsiblePillGroup label="Material" options={[{ l: 'Plástico', v: 'tc_plastic' }, { l: 'Mate', v: 'tc_matte' }, { l: 'Glossy', v: 'tc_glossy' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.tcMaterial} onChange={(v) => updateStyleSetting('tcMaterial', v)} />
+                        <CollapsiblePillGroup label="Iluminación" options={[{ l: 'Suave', v: 'tc_soft' }, { l: 'Estudio', v: 'tc_studio' }, { l: 'Solar', v: 'tc_sun' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.tcLighting} onChange={(v) => updateStyleSetting('tcLighting', v)} />
+                    </>
+                );
+            case 'colored_pencil':
+                return (
+                    <>
+                        <CollapsiblePillGroup label="Técnica" options={[{ l: 'Tramado', v: 'cp_hatching' }, { l: 'Suave', v: 'cp_smooth' }, { l: 'Boceto', v: 'cp_sketchy' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.cpTechnique} onChange={(v) => updateStyleSetting('cpTechnique', v)} />
+                        <CollapsiblePillGroup label="Papel" options={[{ l: 'Blanco', v: 'cp_white' }, { l: 'Tonificado', v: 'cp_toned' }, { l: 'Texturado', v: 'cp_textured' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.cpPaper} onChange={(v) => updateStyleSetting('cpPaper', v)} />
+                        <CollapsiblePillGroup label="Vibrancia" options={[{ l: 'Suave', v: 'cp_soft' }, { l: 'Vibrante', v: 'cp_vibrant' }, { l: 'Realista', v: 'cp_realistic' }].map(o => ({ label: o.l, value: o.v }))} value={renderStyleSettings.cpVibrancy} onChange={(v) => updateStyleSetting('cpVibrancy', v)} />
+                    </>
+                );
+            default:
+                return <div className="text-[10px] text-theme-text-secondary italic p-2">Sin opciones específicas para este estilo.</div>;
+        }
+    };
     const archStyleOptions = [
+        { label: 'Igualar Referencia', value: 'match_source' },
         { label: 'Ninguno / Genérico', value: 'none' },
         { label: 'Moderno', value: 'modern' },
         { label: 'Moderno Mid-Century', value: 'mid_century_modern' },
@@ -178,10 +312,10 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = React
         { label: 'Futurista', value: 'futuristic' },
         { label: 'Cinematográfico', value: 'cinematic' }
     ];
-    const roomOptions = [{ label: 'Sala', value: 'living_room' }, { label: 'Cocina', value: 'kitchen' }, { label: 'Dormitorio', value: 'bedroom' }, { label: 'Baño', value: 'bathroom' }, { label: 'Oficina', value: 'office' }, { label: 'Aula', value: 'classroom' }, { label: 'Laboratorio', value: 'laboratory' }, { label: 'Taller', value: 'workshop' }, { label: 'Gym', value: 'gym' }, { label: 'Hotel', value: 'hotel_room' }, { label: 'Retail', value: 'retail_store' }, { label: 'Restaurante', value: 'restaurant' }, { label: 'Lobby', value: 'lobby' }, { label: 'Mall', value: 'mall_hallway' }];
-    const lightingOptions = [{ label: 'Natural', value: 'natural' }, { label: 'Natural (Mañana)', value: 'natural_morning' }, { label: 'Natural (Tarde)', value: 'natural_afternoon' }, { label: 'Cálida (3000K)', value: 'warm_artificial' }, { label: 'Neutra (4000K)', value: 'neutral_artificial' }, { label: 'Fría (5000K)', value: 'cold_artificial' }, { label: 'Studio', value: 'studio' }, { label: 'Moody (Dramático)', value: 'moody' }];
-    const studioLightOptions = [{ label: 'Softbox (Suave)', value: 'softbox' }, { label: 'Rim Light (Silueta)', value: 'rim_light' }, { label: 'Luz Dura (Hard Key)', value: 'hard_key' }, { label: 'Dramático', value: 'dramatic' }];
-    const studioBgOptions = [{ label: 'Infinito Blanco', value: 'infinity_white' }, { label: 'Infinito Negro', value: 'infinity_black' }, { label: 'Concreto', value: 'concrete' }, { label: 'Gel Color', value: 'colored_gel' }];
+    const roomOptions = [{ label: 'Igualar Referencia', value: 'match_source' }, { label: 'Sala', value: 'living_room' }, { label: 'Cocina', value: 'kitchen' }, { label: 'Dormitorio', value: 'bedroom' }, { label: 'Baño', value: 'bathroom' }, { label: 'Oficina', value: 'office' }, { label: 'Aula', value: 'classroom' }, { label: 'Laboratorio', value: 'laboratory' }, { label: 'Taller', value: 'workshop' }, { label: 'Gym', value: 'gym' }, { label: 'Hotel', value: 'hotel_room' }, { label: 'Retail', value: 'retail_store' }, { label: 'Restaurante', value: 'restaurant' }, { label: 'Lobby', value: 'lobby' }, { label: 'Mall', value: 'mall_hallway' }];
+    const lightingOptions = [{ label: 'Igualar Referencia', value: 'match_source' }, { label: 'Natural', value: 'natural' }, { label: 'Natural (Mañana)', value: 'natural_morning' }, { label: 'Natural (Tarde)', value: 'natural_afternoon' }, { label: 'Cálida (3000K)', value: 'warm_artificial' }, { label: 'Neutra (4000K)', value: 'neutral_artificial' }, { label: 'Fría (5000K)', value: 'cold_artificial' }, { label: 'Studio', value: 'studio' }, { label: 'Moody (Dramático)', value: 'moody' }];
+    const studioLightOptions = [{ label: 'Igualar Referencia', value: 'match_source' }, { label: 'Softbox (Suave)', value: 'softbox' }, { label: 'Rim Light (Silueta)', value: 'rim_light' }, { label: 'Luz Dura (Hard Key)', value: 'hard_key' }, { label: 'Dramático', value: 'dramatic' }];
+    const studioBgOptions = [{ label: 'Igualar Referencia', value: 'match_source' }, { label: 'Infinito Blanco', value: 'infinity_white' }, { label: 'Infinito Negro', value: 'infinity_black' }, { label: 'Concreto', value: 'concrete' }, { label: 'Gel Color', value: 'colored_gel' }];
     const studioShotOptions = [{ label: 'Plano Medio', value: 'full_shot' }, { label: 'Primer Plano (Macro)', value: 'close_up' }, { label: 'Knolling (Top Down)', value: 'knolling' }];
     const carAngleOptions = [{ label: 'Frente 3/4', value: 'front_three_quarter' }, { label: 'Perfil Lateral', value: 'side_profile' }, { label: 'Trasera', value: 'rear' }, { label: 'Contrapicado (Hero)', value: 'low_angle_hero' }];
     const carEnvOptions = [{ label: 'Estudio Limpio', value: 'studio' }, { label: 'Calle Ciudad', value: 'city_street' }, { label: 'Pista Carreras', value: 'raceway' }, { label: 'Naturaleza', value: 'nature_scenic' }];
@@ -206,12 +340,17 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = React
     return (
         <div className="flex flex-col h-full bg-theme-bg-secondary">
             <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin scrollbar-thumb-theme-bg-tertiary">
-                {/* Scene Type Select */}
+                {/* 1. Tipo de escena */}
                 <div className="space-y-4">
                     <CollapsiblePillGroup label="Tipo de Escena" options={sceneTypeOptions} value={sceneType} onChange={(v) => setSceneType(v as SceneType)} />
                 </div>
 
-                {/* Style Reference Upload */}
+                {/* 2. Estilo de renderizado */}
+                <div className="space-y-4">
+                    <CollapsiblePillGroup label="Estilo de Renderizado" options={renderStyleOptions} value={renderStyle} onChange={(v) => setRenderStyle(v as RenderStyleMode)} />
+                </div>
+
+                {/* 3. Estilo de referencia (Imagen) */}
                 <div className="space-y-2">
                     <label className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider flex items-center justify-between">
                         Referencia de Estilo
@@ -219,7 +358,7 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = React
                     </label>
                     <div className={`border border-dashed rounded-lg p-2 flex flex-col items-center justify-center transition-colors cursor-pointer relative overflow-hidden group h-32 ${styleReferenceImage ? 'border-theme-accent-primary bg-black/20' : 'border-theme-bg-tertiary hover:bg-theme-bg-primary hover:border-theme-text-secondary'}`}>
                         {styleReferenceImage ? (
-                            <img src={styleReferenceImage} className="w-full h-full object-cover rounded" />
+                            <img src={styleReferenceImage} className="w-full h-full object-cover rounded" title="Imagen de referencia" />
                         ) : (
                             <div className="flex flex-col items-center p-2 text-center">
                                 <UploadIcon className="w-6 h-6 text-theme-text-tertiary mb-2" />
@@ -228,28 +367,46 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = React
                         )}
                         <input type="file" accept="image/*" onChange={handleStyleRefUpload} className="absolute inset-0 opacity-0 cursor-pointer" title="Subir referencia" />
                     </div>
+                    {(isAnalyzingReference || styleReferenceDescription) && (
+                        <div className="p-2 bg-theme-bg-tertiary/20 rounded border border-theme-bg-tertiary mt-2">
+                            <div className="text-[9px] font-bold text-theme-text-secondary mb-1 flex items-center gap-1">
+                                <SparklesIcon className={`w-3 h-3 text-theme-accent-primary ${isAnalyzingReference ? 'animate-spin' : ''}`} />
+                                {isAnalyzingReference ? "ANALIZANDO ESTILO..." : "ANÁLISIS IA DETECTADO:"}
+                            </div>
+                            {!isAnalyzingReference && <p className="text-[10px] text-theme-text-tertiary italic leading-relaxed max-h-24 overflow-y-auto scrollbar-thin scrollbar-thumb-theme-bg-tertiary/50 pr-1">{styleReferenceDescription}</p>}
+                        </div>
+                    )}
                 </div>
 
-                <div className="h-px bg-theme-bg-tertiary"></div>
+                {/* 4. Opciones de estilo (Render Style Specifics) */}
+                <CollapsibleSection title="Opciones de estilo" defaultOpen={false}>
+                    {getStyleSpecificControls()}
+                </CollapsibleSection>
 
-                {/* Dynamic Controls based on SceneType */}
-                <div className="space-y-4">
-                    {/* Render Style */}
-                    <CollapsiblePillGroup label="Estilo de Renderizado" options={renderStyleOptions} value={renderStyle} onChange={(v) => setRenderStyle(v as RenderStyleMode)} />
-
-                    <div className="h-px bg-theme-bg-tertiary"></div>
-
-                    {/* Scene Options */}
+                {/* 5. Opciones de Escena (Sujeto + Entorno) */}
+                <CollapsibleSection title="Opciones de Escena" defaultOpen={false}>
+                    {(sceneType === 'exterior' || sceneType === 'interior') && (
+                        <>
+                            <div className="flex items-center justify-between p-2 rounded bg-theme-bg-tertiary/30 border border-theme-bg-tertiary mb-1">
+                                <span className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider">Preservar Materialidad Original</span>
+                                <input
+                                    type="checkbox"
+                                    checked={matchMateriality}
+                                    onChange={(e) => setMatchMateriality(e.target.checked)}
+                                    className="accent-theme-accent-primary w-3 h-3 cursor-pointer"
+                                />
+                            </div>
+                            <CollapsiblePillGroup label="Estilo Arquitectónico" options={archStyleOptions} value={archStyle} onChange={setArchStyle} />
+                        </>
+                    )}
                     {sceneType === 'exterior' && (
                         <>
-                            <CollapsiblePillGroup label="Estilo Arquitectónico" options={archStyleOptions} value={archStyle} onChange={setArchStyle} />
                             <CollapsiblePillGroup label="Hora del día" options={timeOptions} value={timeOfDay} onChange={setTimeOfDay} />
                             <CollapsiblePillGroup label="Clima" options={weatherOptions} value={weather} onChange={setWeather} />
                         </>
                     )}
                     {sceneType === 'interior' && (
                         <>
-                            <CollapsiblePillGroup label="Estilo Interior" options={archStyleOptions} value={archStyle} onChange={setArchStyle} />
                             <CollapsiblePillGroup label="Tipo de Habitación" options={roomOptions} value={roomType} onChange={setRoomType} />
                             <CollapsiblePillGroup label="Iluminación" options={lightingOptions} value={lighting} onChange={setLighting} />
                         </>
@@ -270,12 +427,12 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = React
                     )}
                     {(sceneType === 'object_interior' || sceneType === 'object_exterior') && (
                         <>
+                            <CollapsiblePillGroup label="Material Principal" options={objMatOptions} value={objectMaterial} onChange={setObjectMaterial} />
                             <CollapsiblePillGroup label="Contexto" options={objContextOptions} value={objectContext} onChange={setObjectContext} />
-                            <CollapsiblePillGroup label="Material Foco" options={objMatOptions} value={objectMaterial} onChange={setObjectMaterial} />
                             <CollapsiblePillGroup label="Lente / Foco" options={objDofOptions} value={objectDoF} onChange={setObjectDoF} />
                         </>
                     )}
-                </div>
+                </CollapsibleSection>
 
                 <div className="h-px bg-theme-bg-tertiary"></div>
 
@@ -295,7 +452,69 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = React
 
                 {/* Additional Prompt */}
                 <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider">Detalles Adicionales</label>
+                    {/* Additional Prompt */}
+                    <div className="space-y-2 relative z-10">
+                        <div className="flex justify-between items-center">
+                            <label className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider">Detalles Adicionales</label>
+                            <div className="flex items-center gap-2">
+                                {/* Presets Button */}
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setIsPresetsDropdownOpen(!isPresetsDropdownOpen)}
+                                        className="text-[10px] text-theme-text-secondary hover:text-theme-text-primary flex items-center gap-1"
+                                        title="Cargar Preset"
+                                    >
+                                        Presets <ChevronDownIcon className="w-3 h-3" />
+                                    </button>
+                                    {isPresetsDropdownOpen && (
+                                        <div className="absolute top-full right-0 mt-1 w-48 bg-theme-bg-primary border border-theme-bg-tertiary rounded shadow-xl max-h-48 overflow-y-auto z-20">
+                                            {savedInstructions.length === 0 ? (
+                                                <div className="p-2 text-[10px] text-theme-text-tertiary italic text-center">No hay presets.</div>
+                                            ) : (
+                                                savedInstructions.map(preset => (
+                                                    <div
+                                                        key={preset.id}
+                                                        className="flex items-center justify-between p-2 hover:bg-theme-bg-secondary cursor-pointer group border-b border-theme-bg-tertiary last:border-0"
+                                                    >
+                                                        <span className="text-xs text-theme-text-primary truncate flex-1" onClick={() => { handleLoadPreset(preset); setIsPresetsDropdownOpen(false); }}>{preset.name}</span>
+                                                        {preset.source === 'simple' && <span className="text-[9px] text-theme-text-tertiary mr-1" title="Creado en Render Simple">(S)</span>}
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); if (confirm('¿Borrar?')) deletePreset(preset.id); }}
+                                                            className="p-1 text-theme-text-tertiary hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        >
+                                                            <TrashIcon className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <button
+                                    onClick={() => setIsSaveOpen(!isSaveOpen)}
+                                    className="text-[10px] text-theme-accent-primary hover:text-theme-accent-hover flex items-center gap-1"
+                                    title="Guardar instrucciones actuales como preset"
+                                >
+                                    <SaveIcon className="w-3 h-3" /> Guardar
+                                </button>
+                            </div>
+                        </div>
+
+                        {isSaveOpen && (
+                            <div className="flex items-center gap-2 mb-2 bg-theme-bg-primary p-2 rounded border border-theme-accent-primary animate-in fade-in zoom-in-95 duration-200">
+                                <input
+                                    type="text"
+                                    value={saveName}
+                                    onChange={(e) => setSaveName(e.target.value)}
+                                    placeholder="Nombre del preset..."
+                                    className="flex-1 bg-transparent text-xs outline-none min-w-0"
+                                    autoFocus
+                                />
+                                <button onClick={handleSavePreset} disabled={!saveName.trim()} className="text-theme-accent-primary font-bold text-xs disabled:opacity-50">OK</button>
+                            </div>
+                        )}
+                    </div>
                     <textarea
                         value={localPrompt}
                         onChange={(e) => setLocalPrompt(e.target.value)}

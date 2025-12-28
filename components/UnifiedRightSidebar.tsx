@@ -5,11 +5,12 @@ import { LayersIcon, SparklesIcon, XIcon } from './icons';
 interface UnifiedRightSidebarProps {
     isOpen: boolean;
     onClose: () => void;
-    activeTab: 'sketch' | 'render';
-    onTabChange: (tab: 'sketch' | 'render') => void;
+    activeTab: 'sketch' | 'render' | 'simple_render';
+    onTabChange: (tab: 'sketch' | 'render' | 'simple_render') => void;
     outlinerNode: React.ReactNode;
     libraryNode: React.ReactNode;
     renderNode: React.ReactNode;
+    simpleRenderNode: React.ReactNode;
 
     // Resize Props for Outliner/Library split
     rightSidebarTopHeight: number;
@@ -26,6 +27,7 @@ export const UnifiedRightSidebar: React.FC<UnifiedRightSidebarProps> = React.mem
     outlinerNode,
     libraryNode,
     renderNode,
+    simpleRenderNode,
     rightSidebarTopHeight,
     onResizeStart,
     sidebarRef,
@@ -47,32 +49,46 @@ export const UnifiedRightSidebar: React.FC<UnifiedRightSidebarProps> = React.mem
     return (
         <div ref={sidebarRef} className="flex flex-col h-full w-full bg-theme-bg-secondary relative z-40">
             {/* Header Tabs */}
-            <div className="flex items-center border-b border-theme-bg-tertiary bg-theme-bg-primary">
+            <div className="flex items-center border-b border-theme-bg-tertiary bg-theme-bg-primary overflow-x-auto scrollbar-hide shrink-0 h-11">
                 <button
                     onClick={() => onTabChange('sketch')}
-                    className={`flex-1 py-3 px-4 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors relative ${activeTab === 'sketch'
+                    className={`flex-1 min-w-[80px] py-3 px-2 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-colors relative ${activeTab === 'sketch'
                         ? 'text-theme-accent-primary bg-theme-bg-secondary'
                         : 'text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary'
                         }`}
                 >
-                    <LayersIcon className="w-4 h-4" />
+                    <LayersIcon className="w-4 h-4 ml-1" />
                     Boceto
                     {activeTab === 'sketch' && (
-                        <div className="absolute top-0 left-0 w-full h-0.5 bg-theme-accent-primary" />
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-theme-accent-primary" />
                     )}
                 </button>
                 <div className="w-px h-6 bg-theme-bg-tertiary" />
                 <button
                     onClick={() => onTabChange('render')}
-                    className={`flex-1 py-3 px-4 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors relative ${activeTab === 'render'
+                    className={`flex-1 min-w-[80px] py-3 px-2 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-colors relative ${activeTab === 'render'
                         ? 'text-theme-accent-primary bg-theme-bg-secondary'
                         : 'text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary'
                         }`}
                 >
-                    <SparklesIcon className="w-4 h-4" />
+                    <SparklesIcon className="w-4 h-4 ml-1" />
                     Render
                     {activeTab === 'render' && (
-                        <div className="absolute top-0 left-0 w-full h-0.5 bg-theme-accent-primary" />
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-theme-accent-primary" />
+                    )}
+                </button>
+                <div className="w-px h-6 bg-theme-bg-tertiary" />
+                <button
+                    onClick={() => onTabChange('simple_render')}
+                    className={`flex-1 min-w-[80px] py-3 px-2 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-colors relative ${activeTab === 'simple_render'
+                        ? 'text-blue-500 bg-theme-bg-secondary'
+                        : 'text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary'
+                        }`}
+                >
+                    <SparklesIcon className="w-4 h-4" />
+                    Simp.
+                    {activeTab === 'simple_render' && (
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500" />
                     )}
                 </button>
             </div>
@@ -94,9 +110,13 @@ export const UnifiedRightSidebar: React.FC<UnifiedRightSidebarProps> = React.mem
                             {libraryNode}
                         </div>
                     </>
-                ) : (
-                    <div className="flex flex-col h-full overflow-hidden">
+                ) : activeTab === 'render' ? (
+                    <div className="flex-grow flex flex-col min-h-0 relative bg-theme-bg-secondary">
                         {renderNode}
+                    </div>
+                ) : (
+                    <div className="flex-grow flex flex-col min-h-0 relative bg-theme-bg-secondary">
+                        {simpleRenderNode}
                     </div>
                 )}
             </div>

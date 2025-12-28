@@ -368,11 +368,53 @@ export interface WorkspaceTemplate {
   quickAccessSettings: QuickAccessSettings;
 }
 
+
+export interface RenderStyleSettings {
+  // Photorealistic (ph) - UPDATED: No geometry distortion
+  phCamera?: string; // 'dslr', 'large_format', 'drone', 'instant'
+  phFilm?: string;   // 'digital', 'kodak_portra', 'fujifilm', 'bw_film'
+  phEffect?: string; // 'clean', 'bokeh', 'vignette', 'cinematic_bloom'
+  // Digital Sketch
+  dsBrush: string;
+  dsFinish: string;
+  dsStroke: string;
+  // Watercolor
+  wcTechnique: string;
+  wcPaper: string;
+  wcInk: string;
+  // Technical Plan
+  tpBackground: string;
+  tpPrecision: string;
+  tpDetails: string;
+  // Charcoal
+  chSmudge: string;
+  chContrast: string;
+  chHatch: string;
+  // Clay Model
+  cmMaterial: string;
+  cmSurface: string;
+  cmLighting: string;
+  // Ink Marker
+  imPaper: string;
+  imTechnique: string;
+  imColor: string;
+  // 3D Cartoon
+  tcStyle: string;
+  tcMaterial: string;
+  tcLighting: string;
+  // Colored Pencil
+  cpTechnique: string;
+  cpPaper: string;
+  cpVibrancy: string;
+
+}
+
 export interface ArchRenderState {
   inputImage: string | null;
   resultImage: string | null;
   styleReferenceImage: string | null;
   renderStyle: string;
+  renderStyleSettings: RenderStyleSettings; // New settings object
   sceneType: string;
   timeOfDay: string;
   weather: string;
@@ -435,4 +477,12 @@ export interface Project {
   projectFilePath: string;
   thumbnailPath: string;
   thumbnailUrl: string;
+}
+
+// -- Saved Instruction Presets --
+export interface SavedInstruction {
+  id: string;
+  name: string;
+  content: string;
+  source?: 'simple' | 'advanced'; // Track where it was created
 }

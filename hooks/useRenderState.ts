@@ -2,7 +2,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { SceneType, RenderStyleMode, buildArchitecturalPrompt, ArchitecturalRenderOptions } from '../utils/architecturalPromptBuilder';
+import { RenderStyleSettings } from '../types';
 import { GEMINI_MODEL_ID } from '../utils/constants';
+import { resizeImageForAI } from '../utils/imageUtils';
 
 // Define the Hook
 export function useRenderState(
@@ -18,6 +20,21 @@ export function useRenderState(
     const [creativeFreedom, setCreativeFreedom] = useState(50);
     const [additionalPrompt, setAdditionalPrompt] = useState('');
     const [manualPrompt, setManualPrompt] = useState('');
+    const [matchMateriality, setMatchMateriality] = useState(false);
+    const [styleReferenceDescription, setStyleReferenceDescription] = useState('');
+    const [isAnalyzingReference, setIsAnalyzingReference] = useState(false);
+
+    const [renderStyleSettings, setRenderStyleSettings] = useState<RenderStyleSettings>({
+        phCamera: 'dslr', phFilm: 'digital', phEffect: 'clean',
+        dsBrush: 'oil', dsFinish: 'clean', dsStroke: 'medium',
+        wcTechnique: 'wet', wcPaper: 'rough', wcInk: 'fountain',
+        tpBackground: 'blue', tpPrecision: 'cad', tpDetails: 'high',
+        chSmudge: 'soft', chContrast: 'hgh', chHatch: 'cross',
+        cmMaterial: 'white_clay', cmSurface: 'smooth', cmLighting: 'studio_soft',
+        imPaper: 'im_marker_paper', imTechnique: 'im_layered', imColor: 'im_vibrant',
+        tcStyle: 'tc_pixar', tcMaterial: 'tc_plastic', tcLighting: 'tc_soft',
+        cpTechnique: 'cp_hatching', cpPaper: 'cp_white', cpVibrancy: 'cp_vibrant'
+    });
 
     // Detailed Options
     const [archStyle, setArchStyle] = useState('modern');
@@ -60,6 +77,9 @@ export function useRenderState(
             ...(sceneType === 'studio' && { studioLighting, studioBackground, studioShot }),
             ...(sceneType === 'automotive' && { carAngle, carEnvironment, carColor }),
             ...((sceneType === 'object_interior' || sceneType === 'object_exterior') && { objectMaterial, objectDoF, objectContext }),
+            renderStyleSettings,
+            matchMateriality,
+            styleReferenceDescription
         };
         lastOptions.current = renderOptions;
 
@@ -69,7 +89,7 @@ export function useRenderState(
         }, 300);
 
         return () => clearTimeout(timer);
-    }, [sceneType, renderStyle, creativeFreedom, additionalPrompt, archStyle, timeOfDay, weather, roomType, lighting, styleReferenceImage, studioLighting, studioBackground, studioShot, carAngle, carEnvironment, carColor, objectMaterial, objectDoF, objectContext]);
+    }, [sceneType, renderStyle, creativeFreedom, additionalPrompt, archStyle, timeOfDay, weather, roomType, lighting, styleReferenceImage, studioLighting, studioBackground, studioShot, carAngle, carEnvironment, carColor, objectMaterial, objectDoF, objectContext, renderStyleSettings, matchMateriality]);
 
 
     // Actions
@@ -103,17 +123,22 @@ export function useRenderState(
         setResultImage(null);
 
         try {
+            // OPTIMIZATION: Resize Input Image
+            const optimizedInput = await resizeImageForAI(sourceImage);
+
             // @ts-ignore
             const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
             const model = selectedModel;
 
             const parts: any[] = [];
-            const inputBase64 = sourceImage.split(',')[1];
-            parts.push({ inlineData: { mimeType: 'image/png', data: inputBase64 } });
+            const inputBase64 = optimizedInput.split(',')[1];
+            parts.push({ inlineData: { mimeType: 'image/jpeg', data: inputBase64 } });
 
             if (styleReferenceImage) {
-                const styleBase64 = styleReferenceImage.split(',')[1];
-                parts.push({ inlineData: { mimeType: 'image/png', data: styleBase64 } });
+                // OPTIMIZATION: Resize Reference Image
+                const optimizedStyle = await resizeImageForAI(styleReferenceImage);
+                const styleBase64 = optimizedStyle.split(',')[1];
+                parts.push({ inlineData: { mimeType: 'image/jpeg', data: styleBase64 } });
             }
             parts.push({ text: manualPrompt });
 
@@ -180,6 +205,51 @@ export function useRenderState(
         }
     };
 
+    // Auto-Analyze Effect
+    useEffect(() => {
+        if (styleReferenceImage) {
+            analyzeReferenceImage();
+        } else {
+            setStyleReferenceDescription('');
+        }
+    }, [styleReferenceImage]);
+
+    const analyzeReferenceImage = useCallback(async () => {
+        if (!styleReferenceImage) return;
+        setIsAnalyzingReference(true);
+        try {
+            const optimized = await resizeImageForAI(styleReferenceImage);
+            // @ts-ignore
+            const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+
+            const response = await ai.models.generateContent({
+                model: selectedModel,
+                contents: [{
+                    parts: [
+                        { inlineData: { mimeType: 'image/jpeg', data: optimized.split(',')[1] } },
+                        { text: "Analyze the architectural materiality of this image. Describe NOT JUST the materials, but specifically WHERE they are applied (their distribution). Focus on textures, colors, and finishes mapping. DO NOT describe the geometry, volumetry, or shape of the building itself. Output a concise description of the material palette application." }
+                    ]
+                }]
+            });
+
+            let text = "";
+            if (response.candidates && response.candidates[0] && response.candidates[0].content && response.candidates[0].content.parts) {
+                for (const part of response.candidates[0].content.parts) {
+                    if (part.text) {
+                        text += part.text;
+                    }
+                }
+            }
+
+            setStyleReferenceDescription(text);
+        } catch (e) {
+            console.error(e);
+            alert("Error analizando referencia. Verifica tu API Key o cuota.");
+        } finally {
+            setIsAnalyzingReference(false);
+        }
+    }, [styleReferenceImage, selectedModel]);
+
     // Persistence Helpers
     const getFullState = useCallback(() => ({
         sceneType, renderStyle, creativeFreedom, additionalPrompt, manualPrompt,
@@ -187,14 +257,17 @@ export function useRenderState(
         studioLighting, studioBackground, studioShot,
         carAngle, carEnvironment, carColor,
         objectMaterial, objectDoF, objectContext,
-        styleReferenceImage
+        styleReferenceImage,
+        renderStyleSettings,
+        matchMateriality,
+        styleReferenceDescription
     }), [
         sceneType, renderStyle, creativeFreedom, additionalPrompt, manualPrompt,
         archStyle, timeOfDay, weather, roomType, lighting,
         studioLighting, studioBackground, studioShot,
         carAngle, carEnvironment, carColor,
         objectMaterial, objectDoF, objectContext,
-        styleReferenceImage
+        styleReferenceImage, renderStyleSettings, matchMateriality, styleReferenceDescription
     ]);
 
     const setFullState = useCallback((state: any) => {
@@ -219,12 +292,16 @@ export function useRenderState(
         if (state.objectDoF) setObjectDoF(state.objectDoF);
         if (state.objectContext) setObjectContext(state.objectContext);
         if (state.styleReferenceImage) setStyleReferenceImage(state.styleReferenceImage);
+        if (state.renderStyleSettings) setRenderStyleSettings(state.renderStyleSettings);
+        if (state.matchMateriality !== undefined) setMatchMateriality(state.matchMateriality);
+        if (state.styleReferenceDescription) setStyleReferenceDescription(state.styleReferenceDescription);
     }, []);
 
     return {
         // State
         sceneType, setSceneType,
         renderStyle, setRenderStyle,
+        renderStyleSettings, setRenderStyleSettings,
         creativeFreedom, setCreativeFreedom,
         additionalPrompt, setAdditionalPrompt,
         manualPrompt, setManualPrompt, // Manual prompt currently read-only gen from builders in this version, or editable? Component allows edit but useEffect overwrites.
@@ -253,7 +330,10 @@ export function useRenderState(
 
         // Actions
         handleRender,
+        analyzeReferenceImage,
         getFullState,
-        setFullState
+        setFullState,
+        styleReferenceDescription,
+        isAnalyzingReference
     };
 }

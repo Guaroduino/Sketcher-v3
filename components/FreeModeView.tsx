@@ -62,6 +62,7 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
     const [inputValue, setInputValue] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [attachments, setAttachments] = useState<string[]>([]);
+    const [generationMode, setGenerationMode] = useState<'image' | 'text'>('image');
 
     // Expose addAttachment via ref
     useImperativeHandle(ref, () => ({
@@ -247,9 +248,23 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
             }
 
             const model = selectedModel || GEMINI_MODEL_ID;
-            // Config specific for Image Generation models
-            const config = { responseModalities: ["IMAGE"] };
+
+            // Config based on mode
+            const config = generationMode === 'image' ? { responseModalities: ["IMAGE"] } : undefined;
             const contents = { parts };
+
+            // For Text Mode, we add a system instruction (prepended to prompt or as separate context if API supported it, here just prepend text)
+            if (generationMode === 'text') {
+                const systemPrompt = "Actúa como un asistente experto en ingeniería de prompts para generación de imágenes. Ayuda al usuario a crear, refinar y mejorar sus prompts. Ofrece sugerencias creativas y técnicas. Responde únicamente con texto (no generes imágenes).";
+                // Prepend to parts
+                // Use a dedicated text part if possible
+                const lastTextPart = parts.findLast(p => p.text);
+                if (lastTextPart) {
+                    lastTextPart.text = `${systemPrompt}\n\nUser Query: ${lastTextPart.text}`;
+                } else {
+                    parts.push({ text: systemPrompt });
+                }
+            }
 
             // Inspector Check
             if (onInspectRequest) {
@@ -457,7 +472,7 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
                     {isGenerating && (
                         <div className="self-start flex items-center gap-2 p-3 bg-theme-bg-tertiary rounded-2xl rounded-tl-none animate-pulse">
                             <SparklesIcon className="w-4 h-4 text-theme-accent-primary animate-spin" />
-                            <span className="text-sm text-theme-text-secondary">Generando imagen (Gemini Vision)...</span>
+                            <span className="text-sm text-theme-text-secondary">{generationMode === 'image' ? "Generando imagen (Gemini Vision)..." : "Pensando..."}</span>
                         </div>
                     )}
                     <div ref={messagesEndRef} />
@@ -490,6 +505,24 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
                         </div>
                     )}
 
+                    {/* Mode Toggle */}
+                    <div className="flex justify-center mb-2">
+                        <div className="flex bg-theme-bg-secondary rounded-full p-1 border border-theme-bg-tertiary">
+                            <button
+                                onClick={() => setGenerationMode('image')}
+                                className={`px-3 py-1 text-xs font-bold rounded-full transition-colors flex items-center gap-1 ${generationMode === 'image' ? 'bg-theme-accent-primary text-white shadow-sm' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}
+                            >
+                                <ImageIcon className="w-3 h-3" /> Imagen
+                            </button>
+                            <button
+                                onClick={() => setGenerationMode('text')}
+                                className={`px-3 py-1 text-xs font-bold rounded-full transition-colors flex items-center gap-1 ${generationMode === 'text' ? 'bg-theme-accent-primary text-white shadow-sm' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}
+                            >
+                                <EditIcon className="w-3 h-3" /> Chat / Prompt Helper
+                            </button>
+                        </div>
+                    </div>
+
                     <div className="flex items-end gap-2 max-w-4xl mx-auto w-full">
                         <div className="relative flex-grow flex items-end bg-theme-bg-secondary rounded-2xl border border-theme-bg-tertiary px-2 focus-within:ring-2 focus-within:ring-theme-accent-primary shadow-sm hover:border-theme-bg-hover transition-all">
                             {/* Import Sketch Action */}
@@ -510,7 +543,7 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
                                         handleSendMessage();
                                     }
                                 }}
-                                placeholder="Describe la imagen que quieres generar..."
+                                placeholder={generationMode === 'image' ? "Describe la imagen que quieres generar..." : "Escribe para recibir ayuda con tus prompts..."}
                                 className="flex-grow bg-transparent text-theme-text-primary pl-2 pr-12 py-3 max-h-48 min-h-[52px] focus:outline-none resize-none text-sm"
                                 rows={1}
                             />

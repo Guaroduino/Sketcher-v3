@@ -569,26 +569,35 @@ function appReducer(state: AppState, action: Action): AppState {
                 if (item.canvas) {
                     const { canvas: newCanvas, context: newCtx } = createNewCanvas(newCanvasSize.width, newCanvasSize.height);
 
-                    if (scale) {
-                        // Scale content to new size
-                        newCtx.drawImage(item.canvas, 0, 0, newCanvasSize.width, newCanvasSize.height);
-                    } else if (item.isBackground) {
-                        if (item.backgroundImage) {
-                            newCtx.fillStyle = item.color || '#FFFFFF';
-                            newCtx.fillRect(0, 0, newCanvasSize.width, newCanvasSize.height);
-                            // Simple stretch for now
-                            newCtx.drawImage(item.backgroundImage, 0, 0, newCanvasSize.width, newCanvasSize.height);
+                    const updatedItem = { ...item, canvas: newCanvas, context: newCtx, mipmaps: generateMipmaps(newCanvas) };
+
+                    if (item.isBackground && item.contentRect) {
+                        if (scale) {
+                            // Scale contentRect proportionally
+                            const scaleX = newCanvasSize.width / item.canvas.width;
+                            const scaleY = newCanvasSize.height / item.canvas.height;
+                            updatedItem.contentRect = {
+                                x: item.contentRect.x * scaleX,
+                                y: item.contentRect.y * scaleY,
+                                width: item.contentRect.width * scaleX,
+                                height: item.contentRect.height * scaleY
+                            };
                         } else {
-                            newCtx.fillStyle = item.color || '#FFFFFF';
-                            newCtx.fillRect(0, 0, newCanvasSize.width, newCanvasSize.height);
+                            // Shift contentRect by the same amount as the content
+                            const dx = (newCanvasSize.width - item.canvas.width) / 2;
+                            const dy = (newCanvasSize.height - item.canvas.height) / 2;
+                            updatedItem.contentRect = {
+                                ...item.contentRect,
+                                x: item.contentRect.x + dx,
+                                y: item.contentRect.y + dy
+                            };
                         }
-                    } else {
-                        // Center old content on new canvas (Canvas size change)
-                        const dx = (newCanvasSize.width - item.canvas.width) / 2;
-                        const dy = (newCanvasSize.height - item.canvas.height) / 2;
-                        newCtx.drawImage(item.canvas, dx, dy);
+                    } else if (item.isBackground && !item.contentRect && !scale) {
+                        // If no contentRect (full color), and not scaling (centering), update size to match new canvas
+                        // though background color usually fills whole canvas anyway.
                     }
-                    return { ...item, canvas: newCanvas, context: newCtx, mipmaps: generateMipmaps(newCanvas) };
+
+                    return updatedItem;
                 }
                 return item;
             });
