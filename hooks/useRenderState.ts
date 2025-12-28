@@ -93,7 +93,7 @@ export function useRenderState(
 
 
     // Actions
-    const handleRender = async (sourceImage: string, targetDimensions?: { width: number, height: number }, aspectRatio?: number) => {
+    const handleRender = async (sourceImage: string, targetDimensions?: { width: number, height: number }, aspectRatio?: number, overrideImages?: { background?: string, composite?: string }) => {
         if (aspectRatio !== undefined) {
             canvasAspectRatio.current = aspectRatio;
             // Force prompt update for aspect ratio changes
@@ -103,7 +103,7 @@ export function useRenderState(
                 setManualPrompt(newPrompt);
             }
         }
-        if (!sourceImage) {
+        if (!sourceImage && !overrideImages) {
             alert("No hay imagen base para renderizar.");
             return;
         }
@@ -123,24 +123,38 @@ export function useRenderState(
         setResultImage(null);
 
         try {
-            // OPTIMIZATION: Resize Input Image
-            const optimizedInput = await resizeImageForAI(sourceImage);
-
             // @ts-ignore
             const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
             const model = selectedModel;
 
             const parts: any[] = [];
-            const inputBase64 = optimizedInput.split(',')[1];
-            parts.push({ inlineData: { mimeType: 'image/jpeg', data: inputBase64 } });
 
-            if (styleReferenceImage) {
-                // OPTIMIZATION: Resize Reference Image
-                const optimizedStyle = await resizeImageForAI(styleReferenceImage);
-                const styleBase64 = optimizedStyle.split(',')[1];
-                parts.push({ inlineData: { mimeType: 'image/jpeg', data: styleBase64 } });
+            if (sceneType === 'object_integration' && overrideImages && overrideImages.background && overrideImages.composite) {
+                // INTEGRATION MODE SPECIAL PIPELINE
+                parts.push({ text: manualPrompt });
+
+                parts.push({ text: "IMAGE 1: BACKGROUND / CONTEXT (Do not modify perspective/lighting of this)" });
+                const bgOptimized = await resizeImageForAI(overrideImages.background);
+                parts.push({ inlineData: { mimeType: 'image/jpeg', data: bgOptimized.split(',')[1] } });
+
+                parts.push({ text: "IMAGE 2: SKETCH / OBJECT TO INTEGRATE (Apply lighting/perspective from Image 1)" });
+                const compOptimized = await resizeImageForAI(overrideImages.composite);
+                parts.push({ inlineData: { mimeType: 'image/jpeg', data: compOptimized.split(',')[1] } });
+            } else {
+                // STANDARD PIPELINE
+                // OPTIMIZATION: Resize Input Image
+                const optimizedInput = await resizeImageForAI(sourceImage);
+                const inputBase64 = optimizedInput.split(',')[1];
+                parts.push({ inlineData: { mimeType: 'image/jpeg', data: inputBase64 } });
+
+                if (styleReferenceImage) {
+                    // OPTIMIZATION: Resize Reference Image
+                    const optimizedStyle = await resizeImageForAI(styleReferenceImage);
+                    const styleBase64 = optimizedStyle.split(',')[1];
+                    parts.push({ inlineData: { mimeType: 'image/jpeg', data: styleBase64 } });
+                }
+                parts.push({ text: manualPrompt });
             }
-            parts.push({ text: manualPrompt });
 
             const contents = { parts };
 

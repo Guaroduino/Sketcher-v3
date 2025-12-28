@@ -794,3 +794,11 @@ export const MoveIcon: React.FC<{ className?: string }> = ({ className }) => (
         <line x1="12" y1="2" x2="12" y2="22" />
     </svg>
 );
+
+export function EyedropperIcon({ className }: { className?: string }) {
+    return (
+        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.5 4.5l-6 6M19.5 4.5a2.121 2.121 0 113 2.5 3 2.5 0 01-3.536-3.536L19.5 4.5zM4 14l6 6 9.5-9.5-6-6-9.5 9.5zM4 14l-2 4 4-2" />
+        </svg>
+    );
+}

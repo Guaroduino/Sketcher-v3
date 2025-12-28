@@ -10,7 +10,7 @@ import {
     MirrorIcon, OrthogonalIcon, UploadIcon, DownloadIcon, CropIcon,
     LassoIcon, MarqueeRectIcon, MarqueeCircleIcon, PerspectiveIcon, SquareIcon, CircleIcon, CubeIcon, MoreVerticalIcon,
     ChevronDownIcon, ChevronRightIcon, SolidMarkerIcon, AdvancedMarkerIcon, NaturalMarkerIcon, AirbrushIcon,
-    WatercolorIcon, FXBrushIcon, ExpandIcon
+    WatercolorIcon, FXBrushIcon, ExpandIcon, EyeOpenIcon, EyeClosedIcon
 } from './icons';
 
 import type {
@@ -38,6 +38,8 @@ interface DrawingToolsPanelProps {
     setBrushOpacity: (opacity: number) => void;
     strokeSmoothing: number;
     setStrokeSmoothing: (smoothing: number) => void;
+    isPressureSensitivityEnabled: boolean;
+    setPressureSensitivityEnabled: (enabled: boolean) => void;
 
     // Specific Tool Settings (for popover configuration)
     brushSettings: BrushSettings;
@@ -61,6 +63,17 @@ interface DrawingToolsPanelProps {
 
     isPerspectiveEnabled: boolean;
     setPerspectiveEnabled: (enabled: boolean) => void;
+    isPerspectiveGridVisible?: boolean;
+    togglePerspectiveGrid?: () => void;
+    perspectiveGridColor?: string;
+    setPerspectiveGridColor?: (color: string) => void;
+    perspectiveGridDensity?: number;
+    setPerspectiveGridDensity?: (density: number) => void;
+    perspectiveGridVerticalScope?: 'both' | 'above' | 'below';
+    setPerspectiveGridVerticalScope?: (scope: 'both' | 'above' | 'below') => void;
+    perspectiveGridLength?: 'full' | 'short';
+    setPerspectiveGridLength?: (length: 'full' | 'short') => void;
+
 
     isSymmetryEnabled: boolean;
     setSymmetryEnabled: (enabled: boolean) => void;
@@ -83,6 +96,8 @@ interface DrawingToolsPanelProps {
     onOpenCanvasSizeModal: () => void;
     onUpdateBackground: (updates: { color?: string, file?: File }) => void;
     backgroundColor?: string;
+    isBackgroundVisible?: boolean;
+    onToggleBackgroundVisibility?: () => void;
 }
 
 export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
@@ -97,6 +112,7 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
     brushSize, setBrushSize,
     brushOpacity, setBrushOpacity,
     strokeSmoothing, setStrokeSmoothing,
+    isPressureSensitivityEnabled, setPressureSensitivityEnabled,
 
     // Specific Tool Settings
     brushSettings: _brushSettings, setBrushSettings, // Rename to avoid conflict with individual props if any, though we mostly use these objects now
@@ -110,6 +126,11 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
     isGridVisible, setGridVisible,
     gridSize, setGridSize,
     isPerspectiveEnabled, setPerspectiveEnabled,
+    isPerspectiveGridVisible, togglePerspectiveGrid,
+    perspectiveGridColor, setPerspectiveGridColor,
+    perspectiveGridDensity, setPerspectiveGridDensity,
+    perspectiveGridVerticalScope, setPerspectiveGridVerticalScope,
+    perspectiveGridLength, setPerspectiveGridLength,
     isSymmetryEnabled, setSymmetryEnabled,
     isOrthogonalEnabled, setOrthogonalEnabled,
     isRulerEnabled, setRulerEnabled,
@@ -119,7 +140,8 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
 
     // Actions
     onUndo, onRedo, onClearCanvas,
-    onOpenCanvasSizeModal, onUpdateBackground, backgroundColor
+    onOpenCanvasSizeModal, onUpdateBackground, backgroundColor,
+    isBackgroundVisible, onToggleBackgroundVisibility
 }) => {
 
     const TOOLS = [
@@ -400,6 +422,25 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                         className="w-full h-1 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary"
                     />
                 </div>
+
+                <div className="flex items-center justify-between pb-1">
+                    <label className={`text-[10px] ${strokeMode === 'freehand' ? 'text-theme-text-secondary' : 'text-theme-text-tertiary'}`}>
+                        Sensibilidad a Presión
+                    </label>
+                    <div className="relative inline-flex items-center cursor-pointer" onClick={() => strokeMode === 'freehand' && setPressureSensitivityEnabled(!isPressureSensitivityEnabled)}>
+                        <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={isPressureSensitivityEnabled && strokeMode === 'freehand'}
+                            disabled={strokeMode !== 'freehand'}
+                            onChange={() => { }}
+                        />
+                        <div className={`w-9 h-5 bg-theme-bg-tertiary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all ${strokeMode === 'freehand'
+                            ? (isPressureSensitivityEnabled ? 'peer-checked:bg-theme-accent-primary' : '')
+                            : 'opacity-50 cursor-not-allowed'
+                            }`}></div>
+                    </div>
+                </div>
             </section>
 
             <div className="h-px bg-theme-bg-tertiary opacity-50 my-3"></div>
@@ -462,13 +503,101 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                     <input type="checkbox" checked={isGridVisible} onChange={(e) => setGridVisible(e.target.checked)} className="cursor-pointer" />
                 </div>
 
+
+
                 {/* Perspective */}
-                <div className="flex items-center justify-between p-2 bg-theme-bg-primary rounded border border-theme-bg-tertiary">
-                    <div className="flex items-center gap-2 text-[10px] text-theme-text-primary">
-                        <RulerIcon className="w-4 h-4 text-theme-text-secondary" />
-                        <span>Perspectiva</span>
+                <div className={`flex flex-col p-2 bg-theme-bg-primary rounded border border-theme-bg-tertiary transition-all ${isPerspectiveEnabled ? 'border-theme-accent-primary/30 bg-theme-accent-primary/5' : ''}`}>
+                    <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2 text-[10px] text-theme-text-primary">
+                            <PerspectiveIcon className={`w-4 h-4 ${isPerspectiveEnabled ? 'text-theme-accent-primary' : 'text-theme-text-secondary'}`} />
+                            <span className={isPerspectiveEnabled ? 'font-bold text-theme-accent-primary' : ''}>Perspectiva</span>
+                        </div>
+                        <input type="checkbox" checked={isPerspectiveEnabled} onChange={(e) => setPerspectiveEnabled(e.target.checked)} className="cursor-pointer" />
                     </div>
-                    <input type="checkbox" checked={isPerspectiveEnabled} onChange={(e) => setPerspectiveEnabled(e.target.checked)} className="cursor-pointer" />
+
+                    {/* Grid Toggle Sub-option */}
+                    {isPerspectiveEnabled && togglePerspectiveGrid && (
+                        <div className="flex flex-col pl-6 mt-1 pt-1 border-t border-theme-bg-tertiary/50 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <div className="text-[9px] text-theme-text-secondary">Ver Cuadrícula</div>
+                                <div className="relative inline-flex items-center cursor-pointer" onClick={togglePerspectiveGrid}>
+                                    <input type="checkbox" className="sr-only peer" checked={!!isPerspectiveGridVisible} readOnly />
+                                    <div className="w-6 h-3 bg-theme-bg-tertiary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-theme-accent-primary"></div>
+                                </div>
+                            </div>
+
+                            {/* Grid Settings */}
+                            {isPerspectiveGridVisible && (
+                                <div className="flex flex-col gap-1 pb-1">
+                                    <div className="flex items-center justify-between gap-1">
+                                        {/* Color Picker */}
+                                        <div className="flex items-center gap-1.5 bg-theme-bg-tertiary/30 rounded px-1.5 py-0.5 border border-theme-bg-tertiary/50">
+                                            <label className="text-[9px] text-theme-text-secondary">Color</label>
+                                            <input
+                                                type="color"
+                                                value={perspectiveGridColor?.startsWith('#') ? perspectiveGridColor : '#c8c8c8'}
+                                                onChange={(e) => setPerspectiveGridColor && setPerspectiveGridColor(e.target.value)}
+                                                className="w-4 h-4 p-0 border-0 bg-transparent cursor-pointer rounded-sm overflow-hidden"
+                                            />
+                                        </div>
+
+                                        {/* Density Input */}
+                                        <div className="flex items-center gap-1.5 bg-theme-bg-tertiary/30 rounded px-1.5 py-0.5 border border-theme-bg-tertiary/50">
+                                            <label className="text-[9px] text-theme-text-secondary">Líneas</label>
+                                            <input
+                                                type="number"
+                                                min="12"
+                                                max="360"
+                                                step="12"
+                                                value={perspectiveGridDensity || 72}
+                                                onChange={(e) => setPerspectiveGridDensity && setPerspectiveGridDensity(Number(e.target.value))}
+                                                className="w-8 h-4 text-[9px] bg-transparent text-center focus:outline-none text-theme-text-primary"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Vertical Scope (Side) */}
+                                    <div className="flex items-center gap-1.5 mt-1 bg-theme-bg-tertiary/30 rounded px-1.5 py-1 border border-theme-bg-tertiary/50">
+                                        <label className="text-[9px] text-theme-text-secondary w-8">Lado:</label>
+                                        <div className="flex flex-1 gap-px bg-theme-bg-tertiary rounded overflow-hidden">
+                                            {[
+                                                { id: 'above', label: 'Arriba' },
+                                                { id: 'both', label: 'Ambos' },
+                                                { id: 'below', label: 'Abajo' }
+                                            ].map(opt => (
+                                                <button
+                                                    key={opt.id}
+                                                    onClick={() => setPerspectiveGridVerticalScope && setPerspectiveGridVerticalScope(opt.id as any)}
+                                                    className={`flex-1 py-0.5 text-[8px] transition-colors ${perspectiveGridVerticalScope === opt.id ? 'bg-theme-accent-primary text-white font-medium' : 'text-theme-text-secondary hover:bg-theme-bg-primary hover:text-theme-text-primary'}`}
+                                                >
+                                                    {opt.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Grid Length */}
+                                    <div className="flex items-center gap-1.5 mt-1 bg-theme-bg-tertiary/30 rounded px-1.5 py-1 border border-theme-bg-tertiary/50">
+                                        <label className="text-[9px] text-theme-text-secondary w-8">Largo:</label>
+                                        <div className="flex flex-1 gap-px bg-theme-bg-tertiary rounded overflow-hidden">
+                                            {[
+                                                { id: 'full', label: 'Completo' },
+                                                { id: 'short', label: 'Corto' },
+                                            ].map(opt => (
+                                                <button
+                                                    key={opt.id}
+                                                    onClick={() => setPerspectiveGridLength && setPerspectiveGridLength(opt.id as any)}
+                                                    className={`flex-1 py-0.5 text-[8px] transition-colors ${perspectiveGridLength === opt.id ? 'bg-theme-accent-primary text-white font-medium' : 'text-theme-text-secondary hover:bg-theme-bg-primary hover:text-theme-text-primary'}`}
+                                                >
+                                                    {opt.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </section>
 
@@ -507,6 +636,13 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                             <div className="w-full h-full" style={{ backgroundColor: backgroundColor || '#ffffff' }} />
                         </div>
                         <button
+                            onClick={onToggleBackgroundVisibility}
+                            className={`p-2 rounded border flex items-center justify-center transition-colors ${isBackgroundVisible ? 'bg-theme-accent-primary/10 border-theme-accent-primary text-theme-accent-primary' : 'bg-theme-bg-primary border-theme-bg-tertiary text-theme-text-secondary hover:text-theme-text-primary'}`}
+                            title={isBackgroundVisible ? 'Ocultar Fondo' : 'Mostrar Fondo'}
+                        >
+                            {isBackgroundVisible ? <EyeOpenIcon className="w-4 h-4" /> : <EyeClosedIcon className="w-4 h-4" />}
+                        </button>
+                        <button
                             onClick={onOpenCanvasSizeModal}
                             className="flex-1 p-2 bg-theme-bg-primary border border-theme-bg-tertiary rounded text-[10px] text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary transition-colors"
                         >
@@ -516,7 +652,7 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                 </div>
             </section>
 
-        </div>
+        </div >
     );
 };
 

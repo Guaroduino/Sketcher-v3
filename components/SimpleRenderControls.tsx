@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SparklesIcon, SaveIcon, TrashIcon, ChevronDownIcon } from './icons';
+import { SparklesIcon, SaveIcon, TrashIcon, ChevronDownIcon, EyeOpenIcon, EyeClosedIcon } from './icons';
 import { useInstructionPresets } from '../hooks/useInstructionPresets';
 import { SavedInstruction } from '../types';
 
@@ -7,7 +7,7 @@ interface SimpleRenderControlsProps {
     sketchImage: string | null;
     compositeImage: string | null;
     isGenerating: boolean;
-    onRender: (prompt: string, refImages: File[]) => void;
+    onRender: (prompt: string, refImages: File[], includeSketch: boolean, includeComposite: boolean) => void;
 }
 
 interface RefImage {
@@ -27,6 +27,8 @@ export const SimpleRenderControls: React.FC<SimpleRenderControlsProps> = ({
     const [isSaveOpen, setIsSaveOpen] = useState(false);
     const [isPresetsDropdownOpen, setIsPresetsDropdownOpen] = useState(false);
     const [refImages, setRefImages] = useState<RefImage[]>([]);
+    const [includeSketch, setIncludeSketch] = useState(true);
+    const [includeComposite, setIncludeComposite] = useState(true);
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, slotIndex: number) => {
         if (e.target.files && e.target.files[0]) {
@@ -91,15 +93,31 @@ export const SimpleRenderControls: React.FC<SimpleRenderControlsProps> = ({
                 <div className="grid grid-cols-2 gap-2">
                     <div className="aspect-square bg-black/20 rounded border border-theme-bg-tertiary relative overflow-hidden group">
                         {sketchImage ? (
-                            <img src={sketchImage} className="w-full h-full object-cover" />
+                            <img src={sketchImage} className={`w-full h-full object-cover transition-opacity ${includeSketch ? 'opacity-100' : 'opacity-30'}`} />
                         ) : <div className="text-[9px] text-theme-text-tertiary flex items-center justify-center h-full">Sin Sketch</div>}
                         <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-[8px] text-white p-1 text-center">Fondo Sketch</div>
+                        {/* Toggle Button */}
+                        <button
+                            onClick={() => setIncludeSketch(!includeSketch)}
+                            className={`absolute top-1 right-1 p-1 rounded-full transition-colors ${includeSketch ? 'bg-black/40 text-white hover:bg-black/60' : 'bg-red-500/80 text-white hover:bg-red-600'}`}
+                            title={includeSketch ? "Incluir imagen en render" : "No incluir imagen"}
+                        >
+                            {includeSketch ? <EyeOpenIcon className="w-3 h-3" /> : <EyeClosedIcon className="w-3 h-3" />}
+                        </button>
                     </div>
                     <div className="aspect-square bg-black/20 rounded border border-theme-bg-tertiary relative overflow-hidden group">
                         {compositeImage ? (
-                            <img src={compositeImage} className="w-full h-full object-cover" />
+                            <img src={compositeImage} className={`w-full h-full object-cover transition-opacity ${includeComposite ? 'opacity-100' : 'opacity-30'}`} />
                         ) : <div className="text-[9px] text-theme-text-tertiary flex items-center justify-center h-full">Sin Capas</div>}
                         <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-[8px] text-white p-1 text-center">Composite</div>
+                        {/* Toggle Button */}
+                        <button
+                            onClick={() => setIncludeComposite(!includeComposite)}
+                            className={`absolute top-1 right-1 p-1 rounded-full transition-colors ${includeComposite ? 'bg-black/40 text-white hover:bg-black/60' : 'bg-red-500/80 text-white hover:bg-red-600'}`}
+                            title={includeComposite ? "Incluir imagen en render" : "No incluir imagen"}
+                        >
+                            {includeComposite ? <EyeOpenIcon className="w-3 h-3" /> : <EyeClosedIcon className="w-3 h-3" />}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -222,12 +240,12 @@ export const SimpleRenderControls: React.FC<SimpleRenderControlsProps> = ({
             <div className="flex-grow"></div>
 
             <button
-                onClick={() => onRender(prompt, refImages.map(r => r.file))}
+                onClick={() => onRender(prompt, refImages.map(r => r.file), includeSketch, includeComposite)}
                 disabled={isGenerating}
                 className="w-full py-3 rounded-md bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold text-sm shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
             >
                 {isGenerating ? "Generando..." : <><SparklesIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" /> Renderizar V2</>}
             </button>
-        </div>
+        </div >
     );
 };

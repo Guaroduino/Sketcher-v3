@@ -53,7 +53,12 @@ export function useGuides(canvasSize: { width: number, height: number }) {
                         ],
                     },
                     guidePoint: { x: width / 2, y: height * 0.8 },
-                    extraGuideLines: { green: [], red: [], blue: [] }
+                    extraGuideLines: { green: [], red: [], blue: [] },
+                    isGridVisible: false,
+                    gridColor: 'rgba(200, 200, 200, 0.4)',
+                    gridDensity: 72,
+                    gridVerticalScope: 'both',
+                    gridLength: 'full',
                 });
             }
             if (newGuide === 'mirror' && mirrorGuides.length === 0) {
@@ -146,9 +151,18 @@ export function useGuides(canvasSize: { width: number, height: number }) {
                 ],
             },
             guidePoint: { x: width / 2, y: height * 0.8 },
-            extraGuideLines: { green: [], red: [], blue: [] }
+            extraGuideLines: { green: [], red: [], blue: [] },
+            isGridVisible: false,
+            gridColor: 'rgba(200, 200, 200, 0.4)',
+            gridDensity: 72,
+            gridVerticalScope: 'both',
+            gridLength: 'full',
         });
     }, [canvasSize]);
+
+    const togglePerspectiveGrid = useCallback(() => {
+        setPerspectiveGuide(prev => prev ? { ...prev, isGridVisible: !prev.isGridVisible } : null);
+    }, []);
 
     return {
         activeGuide,
@@ -173,5 +187,6 @@ export function useGuides(canvasSize: { width: number, height: number }) {
         onSetGridMinorLineColor: handleSetGridMinorLineColor,
         loadGuideState,
         resetPerspective,
+        togglePerspectiveGrid,
     };
 }

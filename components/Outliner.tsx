@@ -1,6 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { CanvasItem, ItemType } from '../types';
-import { LayersIcon, PlusIcon, TrashIcon, EyeOpenIcon, EyeClosedIcon, UploadIcon, FolderIcon, MergeIcon, ExportIcon, CopyIcon, ArrowUpIcon, ArrowDownIcon, MergeUpIcon, MoreVerticalIcon, AddAboveIcon, AddBelowIcon, SparklesIcon } from './icons';
+import {
+  EyeOpenIcon, EyeClosedIcon, TrashIcon, CopyIcon, ChevronDownIcon, ChevronUpIcon,
+  ArrowUpIcon, ArrowDownIcon, MergeIcon, MergeUpIcon, PlusIcon, FolderIcon, CubeIcon,
+  SparklesIcon, ExportIcon, PhotoIcon, LayersIcon, MoreVerticalIcon, AddAboveIcon, AddBelowIcon
+} from './icons';
 
 type DragPosition = 'top' | 'bottom' | 'middle';
 
@@ -24,6 +28,7 @@ interface OutlinerProps {
   onMergeItemUp: (id: string) => void;
   onAddObjectAbove: (id: string) => void;
   onAddObjectBelow: (id: string) => void;
+  onMergeToBackground: (id: string) => void;
   lastRenderedImage?: string | null;
   onImportRender?: () => void;
   onAddAIObject?: () => void;
@@ -49,6 +54,7 @@ export const Outliner: React.FC<OutlinerProps> = React.memo(({
   onMergeItemUp,
   onAddObjectAbove,
   onAddObjectBelow,
+  onMergeToBackground,
   lastRenderedImage,
   onImportRender,
   onAddAIObject,
@@ -273,6 +279,14 @@ export const Outliner: React.FC<OutlinerProps> = React.memo(({
                     disabled={!activeItemState.canMergeDown}
                     className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover disabled:opacity-50 disabled:cursor-not-allowed" title="Combinar abajo">
                     <MergeIcon className="w-3.5 h-3.5" />
+                  </button>
+
+                  <div className="w-px h-3.5 bg-theme-bg-tertiary mx-0.5" />
+
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onMergeToBackground(item.id); }}
+                    className="p-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-accent-primary" title="Combinar con fondo">
+                    <PhotoIcon className="w-3.5 h-3.5" />
                   </button>
                 </>
               )}

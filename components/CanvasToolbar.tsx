@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Tool, Guide, TransformState, GridGuide, GridType, ScaleUnit, StrokeMode, OrthogonalGuide } from '../types';
-import { HandIcon, ZoomInIcon, ZoomOutIcon, UndoIcon, RedoIcon, TrashIcon, CheckIcon, XIcon, GridIcon, SnapIcon, IsometricIcon, MaximizeIcon, PerspectiveIcon } from './icons';
+import { HandIcon, ZoomInIcon, ZoomOutIcon, UndoIcon, RedoIcon, TrashIcon, CheckIcon, XIcon, GridIcon, SnapIcon, IsometricIcon, MaximizeIcon, PerspectiveIcon, UploadIcon, PasteIcon } from './icons';
 
 interface CanvasToolbarProps {
   tool: Tool;
@@ -48,6 +48,7 @@ interface CanvasToolbarProps {
   scaleFactor: number;
   scaleUnit: ScaleUnit;
   onPaste: () => void;
+  onImport?: () => void;
   hasClipboardContent: boolean;
   strokeSmoothing: number;
   setStrokeSmoothing: (value: number) => void;
@@ -57,7 +58,14 @@ interface CanvasToolbarProps {
 }
 
 export const CanvasToolbar: React.FC<CanvasToolbarProps> = React.memo(({
-  tool, setTool, onSetActiveGuide, onSetGridType, isSnapToGridEnabled, onToggleSnapToGrid, onZoomExtents, onZoomIn, onZoomOut, onUndo, onRedo, onClearAll, canUndo, canRedo, isCropping, onApplyCrop, onCancelCrop, isTransforming, onApplyTransform, onCancelTransform, gridGuide, onSetGridSpacing, scaleFactor, scaleUnit,
+  tool, setTool, onSetActiveGuide, onSetGridType, isSnapToGridEnabled, onToggleSnapToGrid, onZoomExtents, onZoomIn, onZoomOut, onUndo, onRedo, onClearAll, canUndo, canRedo, isCropping, onApplyCrop, onCancelCrop, isTransforming, onApplyTransform, onCancelTransform, onSetAreGuidesLocked,
+  onResetPerspective,
+  scaleFactor,
+  scaleUnit,
+  onPaste,
+  onImport,
+  hasClipboardContent,
+  gridGuide, onSetGridSpacing,
   activeGuide, isPerspectiveStrokeLockEnabled, onSetIsPerspectiveStrokeLockEnabled
 }) => {
   const [gridSpacing, setGridSpacing] = useState('50');
@@ -121,9 +129,14 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = React.memo(({
           </>
         ) : (
           <>
-            {/* 1. Undo / Redo */}
+            {/* 1. Undo / Redo / Paste */}
             <button onClick={onUndo} disabled={!canUndo} className="p-2 rounded-md text-theme-text-secondary hover:bg-theme-bg-hover disabled:opacity-30" title="Deshacer"><UndoIcon className="w-5 h-5" /></button>
             <button onClick={onRedo} disabled={!canRedo} className="p-2 rounded-md text-theme-text-secondary hover:bg-theme-bg-hover disabled:opacity-30" title="Rehacer"><RedoIcon className="w-5 h-5" /></button>
+            {hasClipboardContent && (
+              <button onClick={onPaste} className="p-2 rounded-md text-theme-text-secondary hover:bg-theme-bg-hover" title="Pegar">
+                <PasteIcon className="w-5 h-5" />
+              </button>
+            )}
             <div className="w-px h-6 bg-theme-bg-tertiary" />
 
             {/* 2. Zoom */}
@@ -157,8 +170,11 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = React.memo(({
             </button>
             <div className="w-px h-6 bg-theme-bg-tertiary" />
 
-            {/* 5. Clear */}
-            <button onClick={onClearAll} className="p-2 rounded-md text-theme-text-secondary hover:text-red-500 hover:bg-theme-bg-hover" title="Limpiar Todo"><TrashIcon className="w-5 h-5" /></button>
+            {/* 5. Clear & Import */}
+            <div className="flex items-center gap-1">
+              <button onClick={onImport} className="p-2 rounded-md text-theme-accent-primary hover:bg-theme-bg-hover" title="Importar Imagen/Fondo"><UploadIcon className="w-5 h-5" /></button>
+              <button onClick={onClearAll} className="p-2 rounded-md text-theme-text-secondary hover:text-red-500 hover:bg-theme-bg-hover" title="Limpiar Todo"><TrashIcon className="w-5 h-5" /></button>
+            </div>
           </>
         )}
       </div>

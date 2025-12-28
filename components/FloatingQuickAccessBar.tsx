@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { QuickAccessSettings, QuickAccessTool, Tool, StrokeMode } from '../types';
-import { ChevronUpIcon, ChevronDownIcon, PlusIcon, SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, NaturalMarkerIcon, AirbrushIcon, FXBrushIcon, TransformIcon, FreeTransformIcon, SparklesIcon, CropIcon, MarqueeRectIcon, LassoIcon, MagicWandIcon, TextIcon, AdvancedMarkerIcon, WatercolorIcon, CubeIcon } from './icons';
+import { ChevronUpIcon, ChevronDownIcon, PlusIcon, SelectIcon, BrushIcon, EraserIcon, SolidMarkerIcon, NaturalMarkerIcon, AirbrushIcon, FXBrushIcon, TransformIcon, FreeTransformIcon, SparklesIcon, CropIcon, MarqueeRectIcon, MarqueeCircleIcon, LassoIcon, MagicWandIcon, TextIcon, AdvancedMarkerIcon, WatercolorIcon, CubeIcon, EyedropperIcon } from './icons';
 
 interface FloatingQuickAccessBarProps {
     quickAccessSettings: QuickAccessSettings;
@@ -39,6 +40,7 @@ const toolIconMap: Record<Tool, React.FC<{ className?: string }>> = {
     'crop': CropIcon,
     'pan': () => null,
     'marquee-rect': MarqueeRectIcon,
+    'marquee-circle': MarqueeCircleIcon,
     'lasso': LassoIcon,
     'magic-wand': MagicWandIcon,
     'debug-brush': BrushIcon,
@@ -77,7 +79,7 @@ const ColorEditorPopover = ({ anchorEl, initialColor, onColorChange, onClose }: 
 
     const presets = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#f43f5e', '#78716c', '#ffffff', '#000000'];
 
-    return (
+    return createPortal(
         <div ref={popoverRef} style={style} className="bg-theme-bg-secondary p-3 rounded-lg shadow-2xl border border-theme-bg-tertiary space-y-3" onPointerDown={e => e.stopPropagation()}>
             <div className="flex items-center gap-2">
                 <div className="relative w-10 h-10">
@@ -92,11 +94,12 @@ const ColorEditorPopover = ({ anchorEl, initialColor, onColorChange, onClose }: 
             <div>
                 <div className="grid grid-cols-7 gap-1">
                     {presets.map(preset => (
-                        <button key={preset} onClick={() => { setColor(preset); onColorChange(preset); }} className={`w-6 h-6 rounded-full border-2 ${preset === color ? 'border-theme-accent-primary' : 'border-transparent hover:border-gray-400'}`} style={{ backgroundColor: preset }} />
+                        <button key={preset} onClick={() => { setColor(preset); onColorChange(preset); }} className={`w-6 h-6 rounded-full border-2 flex-shrink-0 ${preset === color ? 'border-theme-accent-primary' : 'border-transparent hover:border-gray-400'}`} style={{ backgroundColor: preset }} />
                     ))}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
@@ -104,20 +107,22 @@ import { useLongPress } from '../hooks/useLongPress';
 
 // ... (other components)
 
-const QuickAccessToolButton = ({
+interface QuickAccessToolButtonProps {
+    t: QuickAccessTool | null;
+    isActive: boolean;
+    onClick: () => void;
+    onLongPress: () => void;
+    onContextMenu: (e: React.MouseEvent) => void;
+    title: string;
+}
+
+const QuickAccessToolButton: React.FC<QuickAccessToolButtonProps> = ({
     t,
     isActive,
     onClick,
     onLongPress,
     onContextMenu,
     title
-}: {
-    t: QuickAccessTool | null,
-    isActive: boolean,
-    onClick: () => void,
-    onLongPress: () => void,
-    onContextMenu: (e: React.MouseEvent) => void,
-    title: string
 }) => {
     const longPressProps = useLongPress(
         onLongPress,
@@ -129,7 +134,7 @@ const QuickAccessToolButton = ({
         <button
             {...longPressProps}
             onContextMenu={onContextMenu}
-            className={`p-2 rounded-lg transition-colors ${isActive ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+            className={`p-2 rounded-lg transition-colors flex-shrink-0 ${isActive ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
             title={title}
         >
             {renderToolSlotIcon(t)}
@@ -182,34 +187,78 @@ export const FloatingQuickAccessBar: React.FC<FloatingQuickAccessBarProps> = ({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [colorContextMenu]);
 
+    const handleEyeDropper = async () => {
+        if (!('EyeDropper' in window)) {
+            alert('Su navegador no soporta la herramienta de Cuentagotas.');
+            return;
+        }
+
+        try {
+            // @ts-ignore
+            const eyeDropper = new window.EyeDropper();
+            // @ts-ignore
+            const result = await eyeDropper.open();
+            const color = result.sRGBHex;
+
+            if (activeColorType === 'stroke') {
+                onSelectColor(color);
+            } else if (activeColorType === 'fill' && onSelectFillColor) {
+                onSelectFillColor(color);
+            }
+        } catch (e) {
+            console.log('EyeDropper closed or failed', e);
+        }
+    };
+
     return (
-        <div className={`fixed left-1/2 -translate-x-1/2 z-30 flex flex-col items-center max-w-[95vw] transition-all duration-300 ${isHeaderVisible ? 'top-20' : 'top-4'}`}>
+        <div className={`fixed left-1/2 -translate-x-1/2 z-30 flex flex-col items-center max-w-[95vw] transition-all duration-300 ${isHeaderVisible ? 'top-[72px]' : 'top-4'}`}>
 
             {/* Color Edit Popover and Context Menu */}
             {editingColor && (
-                <ColorEditorPopover anchorEl={editingColor.anchorEl} initialColor={editingColor.initialColor} onClose={() => setEditingColor(null)} onColorChange={(newColor) => { if (editingColor.index !== null) { onUpdateColor(editingColor.index, newColor); setEditingColor(prev => prev ? { ...prev, initialColor: newColor } : null); } }} />
+                <ColorEditorPopover
+                    anchorEl={editingColor.anchorEl}
+                    initialColor={editingColor.initialColor}
+                    onClose={() => setEditingColor(null)}
+                    onColorChange={(newColor) => {
+                        if (editingColor.index !== null) {
+                            onUpdateColor(editingColor.index, newColor);
+                            setEditingColor(prev => prev ? { ...prev, initialColor: newColor } : null);
+                            // Immediate update
+                            if (activeColorType === 'stroke') {
+                                onSelectColor(newColor);
+                            } else if (activeColorType === 'fill' && onSelectFillColor) {
+                                onSelectFillColor(newColor);
+                            }
+                        }
+                    }}
+                />
             )}
-            {colorContextMenu && (
-                <div ref={contextMenuRef} className="fixed z-60 bg-theme-bg-secondary rounded-md shadow-lg border border-theme-bg-tertiary py-1" style={{ top: colorContextMenu.y, left: colorContextMenu.x }}>
+            {colorContextMenu && createPortal(
+                <div ref={contextMenuRef} className="fixed z-[70] bg-theme-bg-secondary rounded-md shadow-lg border border-theme-bg-tertiary py-1" style={{ top: colorContextMenu.y, left: colorContextMenu.x }}>
                     <button onClick={() => { if (quickAccessSettings.colors.length > 1) onRemoveColor(colorContextMenu.index); setColorContextMenu(null); }} className="block w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-theme-bg-hover">Eliminar</button>
-                </div>
+                </div>,
+                document.body
             )}
 
 
             <div className="bg-theme-bg-primary/95 backdrop-blur-md rounded-xl p-1.5 flex items-center gap-2 shadow-sm border border-theme-bg-tertiary overflow-x-auto scrollbar-hide max-w-full">
                 {/* 1. Header Toggle */}
-                <button onClick={onToggleHeader} className="p-2 rounded-lg text-theme-text-secondary hover:bg-theme-bg-tertiary transition-colors" title={isHeaderVisible ? "Ocultar Encabezado" : "Mostrar Encabezado"}>
+                <button onClick={onToggleHeader} className="p-2 rounded-lg text-theme-text-secondary hover:bg-theme-bg-tertiary transition-colors flex-shrink-0" title={isHeaderVisible ? "Ocultar Encabezado" : "Mostrar Encabezado"}>
                     {isHeaderVisible ? <ChevronUpIcon className="w-5 h-5" /> : <ChevronDownIcon className="w-5 h-5" />}
                 </button>
                 <div className="w-px h-6 bg-theme-bg-tertiary" />
 
                 {/* 2. Active Colors Indicators */}
                 <div className="flex items-center gap-2 mr-2">
-                    <div className="flex flex-col items-center gap-0.5" title="Color de Trazo" onClick={() => setActiveColorType('stroke')}>
+                    <div className="flex flex-col items-center gap-0.5 flex-shrink-0" title="Color de Trazo" onClick={() => setActiveColorType('stroke')}>
                         <div className={`w-6 h-6 rounded-full border-2 transition-transform cursor-pointer ${activeColorType === 'stroke' ? 'ring-2 ring-theme-accent-primary scale-110' : ''}`} style={{ backgroundColor: activeColor, borderColor: 'rgba(0,0,0,0.2)' }}></div>
                     </div>
+                    {/* Screen Picker */}
+                    <button onClick={handleEyeDropper} className="p-1 rounded-full text-theme-text-secondary hover:bg-theme-bg-tertiary transition-colors" title="Selector de Color en Pantalla">
+                        <EyedropperIcon className="w-4 h-4" />
+                    </button>
                     {activeFillColor !== undefined && onSelectFillColor && (
-                        <div className="flex flex-col items-center gap-0.5" title="Color de Relleno" onClick={() => setActiveColorType('fill')}>
+                        <div className="flex flex-col items-center gap-0.5 flex-shrink-0" title="Color de Relleno" onClick={() => setActiveColorType('fill')}>
                             <div className={`w-6 h-6 rounded-full border-2 transition-transform cursor-pointer ${activeColorType === 'fill' ? 'ring-2 ring-theme-accent-primary scale-110' : ''}`} style={{ backgroundColor: activeFillColor, borderColor: 'rgba(0,0,0,0.2)' }}>
                                 {activeFillColor === 'transparent' && <div className="w-full h-0.5 bg-red-500 rotate-45 relative top-1/2 -translate-y-1/2 rounded-full"></div>}
                             </div>
@@ -226,19 +275,19 @@ export const FloatingQuickAccessBar: React.FC<FloatingQuickAccessBarProps> = ({
                             onClick={() => activeColorType === 'stroke' ? onSelectColor(color) : onSelectFillColor?.(color)}
                             onDoubleClick={(e) => setEditingColor({ index: idx, initialColor: color, anchorEl: e.currentTarget })}
                             onContextMenu={(e) => { e.preventDefault(); setColorContextMenu({ x: e.clientX, y: e.clientY, index: idx }); }}
-                            className={`w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 ${activeColor === color || activeFillColor === color ? 'border-theme-accent-primary' : 'border-theme-bg-tertiary'}`}
+                            className={`w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 flex-shrink-0 ${activeColor === color || activeFillColor === color ? 'border-theme-accent-primary' : 'border-theme-bg-tertiary'}`}
                             style={{ backgroundColor: color }}
                             title={color}
                         />
                     ))}
                     <button
                         onClick={() => activeColorType === 'stroke' ? onSelectColor('transparent') : onSelectFillColor?.('transparent')}
-                        className={`w-6 h-6 rounded-full border-2 border-theme-bg-tertiary flex items-center justify-center bg-white relative overflow-hidden transition-transform hover:scale-110 ${activeColor === 'transparent' || activeFillColor === 'transparent' ? 'border-theme-accent-primary' : ''}`}
+                        className={`w-6 h-6 rounded-full border-2 border-theme-bg-tertiary flex items-center justify-center bg-white relative overflow-hidden transition-transform hover:scale-110 flex-shrink-0 ${activeColor === 'transparent' || activeFillColor === 'transparent' ? 'border-theme-accent-primary' : ''}`}
                         title="Transparente"
                     >
                         <div className="w-full h-0.5 bg-red-500 rotate-45 absolute"></div>
                     </button>
-                    <button onClick={() => onAddColor('#ffffff')} className="w-6 h-6 rounded-full border-2 border-dashed border-theme-text-tertiary flex items-center justify-center hover:border-theme-accent-primary text-theme-text-tertiary hover:text-theme-accent-primary transition-colors">
+                    <button onClick={() => onAddColor('#ffffff')} className="w-6 h-6 rounded-full border-2 border-dashed border-theme-text-tertiary flex items-center justify-center hover:border-theme-accent-primary text-theme-text-tertiary hover:text-theme-accent-primary transition-colors flex-shrink-0">
                         <PlusIcon className="w-3 h-3" />
                     </button>
                 </div>
@@ -251,7 +300,7 @@ export const FloatingQuickAccessBar: React.FC<FloatingQuickAccessBarProps> = ({
                             {editingSize?.index === idx ? (
                                 <input ref={sizeInputRef} type="number" value={editingSize.value} onChange={handleSizeChange} onBlur={handleSizeBlur} onKeyDown={(e) => e.key === 'Enter' && handleSizeBlur()} className="w-10 text-center text-xs bg-theme-bg-tertiary rounded p-0.5" />
                             ) : (
-                                <button onClick={() => onSelectSize(size)} onDoubleClick={() => handleSizeDoubleClick(idx, size)} className={`w-8 py-1 rounded text-xs font-bold transition-colors ${activeSize === size ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`} title={`${size}px`}>
+                                <button onClick={() => onSelectSize(size)} onDoubleClick={() => handleSizeDoubleClick(idx, size)} className={`w-8 py-1 rounded text-xs font-bold transition-colors flex-shrink-0 ${activeSize === size ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`} title={`${size}px`}>
                                     {size}
                                 </button>
                             )}
@@ -280,7 +329,7 @@ export const FloatingQuickAccessBar: React.FC<FloatingQuickAccessBarProps> = ({
                             />
                         );
                     })}
-                    <button onClick={onAddToolSlot} className="p-2 rounded-lg border border-dashed border-theme-bg-tertiary text-theme-text-tertiary hover:text-theme-accent-primary hover:border-theme-accent-primary transition-colors">
+                    <button onClick={onAddToolSlot} className="p-2 rounded-lg border border-dashed border-theme-bg-tertiary text-theme-text-tertiary hover:text-theme-accent-primary hover:border-theme-accent-primary transition-colors flex-shrink-0">
                         <PlusIcon className="w-4 h-4" />
                     </button>
                 </div>

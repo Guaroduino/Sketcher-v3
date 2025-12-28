@@ -70,6 +70,8 @@ interface ArchitecturalControlsProps {
     analyzeReferenceImage?: () => void;
     onRender: () => void;
     isGenerating: boolean;
+    previewBackground?: string | null;
+    previewComposite?: string | null;
 }
 
 const CollapsiblePillGroup: React.FC<{ label: string, options: { label: string, value: string }[], value: string, onChange: (val: string) => void }> = ({ label, options, value, onChange }) => {
@@ -139,7 +141,9 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = React
     styleReferenceImage, setStyleReferenceImage,
     styleReferenceDescription, isAnalyzingReference, analyzeReferenceImage,
     onRender,
-    isGenerating
+    isGenerating,
+    previewBackground,
+    previewComposite
 }) => {
     // Local state for debouncing additionalPrompt
     const [localPrompt, setLocalPrompt] = React.useState(additionalPrompt);
@@ -188,6 +192,7 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = React
         { label: 'Objeto (Exterior)', value: 'object_exterior' },
         { label: 'Fotografía de Estudio', value: 'studio' },
         { label: 'Automotriz', value: 'automotive' },
+        { label: 'Integración Objetos', value: 'object_integration' }
     ];
     const renderStyleOptions = [
         { label: 'Fotorealista', value: 'photorealistic' },
@@ -346,93 +351,127 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = React
                 </div>
 
                 {/* 2. Estilo de renderizado */}
-                <div className="space-y-4">
-                    <CollapsiblePillGroup label="Estilo de Renderizado" options={renderStyleOptions} value={renderStyle} onChange={(v) => setRenderStyle(v as RenderStyleMode)} />
-                </div>
+                {sceneType !== 'object_integration' && (
+                    <div className="space-y-4">
+                        <CollapsiblePillGroup label="Estilo de Renderizado" options={renderStyleOptions} value={renderStyle} onChange={(v) => setRenderStyle(v as RenderStyleMode)} />
+                    </div>
+                )}
 
                 {/* 3. Estilo de referencia (Imagen) */}
-                <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider flex items-center justify-between">
-                        Referencia de Estilo
-                        {styleReferenceImage && <button onClick={() => setStyleReferenceImage(null)} className="text-[9px] text-red-400 hover:text-red-300">Borrar</button>}
-                    </label>
-                    <div className={`border border-dashed rounded-lg p-2 flex flex-col items-center justify-center transition-colors cursor-pointer relative overflow-hidden group h-32 ${styleReferenceImage ? 'border-theme-accent-primary bg-black/20' : 'border-theme-bg-tertiary hover:bg-theme-bg-primary hover:border-theme-text-secondary'}`}>
-                        {styleReferenceImage ? (
-                            <img src={styleReferenceImage} className="w-full h-full object-cover rounded" title="Imagen de referencia" />
-                        ) : (
-                            <div className="flex flex-col items-center p-2 text-center">
-                                <UploadIcon className="w-6 h-6 text-theme-text-tertiary mb-2" />
-                                <span className="text-[10px] text-theme-text-secondary">Arrastra o Click para subir imagen de estilo</span>
+                {sceneType !== 'object_integration' && (
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider flex items-center justify-between">
+                            Referencia de Estilo
+                            {styleReferenceImage && <button onClick={() => setStyleReferenceImage(null)} className="text-[9px] text-red-400 hover:text-red-300">Borrar</button>}
+                        </label>
+                        <div className={`border border-dashed rounded-lg p-2 flex flex-col items-center justify-center transition-colors cursor-pointer relative overflow-hidden group h-32 ${styleReferenceImage ? 'border-theme-accent-primary bg-black/20' : 'border-theme-bg-tertiary hover:bg-theme-bg-primary hover:border-theme-text-secondary'}`}>
+                            {styleReferenceImage ? (
+                                <img src={styleReferenceImage} className="w-full h-full object-cover rounded" title="Imagen de referencia" />
+                            ) : (
+                                <div className="flex flex-col items-center p-2 text-center">
+                                    <UploadIcon className="w-6 h-6 text-theme-text-tertiary mb-2" />
+                                    <span className="text-[10px] text-theme-text-secondary">Arrastra o Click para subir imagen de estilo</span>
+                                </div>
+                            )}
+                            <input type="file" accept="image/*" onChange={handleStyleRefUpload} className="absolute inset-0 opacity-0 cursor-pointer" title="Subir referencia" />
+                        </div>
+                        {(isAnalyzingReference || styleReferenceDescription) && (
+                            <div className="p-2 bg-theme-bg-tertiary/20 rounded border border-theme-bg-tertiary mt-2">
+                                <div className="text-[9px] font-bold text-theme-text-secondary mb-1 flex items-center gap-1">
+                                    <SparklesIcon className={`w-3 h-3 text-theme-accent-primary ${isAnalyzingReference ? 'animate-spin' : ''}`} />
+                                    {isAnalyzingReference ? "ANALIZANDO ESTILO..." : "ANÁLISIS IA DETECTADO:"}
+                                </div>
+                                {!isAnalyzingReference && <p className="text-[10px] text-theme-text-tertiary italic leading-relaxed max-h-24 overflow-y-auto scrollbar-thin scrollbar-thumb-theme-bg-tertiary/50 pr-1">{styleReferenceDescription}</p>}
                             </div>
                         )}
-                        <input type="file" accept="image/*" onChange={handleStyleRefUpload} className="absolute inset-0 opacity-0 cursor-pointer" title="Subir referencia" />
                     </div>
-                    {(isAnalyzingReference || styleReferenceDescription) && (
-                        <div className="p-2 bg-theme-bg-tertiary/20 rounded border border-theme-bg-tertiary mt-2">
-                            <div className="text-[9px] font-bold text-theme-text-secondary mb-1 flex items-center gap-1">
-                                <SparklesIcon className={`w-3 h-3 text-theme-accent-primary ${isAnalyzingReference ? 'animate-spin' : ''}`} />
-                                {isAnalyzingReference ? "ANALIZANDO ESTILO..." : "ANÁLISIS IA DETECTADO:"}
+                )}
+
+                {/* INTEGRATION PREVIEW SECTION */}
+                {sceneType === 'object_integration' && (
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider block mb-2">Input Visual (Integración)</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            {/* Background Preview */}
+                            <div className="aspect-square bg-black/20 rounded border border-theme-bg-tertiary relative overflow-hidden group">
+                                {previewBackground ? (
+                                    <img src={previewBackground} className="w-full h-full object-cover" />
+                                ) : <div className="text-[9px] text-theme-text-tertiary flex items-center justify-center h-full text-center p-2">Sin Fondo<br />(Añade imagen al canvas)</div>}
+                                <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-[8px] text-white p-1 text-center font-bold">FONDO (Contexto)</div>
                             </div>
-                            {!isAnalyzingReference && <p className="text-[10px] text-theme-text-tertiary italic leading-relaxed max-h-24 overflow-y-auto scrollbar-thin scrollbar-thumb-theme-bg-tertiary/50 pr-1">{styleReferenceDescription}</p>}
+                            {/* Sketch Preview */}
+                            <div className="aspect-square bg-black/20 rounded border border-theme-bg-tertiary relative overflow-hidden group">
+                                {previewComposite ? (
+                                    <img src={previewComposite} className="w-full h-full object-cover" />
+                                ) : <div className="text-[9px] text-theme-text-tertiary flex items-center justify-center h-full text-center p-2">Sin Objeto<br />(Dibuja algo)</div>}
+                                <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-[8px] text-white p-1 text-center font-bold">OBJETO (Sketch)</div>
+                            </div>
                         </div>
-                    )}
-                </div>
+                        <p className="text-[9px] text-theme-text-tertiary italic">
+                            * La IA integrará el objeto dibujado en el fondo, respetando la iluminación y perspectiva de la imagen de fondo.
+                        </p>
+                    </div>
+                )}
 
                 {/* 4. Opciones de estilo (Render Style Specifics) */}
-                <CollapsibleSection title="Opciones de estilo" defaultOpen={false}>
-                    {getStyleSpecificControls()}
-                </CollapsibleSection>
+                {sceneType !== 'object_integration' && (
+                    <CollapsibleSection title="Opciones de estilo" defaultOpen={false}>
+                        {getStyleSpecificControls()}
+                    </CollapsibleSection>
+                )}
 
                 {/* 5. Opciones de Escena (Sujeto + Entorno) */}
-                <CollapsibleSection title="Opciones de Escena" defaultOpen={false}>
-                    {(sceneType === 'exterior' || sceneType === 'interior') && (
-                        <>
-                            <div className="flex items-center justify-between p-2 rounded bg-theme-bg-tertiary/30 border border-theme-bg-tertiary mb-1">
-                                <span className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider">Preservar Materialidad Original</span>
-                                <input
-                                    type="checkbox"
-                                    checked={matchMateriality}
-                                    onChange={(e) => setMatchMateriality(e.target.checked)}
-                                    className="accent-theme-accent-primary w-3 h-3 cursor-pointer"
-                                />
-                            </div>
-                            <CollapsiblePillGroup label="Estilo Arquitectónico" options={archStyleOptions} value={archStyle} onChange={setArchStyle} />
-                        </>
-                    )}
-                    {sceneType === 'exterior' && (
-                        <>
-                            <CollapsiblePillGroup label="Hora del día" options={timeOptions} value={timeOfDay} onChange={setTimeOfDay} />
-                            <CollapsiblePillGroup label="Clima" options={weatherOptions} value={weather} onChange={setWeather} />
-                        </>
-                    )}
-                    {sceneType === 'interior' && (
-                        <>
-                            <CollapsiblePillGroup label="Tipo de Habitación" options={roomOptions} value={roomType} onChange={setRoomType} />
-                            <CollapsiblePillGroup label="Iluminación" options={lightingOptions} value={lighting} onChange={setLighting} />
-                        </>
-                    )}
-                    {sceneType === 'studio' && (
-                        <>
-                            <CollapsiblePillGroup label="Tipo de Plano" options={studioShotOptions} value={studioShot} onChange={setStudioShot} />
-                            <CollapsiblePillGroup label="Iluminación" options={studioLightOptions} value={studioLighting} onChange={setStudioLighting} />
-                            <CollapsiblePillGroup label="Fondo" options={studioBgOptions} value={studioBackground} onChange={setStudioBackground} />
-                        </>
-                    )}
-                    {sceneType === 'automotive' && (
-                        <>
-                            <CollapsiblePillGroup label="Pintura / Color" options={carColorOptions} value={carColor} onChange={setCarColor} />
-                            <CollapsiblePillGroup label="Ángulo Cámara" options={carAngleOptions} value={carAngle} onChange={setCarAngle} />
-                            <CollapsiblePillGroup label="Entorno" options={carEnvOptions} value={carEnvironment} onChange={setCarEnvironment} />
-                        </>
-                    )}
-                    {(sceneType === 'object_interior' || sceneType === 'object_exterior') && (
-                        <>
-                            <CollapsiblePillGroup label="Material Principal" options={objMatOptions} value={objectMaterial} onChange={setObjectMaterial} />
-                            <CollapsiblePillGroup label="Contexto" options={objContextOptions} value={objectContext} onChange={setObjectContext} />
-                            <CollapsiblePillGroup label="Lente / Foco" options={objDofOptions} value={objectDoF} onChange={setObjectDoF} />
-                        </>
-                    )}
-                </CollapsibleSection>
+                {sceneType !== 'object_integration' && (
+                    <CollapsibleSection title="Opciones de Escena" defaultOpen={false}>
+                        {(sceneType === 'exterior' || sceneType === 'interior') && (
+                            <>
+                                <div className="flex items-center justify-between p-2 rounded bg-theme-bg-tertiary/30 border border-theme-bg-tertiary mb-1">
+                                    <span className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider">Preservar Materialidad Original</span>
+                                    <input
+                                        type="checkbox"
+                                        checked={matchMateriality}
+                                        onChange={(e) => setMatchMateriality(e.target.checked)}
+                                        className="accent-theme-accent-primary w-3 h-3 cursor-pointer"
+                                    />
+                                </div>
+                                <CollapsiblePillGroup label="Estilo Arquitectónico" options={archStyleOptions} value={archStyle} onChange={setArchStyle} />
+                            </>
+                        )}
+                        {sceneType === 'exterior' && (
+                            <>
+                                <CollapsiblePillGroup label="Hora del día" options={timeOptions} value={timeOfDay} onChange={setTimeOfDay} />
+                                <CollapsiblePillGroup label="Clima" options={weatherOptions} value={weather} onChange={setWeather} />
+                            </>
+                        )}
+                        {sceneType === 'interior' && (
+                            <>
+                                <CollapsiblePillGroup label="Tipo de Habitación" options={roomOptions} value={roomType} onChange={setRoomType} />
+                                <CollapsiblePillGroup label="Iluminación" options={lightingOptions} value={lighting} onChange={setLighting} />
+                            </>
+                        )}
+                        {sceneType === 'studio' && (
+                            <>
+                                <CollapsiblePillGroup label="Tipo de Plano" options={studioShotOptions} value={studioShot} onChange={setStudioShot} />
+                                <CollapsiblePillGroup label="Iluminación" options={studioLightOptions} value={studioLighting} onChange={setStudioLighting} />
+                                <CollapsiblePillGroup label="Fondo" options={studioBgOptions} value={studioBackground} onChange={setStudioBackground} />
+                            </>
+                        )}
+                        {sceneType === 'automotive' && (
+                            <>
+                                <CollapsiblePillGroup label="Pintura / Color" options={carColorOptions} value={carColor} onChange={setCarColor} />
+                                <CollapsiblePillGroup label="Ángulo Cámara" options={carAngleOptions} value={carAngle} onChange={setCarAngle} />
+                                <CollapsiblePillGroup label="Entorno" options={carEnvOptions} value={carEnvironment} onChange={setCarEnvironment} />
+                            </>
+                        )}
+                        {(sceneType === 'object_interior' || sceneType === 'object_exterior') && (
+                            <>
+                                <CollapsiblePillGroup label="Material Principal" options={objMatOptions} value={objectMaterial} onChange={setObjectMaterial} />
+                                <CollapsiblePillGroup label="Contexto" options={objContextOptions} value={objectContext} onChange={setObjectContext} />
+                                <CollapsiblePillGroup label="Lente / Foco" options={objDofOptions} value={objectDoF} onChange={setObjectDoF} />
+                            </>
+                        )}
+                    </CollapsibleSection>
+                )}
 
                 <div className="h-px bg-theme-bg-tertiary"></div>
 

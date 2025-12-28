@@ -110,6 +110,7 @@ interface CanvasContainerProps {
 
     scaleUnit: ScaleUnit;
     isSolidBox: boolean;
+    isPressureSensitivityEnabled: boolean;
 }
 
 type GuideDragState =
@@ -160,8 +161,8 @@ export const CanvasContainerComponent: React.FC<CanvasContainerPropsWithRef> = (
         isPalmRejectionEnabled,
         scaleFactor,
         scaleUnit,
-
         isSolidBox,
+        isPressureSensitivityEnabled,
     } = props;
 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -253,6 +254,7 @@ export const CanvasContainerComponent: React.FC<CanvasContainerPropsWithRef> = (
         // setDebugPointers, // OPTIMIZATION: Removed
         isPalmRejectionEnabled,
         isSolidBox,
+        isPressureSensitivityEnabled,
         brushSettings: props.brushSettings,
         fillColor: tool === 'brush' ? props.brushSettings.fillColor :
             tool === 'simple-marker' ? props.simpleMarkerSettings.fillColor :

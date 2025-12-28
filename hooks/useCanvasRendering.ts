@@ -16,7 +16,7 @@ import type {
     Tool,
     ScaleUnit,
 } from '../types';
-import { getLineIntersection } from '../utils/canvasUtils';
+import { getLineIntersection, isNearPoint } from '../utils/canvasUtils';
 
 type PerspectiveVPs = { vpGreen: Point | null, vpRed: Point | null, vpBlue: Point | null };
 
@@ -441,6 +441,251 @@ export function useCanvasRendering({
                 guideCtx.setLineDash([]);
             }
 
+            // --- 1.5 Draw Background Grid if Enabled ---
+            // --- 1.5 Draw Background Grid if Enabled ---
+            if (perspectiveGuide.isGridVisible) {
+                // Helper to find intersection of two lines defined by start/end points
+                const getIntersection = (l1: PerspectiveGuideLine, l2: PerspectiveGuideLine): Point | null => {
+                    const x1 = l1.start.x, y1 = l1.start.y, x2 = l1.end.x, y2 = l1.end.y;
+                    const x3 = l2.start.x, y3 = l2.start.y, x4 = l2.end.x, y4 = l2.end.y;
+                    const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
+                    if (denom === 0) return null;
+                    const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
+                    return { x: x1 + ua * (x2 - x1), y: y1 + ua * (y2 - y1) };
+                };
+
+                // Calculate intersections between manual guide lines
+                const greenLines = perspectiveGuide.lines.green;
+                const redLines = perspectiveGuide.lines.red;
+                const blueLines = perspectiveGuide.lines.blue;
+
+                // Collect intersections (Corners of the implied box)
+                const grIntersections: Point[] = [];
+                greenLines.forEach(g => redLines.forEach(r => { const p = getIntersection(g, r); if (p) grIntersections.push(p); }));
+
+                const gbIntersections: Point[] = [];
+                if (activeGuide === 'perspective' && vpBlue) greenLines.forEach(g => blueLines.forEach(b => { const p = getIntersection(g, b); if (p) gbIntersections.push(p); }));
+
+                const rbIntersections: Point[] = [];
+                if (activeGuide === 'perspective' && vpBlue) redLines.forEach(r => blueLines.forEach(b => { const p = getIntersection(r, b); if (p) rbIntersections.push(p); }));
+
+                // Core Grid Drawing Function
+                const drawPerspectiveGrid = (vp: Point | null, alignPoints: Point[]) => {
+                    if (!vp) return;
+
+                    const density = perspectiveGuide.gridDensity || 72;
+                    const scope = perspectiveGuide.gridVerticalScope || 'both';
+                    const isShort = perspectiveGuide.gridLength === 'short';
+                    const rayLength = Math.max(worldView.width, worldView.height) * 10;
+
+                    guideCtx.lineWidth = 0.5 / viewTransform.zoom;
+                    guideCtx.strokeStyle = perspectiveGuide.gridColor || 'rgba(200, 200, 200, 0.4)';
+                    guideCtx.beginPath();
+
+                    // --- Axes Setup for 3D Box Logic ---
+                    let blueAxisVec = { x: 0, y: -1 };
+                    if (vpBlue) {
+                        const dx = vpBlue.x - guidePoint.x;
+                        const dy = vpBlue.y - guidePoint.y;
+                        const len = Math.hypot(dx, dy) || 1;
+                        blueAxisVec = { x: dx / len, y: dy / len };
+                    }
+
+                    const gVecArg = vpGreen ? { x: vpGreen.x - guidePoint.x, y: vpGreen.y - guidePoint.y } : { x: -1, y: 0 };
+                    const rVecArg = vpRed ? { x: vpRed.x - guidePoint.x, y: vpRed.y - guidePoint.y } : { x: 1, y: 0 };
+
+                    // Identify VP
+                    const isGreen = vpGreen && isNearPoint(vp, vpGreen, 1);
+                    const isRed = vpRed && isNearPoint(vp, vpRed, 1);
+                    const isBlue = vpBlue && isNearPoint(vp, vpBlue, 1);
+                    const isSideVP = Math.abs(vp.x - guidePoint.x) > 50 && (!vpBlue || Math.abs(vp.y - vpBlue.y) > 100);
+
+                    // --- Universal Ray Drawer ---
+                    const drawRayThrough = (target: Point) => {
+                        // 1. Calculate Intersection with Boundary
+                        let endPoint = target;
+                        let startPoint = vp;
+
+                        // Case A: Side VP (Green/Red) -> Bound by Blue Axis
+                        if (isGreen || isRed || (!isBlue && isSideVP)) {
+                            // Find intersection of Line(vp, target) and Line(guidePoint, guidePoint + blueAxisVec)
+                            const rayEnd = {
+                                x: vp.x + (target.x - vp.x) * 1000,
+                                y: vp.y + (target.y - vp.y) * 1000
+                            };
+                            const blueAxisEnd = {
+                                x: guidePoint.x + blueAxisVec.x * 1000,
+                                y: guidePoint.y + blueAxisVec.y * 1000
+                            };
+
+                            // For Side VPs, we clip at the Blue Axis (Central "Corner")
+                            const corner = getLineIntersection(
+                                { start: vp, end: rayEnd },
+                                { start: guidePoint, end: blueAxisEnd } // Half-line? Blue Axis usually goes both ways.
+                                // Actually Blue Axis is a line. intersection logic handles line-line.
+                            );
+
+                            // Refine Blue Axis to be the Full Line passing through guidePoint along blueAxisVec
+                            const blueAxisStartFull = {
+                                x: guidePoint.x - blueAxisVec.x * 1000,
+                                y: guidePoint.y - blueAxisVec.y * 1000
+                            };
+                            const cornerFull = getLineIntersection(
+                                { start: vp, end: rayEnd },
+                                { start: blueAxisStartFull, end: blueAxisEnd }
+                            );
+
+                            if (cornerFull) {
+                                if (isShort) {
+                                    // Draw [VP, Corner]
+                                    endPoint = cornerFull;
+                                } else {
+                                    // Draw [VP, Infinity] passing through Corner
+                                    // Just draw huge line
+                                    const angle = Math.atan2(cornerFull.y - vp.y, cornerFull.x - vp.x);
+                                    endPoint = {
+                                        x: vp.x + Math.cos(angle) * rayLength,
+                                        y: vp.y + Math.sin(angle) * rayLength
+                                    };
+                                }
+                            }
+                        }
+                        // Case B: Blue VP -> Bound by Green/Red Axes ("Horizon")
+                        else {
+                            // Boundary is interaction with Green/Red axes.
+                            // We determine which "Wall" the point belongs to? 
+                            // Or simpler: Clip at the V-Shape formed by Green/Red axes.
+
+                            // Horizon Intersection Logic from before:
+                            // If target.x < guidePoint.x -> Intersect Green Axis
+                            // If target.x > guidePoint.x -> Intersect Red Axis
+                            // But "Left/Right" is relative to Blue Axis in 3D...
+                            // Let's use simple logic: Intersect with BOTH, pick closest?
+                            // Or stick to: Everything radiates from Blue VP. 
+                            // Start point is Horizon (Intersection with Green or Red line).
+                            // End point is Up/Down.
+
+                            const rayEnd = {
+                                x: vp.x + (target.x - vp.x) * 1000,
+                                y: vp.y + (target.y - vp.y) * 1000
+                            };
+                            const greenAxisEnd = vpGreen ? vpGreen : { x: guidePoint.x - 1000, y: guidePoint.y };
+                            const redAxisEnd = vpRed ? vpRed : { x: guidePoint.x + 1000, y: guidePoint.y };
+
+                            const iGreen = getLineIntersection({ start: vp, end: rayEnd }, { start: guidePoint, end: greenAxisEnd });
+                            const iRed = getLineIntersection({ start: vp, end: rayEnd }, { start: guidePoint, end: redAxisEnd });
+
+                            // Determine which intersection is "Active".
+                            // Usually the one strictly between the V-Wedge.
+                            // Or just use the one closer to 'target'?
+                            // Let's use the one that is valid (exists) and makes sense.
+
+                            let horizonPoint = iGreen || iRed;
+                            // Check "Sides": 
+                            // If target is "Left" of Blue Axis, use Green. Right -> Red.
+                            // Cross product (det) to check side of Blue Axis.
+                            const det = (target.x - guidePoint.x) * blueAxisVec.y - (target.y - guidePoint.y) * blueAxisVec.x;
+                            if (det > 0) horizonPoint = iGreen; // Left-ish? (Check coordinate system)
+                            else horizonPoint = iRed;
+
+                            // Fallback
+                            if (!horizonPoint) horizonPoint = iGreen || iRed || guidePoint;
+
+                            // Apply Scope (Above/Below) relative to Horizon Point
+                            // Ray: Line through VP and HorizonPoint.
+                            // We split at HorizonPoint.
+                            // "Above" -> Segment going 'Up' (towards Zenith/vpBlueCheck).
+                            // "Below" -> Segment going 'Down'.
+
+                            // Determine "Up" direction vector along the ray
+                            // Vector H->VP.
+                            // If VP is Zenith (Up), H->VP is Up.
+                            // If VP is Nadir (Down), H->VP is Down.
+                            // Assume VP is Up for now (or check y).
+
+                            const isVpUp = vp.y < horizonPoint.y;
+
+                            const angle = Math.atan2(vp.y - horizonPoint.y, vp.x - horizonPoint.x);
+                            const vecToVP = { x: vp.x - horizonPoint.x, y: vp.y - horizonPoint.y };
+                            const vecAwayVP = { x: -vecToVP.x, y: -vecToVP.y };
+
+                            const drawSegment = (vec: Point) => {
+                                // Draw from HorizonPoint along vec
+                                const ang = Math.atan2(vec.y, vec.x);
+                                guideCtx.moveTo(horizonPoint.x, horizonPoint.y);
+                                guideCtx.lineTo(horizonPoint.x + Math.cos(ang) * rayLength, horizonPoint.y + Math.sin(ang) * rayLength);
+                            };
+
+                            if (scope === 'above' || scope === 'both') {
+                                // Draw "Up"
+                                // If VP is Up, draw towards VP.
+                                // If VP is Down, draw Away from VP (assuming "Above" means skywards).
+                                if (isVpUp) drawSegment(vecToVP);
+                                else drawSegment(vecAwayVP);
+                            }
+                            if (scope === 'below' || scope === 'both') {
+                                // Draw "Down"
+                                if (isVpUp) drawSegment(vecAwayVP);
+                                else drawSegment(vecToVP);
+                            }
+                            return; // Blue handles its own drawing commands
+                        }
+
+                        // Execute draw for Side VPs
+                        guideCtx.moveTo(vp.x, vp.y);
+                        guideCtx.lineTo(endPoint.x, endPoint.y);
+                    };
+
+                    // --- Generation Loops ---
+
+                    // 1. Uniform Points
+                    const spacing = 20 * (1 / viewTransform.zoom);
+                    const steps = 100;
+
+                    if (isGreen || isRed || (!isBlue && isSideVP)) {
+                        // Side VP: Target Uniform Points on Blue Axis
+                        for (let i = 0; i < steps; i++) {
+                            const dist = i * spacing;
+                            drawRayThrough({ x: guidePoint.x + blueAxisVec.x * dist, y: guidePoint.y + blueAxisVec.y * dist });
+                            if (i > 0) drawRayThrough({ x: guidePoint.x - blueAxisVec.x * dist, y: guidePoint.y - blueAxisVec.y * dist });
+                        }
+                    } else {
+                        // Blue VP: Target Uniform Points on Green/Red Axes
+                        const gLen = Math.hypot(gVecArg.x, gVecArg.y) || 1;
+                        const gUnit = { x: gVecArg.x / gLen, y: gVecArg.y / gLen };
+                        const rLen = Math.hypot(rVecArg.x, rVecArg.y) || 1;
+                        const rUnit = { x: rVecArg.x / rLen, y: rVecArg.y / rLen };
+
+                        for (let i = 0; i < steps; i++) {
+                            const dist = i * spacing;
+                            drawRayThrough({ x: guidePoint.x + gUnit.x * dist, y: guidePoint.y + gUnit.y * dist });
+                            drawRayThrough({ x: guidePoint.x + rUnit.x * dist, y: guidePoint.y + rUnit.y * dist });
+                        }
+                    }
+
+                    // 2. Alignment Points (Manual Intersections)
+                    alignPoints.forEach(p => drawRayThrough(p));
+
+                    guideCtx.stroke();
+                };
+
+                // --- Execute Grid Drawing for Each VP ---
+                // Green Grid: targets Red/Blue intersections (Logic: Green lines form 'Left Wall' horizontal-ish lines? No, 'Left Wall' vertical lines?)
+                // Actually:
+                // Green Grid = "Depth" lines?
+                // Red Grid = "Width" lines?
+                // Blue Grid = "Height" lines.
+                // Intersections logic:
+                // Green grid lines pass through intersections of Red and Blue?
+                // Yes, a grid intersection is (x,y,z).
+                // Green ray goes through (x, y, z) defined by Red/Blue.
+                drawPerspectiveGrid(vpGreen, [...rbIntersections, guidePoint]);
+                drawPerspectiveGrid(vpRed, [...gbIntersections, guidePoint]);
+                if (activeGuide === 'perspective' && vpBlue) {
+                    drawPerspectiveGrid(vpBlue, [...grIntersections, guidePoint]);
+                }
+            } // Close isGridVisible
+
             // --- 2. Helper function to draw a complete guide set for one color ---
             const drawGuideSet = (color: string, vp: Point | null, mainLines: PerspectiveGuideLine[], extraHandles: Point[]) => {
                 const guideColor = color.replace('0.5', '0.4');
@@ -613,7 +858,7 @@ export function useCanvasRendering({
             // Format Label
             // Avoid floating point nastiness
             const decimals = bestStep < 1 ? (bestStep < 0.01 ? 4 : (bestStep < 0.1 ? 2 : 1)) : (bestStep < 10 ? 1 : 0);
-            const label = `${parseFloat(bestStep.toFixed(decimals))}${targetUnit}`;
+            const label = `${parseFloat(bestStep.toFixed(decimals))}${targetUnit} `;
 
             uiCtx.lineJoin = 'round';
             uiCtx.lineCap = 'round';

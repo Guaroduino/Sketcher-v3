@@ -88,6 +88,26 @@ function drawWarpedImage(
     ctx.putImageData(destImageData, minX, minY);
 }
 
+function bakeOpacity(item: SketchObject): HTMLCanvasElement {
+    const { canvas: tempCanvas, context: tempCtx } = createNewCanvas(item.canvas!.width, item.canvas!.height);
+    tempCtx.drawImage(item.canvas!, 0, 0);
+    try {
+        const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+        const data = imageData.data;
+        for (let i = 3; i < data.length; i += 4) {
+            data[i] = data[i] * item.opacity;
+        }
+        tempCtx.putImageData(imageData, 0, 0);
+    } catch (e) {
+        console.error("Could not bake opacity, falling back to simple draw.", e);
+        tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+        tempCtx.globalAlpha = item.opacity;
+        tempCtx.drawImage(item.canvas!, 0, 0);
+        tempCtx.globalAlpha = 1.0;
+    }
+    return tempCanvas;
+}
+
 
 export const initialState: AppState = {
     objects: [
@@ -127,7 +147,7 @@ export type Action =
     | { type: 'UPDATE_ITEM'; payload: { id: string, updates: Partial<CanvasItem> } }
     | { type: 'MOVE_ITEM'; payload: { draggedId: string; targetId: string; position: 'top' | 'bottom' | 'middle' } }
     | { type: 'MERGE_ITEMS'; payload: { sourceId: string, targetId: string } }
-    | { type: 'UPDATE_BACKGROUND'; payload: { color?: string, image?: HTMLImageElement } }
+    | { type: 'UPDATE_BACKGROUND'; payload: { color?: string; image?: HTMLImageElement | HTMLCanvasElement; cropToFit?: boolean; fitToCanvas?: boolean } }
     | { type: 'SET_CANVAS_FROM_IMAGE'; payload: { image: HTMLImageElement } }
     | { type: 'REMOVE_BACKGROUND_IMAGE' }
     | { type: 'CLEAR_CANVAS' }
@@ -138,6 +158,7 @@ export type Action =
     | { type: 'SET_SCALE_FACTOR'; payload: number }
     | { type: 'SET_SCALE_UNIT'; payload: ScaleUnit }
     | { type: 'LOAD_PROJECT_STATE'; payload: { newState: AppState } }
+    | { type: 'MERGE_TO_BACKGROUND'; payload: { id: string } }
     | { type: 'COMMIT_DRAWING'; payload: { activeItemId: string; beforeCanvas: HTMLCanvasElement } };
 
 
@@ -387,26 +408,6 @@ function appReducer(state: AppState, action: Action): AppState {
 
             const { canvas: newCanvas, context: newCtx } = createNewCanvas(bottomItem.canvas.width, bottomItem.canvas.height);
 
-            const bakeOpacity = (item: SketchObject): HTMLCanvasElement => {
-                const { canvas: tempCanvas, context: tempCtx } = createNewCanvas(item.canvas!.width, item.canvas!.height);
-                tempCtx.drawImage(item.canvas!, 0, 0);
-                try {
-                    const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-                    const data = imageData.data;
-                    for (let i = 3; i < data.length; i += 4) {
-                        data[i] = data[i] * item.opacity;
-                    }
-                    tempCtx.putImageData(imageData, 0, 0);
-                } catch (e) {
-                    console.error("Could not bake opacity, falling back to simple draw.", e);
-                    tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
-                    tempCtx.globalAlpha = item.opacity;
-                    tempCtx.drawImage(item.canvas!, 0, 0);
-                    tempCtx.globalAlpha = 1.0;
-                }
-                return tempCanvas;
-            }
-
             const bottomBakedCanvas = bakeOpacity(bottomItem);
             newCtx.drawImage(bottomBakedCanvas, 0, 0);
 
@@ -426,55 +427,109 @@ function appReducer(state: AppState, action: Action): AppState {
 
             return { ...state, objects: newObjects };
         }
+        case 'MERGE_TO_BACKGROUND': {
+            const { id } = action.payload;
+
+            const sourceItem = state.objects.find(i => i.id === id) as SketchObject | undefined;
+            const backgroundItem = state.objects.find(i => i.isBackground) as SketchObject | undefined;
+
+            if (!sourceItem || !backgroundItem || !sourceItem.canvas || !backgroundItem.canvas) {
+                return state;
+            }
+
+            const { canvas: newCanvas, context: newCtx } = createNewCanvas(backgroundItem.canvas.width, backgroundItem.canvas.height);
+            newCtx.drawImage(backgroundItem.canvas, 0, 0);
+
+            const baked = bakeOpacity(sourceItem);
+            const sx = (sourceItem.offsetX || 0) - (backgroundItem.offsetX || 0);
+            const sy = (sourceItem.offsetY || 0) - (backgroundItem.offsetY || 0);
+            newCtx.drawImage(baked, sx, sy);
+
+            const mipmaps = generateMipmaps(newCanvas);
+
+            const newObjects = state.objects
+                .filter(o => o.id !== id)
+                .map(o => o.isBackground ? {
+                    ...o,
+                    canvas: newCanvas,
+                    context: newCtx,
+                    mipmaps,
+                    backgroundImage: newCanvas
+                } : o);
+
+            return { ...state, objects: newObjects };
+        }
         case 'UPDATE_BACKGROUND': {
-            const { color, image } = action.payload;
+            const { color, image, cropToFit, fitToCanvas } = action.payload;
             const newObjects = state.objects.map(o => {
-                if (o.type === 'object' && o.isBackground && o.context) {
-                    const updatedObject = { ...o };
-                    if (color) {
-                        updatedObject.color = color;
-                        updatedObject.context.fillStyle = color;
-                        updatedObject.context.fillRect(0, 0, o.context.canvas.width, o.context.canvas.height);
-                        if (updatedObject.backgroundImage) {
-                            updatedObject.context.drawImage(updatedObject.backgroundImage, 0, 0);
-                        }
-                    }
-                    if (image) {
-                        updatedObject.backgroundImage = image;
-                        const canvasWidth = o.context.canvas.width;
-                        const canvasHeight = o.context.canvas.height;
+                if (o.type === 'object' && o.isBackground && o.canvas) {
+                    // Create a new canvas to be immutable
+                    const { canvas: newCanvas, context: newCtx } = createNewCanvas(o.canvas.width, o.canvas.height);
 
-                        updatedObject.context.clearRect(0, 0, canvasWidth, canvasHeight);
-                        if (updatedObject.color) { // Draw color behind image if it exists
-                            updatedObject.context.fillStyle = updatedObject.color;
-                            updatedObject.context.fillRect(0, 0, canvasWidth, canvasHeight);
-                        }
+                    // 1. Fill with color (either new or existing)
+                    const finalColor = color !== undefined ? color : o.color || '#FFFFFF';
+                    newCtx.fillStyle = finalColor;
+                    newCtx.fillRect(0, 0, newCanvas.width, newCanvas.height);
 
-                        // Fit (Letterbox) logic to preserve aspect ratio
-                        const imageAspect = image.width / image.height;
+                    // 2. Draw image if provided, or redraw previous image if we're just changing color
+                    const finalImage = image !== undefined ? image : o.backgroundImage;
+
+                    if (finalImage && typeof finalImage !== 'string') {
+                        // Image scaling logic
+                        const canvasWidth = newCanvas.width;
+                        const canvasHeight = newCanvas.height;
+                        const imgWidth = finalImage.width;
+                        const imgHeight = finalImage.height;
+
                         const canvasAspect = canvasWidth / canvasHeight;
+                        const imgAspect = imgWidth / imgHeight;
 
-                        let renderWidth, renderHeight, x, y;
+                        let drawW, drawH, dx, dy;
 
-                        if (imageAspect > canvasAspect) {
-                            // Image is wider than canvas
-                            renderWidth = canvasWidth;
-                            renderHeight = canvasWidth / imageAspect;
-                            x = 0;
-                            y = (canvasHeight - renderHeight) / 2;
+                        // Default behavior or explicit 'fitToCanvas'
+                        if (cropToFit) {
+                            // COVER (FILL)
+                            if (imgAspect > canvasAspect) {
+                                drawH = canvasHeight;
+                                drawW = drawH * imgAspect;
+                                dx = (canvasWidth - drawW) / 2;
+                                dy = 0;
+                            } else {
+                                drawW = canvasWidth;
+                                drawH = drawW / imgAspect;
+                                dx = 0;
+                                dy = (canvasHeight - drawH) / 2;
+                            }
                         } else {
-                            // Image is taller than canvas
-                            renderWidth = canvasHeight * imageAspect;
-                            renderHeight = canvasHeight;
-                            x = (canvasWidth - renderWidth) / 2;
-                            y = 0;
+                            // CONTAIN (FIT)
+                            if (imgAspect > canvasAspect) {
+                                drawW = canvasWidth;
+                                drawH = drawW / imgAspect;
+                                dx = 0;
+                                dy = (canvasHeight - drawH) / 2;
+                            } else {
+                                drawH = canvasHeight;
+                                drawW = drawH * imgAspect;
+                                dx = (canvasWidth - drawW) / 2;
+                                dy = 0;
+                            }
                         }
 
-                        updatedObject.context.drawImage(image, x, y, renderWidth, renderHeight);
-                        updatedObject.contentRect = { x, y, width: renderWidth, height: renderHeight };
-                        updatedObject.mipmaps = generateMipmaps(o.context.canvas);
+                        newCtx.drawImage(finalImage, dx, dy, drawW, drawH);
                     }
-                    return updatedObject;
+
+                    const mipmaps = generateMipmaps(newCanvas);
+
+                    return {
+                        ...o,
+                        color: finalColor,
+                        canvas: newCanvas,
+                        context: newCtx,
+                        mipmaps,
+                        // We store the image object itself for redrawing if color changes later, 
+                        // but also a flag for serialization if needed.
+                        backgroundImage: finalImage
+                    };
                 }
                 return o;
             });

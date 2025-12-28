@@ -135,6 +135,7 @@ export function usePointerEvents({
     isPalmRejectionEnabled,
     isSolidBox,
     fillColor,
+    isPressureSensitivityEnabled,
 }: {
     items: CanvasItem[];
     uiCanvasRef: React.RefObject<HTMLCanvasElement>;
@@ -194,6 +195,7 @@ export function usePointerEvents({
     isPalmRejectionEnabled: boolean;
     isSolidBox: boolean;
     fillColor: string;
+    isPressureSensitivityEnabled: boolean;
 }) {
     const canvasRectRef = useRef<DOMRect | null>(null);
 
@@ -423,7 +425,7 @@ export function usePointerEvents({
             }
         }
 
-        const isPressureSensitive = strokeMode === 'freehand';
+        const isPressureSensitive = strokeMode === 'freehand' && isPressureSensitivityEnabled;
         const pressure = (isPressureSensitive && e.pointerType === 'pen') ? e.pressure : 1.0;
         const snappedPointWithPressure = { ...snappedPoint, pressure };
 
@@ -1062,7 +1064,7 @@ export function usePointerEvents({
                         pointToDraw = snapPointToGrid(point);
                     }
 
-                    const isPressureSensitive = strokeMode === 'freehand';
+                    const isPressureSensitive = strokeMode === 'freehand' && isPressureSensitivityEnabled;
                     const pressure = (isPressureSensitive && event.pointerType === 'pen') ? event.pressure : 1.0;
                     const newPoint = { ...pointToDraw, pressure };
 
@@ -1140,7 +1142,8 @@ export function usePointerEvents({
             const previewCtx = previewCanvasRef.current?.getContext('2d');
             if (!previewCtx) return;
 
-            const pressure = (lastEvent.pointerType === 'pen') ? lastEvent.pressure : 1.0;
+            const isPressureSensitive = strokeMode === 'freehand' && isPressureSensitivityEnabled;
+            const pressure = (isPressureSensitive && lastEvent.pointerType === 'pen') ? lastEvent.pressure : 1.0;
             const currentPointWithPressure = { ...finalPoint, pressure };
 
             clearCanvas(previewCtx);

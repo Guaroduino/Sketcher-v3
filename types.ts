@@ -22,7 +22,7 @@ export interface SketchObject extends BaseItem {
   isBackground?: boolean;
   color?: string;
   fillColor?: string;
-  backgroundImage?: HTMLImageElement;
+  backgroundImage?: HTMLImageElement | HTMLCanvasElement;
   dataUrl?: string; // For serialization
   contentRect?: CropRect; // New: tracks the actual area occupied by the background image or content
   mipmaps?: {
@@ -270,6 +270,11 @@ export interface PerspectiveGuide {
     red: PerspectiveControlPoint[];
     blue: PerspectiveControlPoint[];
   };
+  isGridVisible?: boolean;
+  gridColor?: string;
+  gridDensity?: number;
+  gridVerticalScope?: 'both' | 'above' | 'below';
+  gridLength?: 'full' | 'short';
 }
 
 export interface OrthogonalGuide {

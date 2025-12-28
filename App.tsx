@@ -1002,6 +1002,7 @@ export function App() {
     const [strokeModifier, setStrokeModifier] = useState<StrokeModifier>({ style: 'solid', scale: 1 });
     const [isSolidBox, setIsSolidBox] = useState(false);
     const [isPalmRejectionEnabled, setIsPalmRejectionEnabled] = useState(false); // Default: Disabled (Touch can draw)
+    const [isPressureSensitivityEnabled, setIsPressureSensitivityEnabled] = useState(true);
     const [debugPointers, setDebugPointers] = useState<Map<number, { x: number, y: number }>>(new Map());
 
     // -- View State --
@@ -1015,7 +1016,8 @@ export function App() {
     const [isSimpleRenderGenerating, setIsSimpleRenderGenerating] = useState(false);
 
     // -- Unified Render State --
-
+    const [integrationPreviewBg, setIntegrationPreviewBg] = useState<string | null>(null);
+    const [integrationPreviewComp, setIntegrationPreviewComp] = useState<string | null>(null);
 
     // -- Legacy State (To be cleaned up) --
     const [galleryInitialTab, setGalleryInitialTab] = useState<'projects' | 'library'>('projects');
@@ -1152,6 +1154,29 @@ export function App() {
         if (compositeCanvas) {
             const targetDimensions = { width: canvasSize.width, height: canvasSize.height };
             const aspectRatio = canvasSize.width / canvasSize.height;
+
+            // Handle Object Integration Mode
+            if (renderState.sceneType === 'object_integration') {
+                let bgDataUrl = '';
+                // 1. Get Background
+                if (backgroundObject?.canvas) {
+                    bgDataUrl = backgroundObject.canvas.toDataURL('image/png');
+                }
+
+                // 2. Get Sketch Only (Composite without Background)
+                // We want the "object" to integrate.
+                const getterSketches = () => getDrawableObjects().filter(o => !o.isBackground);
+                const sketchCanvas = getCompositeCanvas(true, canvasSize, getterSketches, undefined, { transparent: true });
+                const skDataUrl = sketchCanvas ? sketchCanvas.toDataURL('image/png') : compositeCanvas.toDataURL('image/png');
+
+                if (bgDataUrl) {
+                    await renderState.handleRender(compositeCanvas.toDataURL('image/png'), targetDimensions, aspectRatio, { background: bgDataUrl, composite: skDataUrl });
+                    return;
+                } else {
+                    // If no background object, warn or just proceed?
+                    console.warn("Object Integration mode selected but no Background Object found. Proceeding with standard render.");
+                }
+            }
 
             if (isAnnotationsVisible && layeredCanvasRef.current && vp.regions.length > 0) {
                 const overlayDataUrl = await layeredCanvasRef.current.getVisualGuideSnapshot();
@@ -1450,6 +1475,31 @@ export function App() {
         else ai.setBackgroundDataUrl(null);
     }, [backgroundObject, backgroundObject?.canvas, ai]);
 
+    // Effect: Update Integration Previews
+    useEffect(() => {
+        if (sidebarTab === 'render' && renderState.sceneType === 'object_integration' && ui.isRightSidebarVisible) {
+            const timer = setTimeout(() => {
+                // 1. Background
+                if (backgroundObject?.canvas) {
+                    setIntegrationPreviewBg(backgroundObject.canvas.toDataURL('image/png'));
+                } else {
+                    setIntegrationPreviewBg(null);
+                }
+
+                // 2. Composite (Sketch)
+                // Use helper to filter sketches
+                const getterSketches = () => getDrawableObjects().filter(o => !o.isBackground);
+                const sketchCanvas = getCompositeCanvas(true, canvasSize, getterSketches, undefined, { transparent: true });
+                if (sketchCanvas) {
+                    setIntegrationPreviewComp(sketchCanvas.toDataURL('image/png'));
+                } else {
+                    setIntegrationPreviewComp(null);
+                }
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, [sidebarTab, renderState.sceneType, ui.isRightSidebarVisible, objects, backgroundObject, canvasSize]);
+
     useEffect(() => {
         // Reset crop state when switching away from crop tool
         if (tool !== 'crop') {
@@ -1726,6 +1776,11 @@ export function App() {
         setSelectedItemIds([targetId]);
     }, [dispatch]);
 
+    const handleMergeToBackground = useCallback((id: string) => {
+        dispatch({ type: 'MERGE_TO_BACKGROUND', payload: { id } });
+        setSelectedItemIds([]);
+    }, [dispatch]);
+
     const handleConfirmClear = useCallback(() => {
         dispatch({ type: 'CLEAR_CANVAS' });
         ui.setShowClearConfirm(false);
@@ -1994,8 +2049,8 @@ export function App() {
         }
     }, [activeItemState.canMergeUp, visualList, handleMergeItems]);
 
-    const handleAddObjectAbove = useCallback((id: string) => { const newItemId = `object - ${Date.now()} `; dispatch({ type: 'ADD_ITEM', payload: { type: 'object', activeItemId: id, canvasSize, newItemId } }); setSelectedItemIds([newItemId]); }, [canvasSize, dispatch]);
-    const handleAddObjectBelow = useCallback((id: string) => { const newItemId = `object - ${Date.now()} `; dispatch({ type: 'ADD_ITEM_BELOW', payload: { targetId: id, canvasSize, newItemId } }); setSelectedItemIds([newItemId]); }, [canvasSize, dispatch]);
+    const handleAddObjectAbove = useCallback((id: string) => { const newItemId = `object-${Date.now()}`; dispatch({ type: 'ADD_ITEM', payload: { type: 'object', activeItemId: id, canvasSize, newItemId } }); setSelectedItemIds([newItemId]); }, [canvasSize, dispatch]);
+    const handleAddObjectBelow = useCallback((id: string) => { const newItemId = `object-${Date.now()}`; dispatch({ type: 'ADD_ITEM_BELOW', payload: { targetId: id, canvasSize, newItemId } }); setSelectedItemIds([newItemId]); }, [canvasSize, dispatch]);
 
     const dimensionDisplay = useMemo(() => {
         if (canvasSize.width > 0 && scaleFactor > 0) {
@@ -2195,6 +2250,8 @@ export function App() {
             setBrushOpacity={(o) => toolSettings.setBrushSettings(state => ({ ...state, opacity: o }))}
             strokeSmoothing={strokeSmoothing}
             setStrokeSmoothing={setStrokeSmoothing}
+            isPressureSensitivityEnabled={isPressureSensitivityEnabled}
+            setPressureSensitivityEnabled={setIsPressureSensitivityEnabled}
 
             // Specific Tool Settings
             brushSettings={toolSettings.brushSettings}
@@ -2218,6 +2275,16 @@ export function App() {
 
             isPerspectiveEnabled={guides.activeGuide === 'perspective'}
             setPerspectiveEnabled={(enabled) => guides.onSetActiveGuide(enabled ? 'perspective' : 'none')}
+            isPerspectiveGridVisible={guides.perspectiveGuide?.isGridVisible}
+            togglePerspectiveGrid={guides.togglePerspectiveGrid}
+            perspectiveGridColor={guides.perspectiveGuide?.gridColor}
+            setPerspectiveGridColor={(color) => guides.setPerspectiveGuide(prev => prev ? { ...prev, gridColor: color } : null)}
+            perspectiveGridDensity={guides.perspectiveGuide?.gridDensity}
+            setPerspectiveGridDensity={(density) => guides.setPerspectiveGuide(prev => prev ? { ...prev, gridDensity: density } : null)}
+            perspectiveGridVerticalScope={guides.perspectiveGuide?.gridVerticalScope}
+            setPerspectiveGridVerticalScope={(scope) => guides.setPerspectiveGuide(prev => prev ? { ...prev, gridVerticalScope: scope } : null)}
+            perspectiveGridLength={guides.perspectiveGuide?.gridLength}
+            setPerspectiveGridLength={(length) => guides.setPerspectiveGuide(prev => prev ? { ...prev, gridLength: length } : null)}
 
             isSymmetryEnabled={guides.activeGuide === 'mirror'}
             setSymmetryEnabled={(enabled) => guides.onSetActiveGuide(enabled ? 'mirror' : 'none')}
@@ -2231,7 +2298,14 @@ export function App() {
             // Canvas Controls
             onOpenCanvasSizeModal={() => ui.setCanvasSizeModalOpen(true)}
             onUpdateBackground={handleUpdateBackground}
-            backgroundColor={objects.find(o => o.type === 'object' && o.isBackground)?.color}
+            backgroundColor={objects.find(o => o.isBackground)?.color}
+            isBackgroundVisible={objects.find(o => o.isBackground)?.isVisible ?? true}
+            onToggleBackgroundVisibility={() => {
+                const bg = objects.find(o => o.isBackground);
+                if (bg) {
+                    dispatch({ type: 'UPDATE_ITEM', payload: { id: bg.id, updates: { isVisible: !bg.isVisible } } });
+                }
+            }}
 
             // File
             onImportBackground={() => setIsBgImportModalOpen(true)}
@@ -2255,6 +2329,7 @@ export function App() {
             onUpdateItem={updateItem}
             onMoveItem={handleMoveItem}
             onMergeItems={handleMergeItems}
+            onMergeToBackground={handleMergeToBackground}
             onUpdateBackground={handleUpdateBackground}
             onRemoveBackgroundImage={handleRemoveBackgroundImage}
             onExportItem={() => { if (activeItem) ui.setSingleExportModalOpen(true); }}
@@ -2270,7 +2345,7 @@ export function App() {
             onAddAIObject={() => setIsAIPanelOpen(true)}
             onClearAll={() => ui.setShowClearConfirm(true)}
         />
-    ), [visualList, activeItemId, addItem, copyItem, deleteItem, handleSelectItem, updateItem, handleMoveItem, handleMergeItems, handleUpdateBackground, handleRemoveBackgroundImage, activeItem, ui, activeItemState, handleMoveItemUpDown, handleMergeItemDown, handleMergeItemUp, handleAddObjectAbove, handleAddObjectBelow, renderState.resultImage, handleImportRenderToSketch, setIsAIPanelOpen]);
+    ), [visualList, activeItemId, addItem, copyItem, deleteItem, handleSelectItem, updateItem, handleMoveItem, handleMergeItems, handleMergeToBackground, handleUpdateBackground, handleRemoveBackgroundImage, activeItem, ui, activeItemState, handleMoveItemUpDown, handleMergeItemDown, handleMergeItemUp, handleAddObjectAbove, handleAddObjectBelow, renderState.resultImage, handleImportRenderToSketch, setIsAIPanelOpen]);
 
     const libraryNode = useMemo(() => (
         <Library
@@ -2290,7 +2365,12 @@ export function App() {
     ), [user, library, onDropOnCanvas, activeItemId, setSelectedItemIds, handleSelectItem]);
 
     // -- Simple Render Logic --
-    const handleSimpleRender = useCallback(async (instructions: string, refImages?: { id: string, file: File }[]) => {
+    const handleSimpleRender = useCallback(async (
+        instructions: string,
+        refImages?: { id: string, file: File }[],
+        includeSketch: boolean = true,
+        includeComposite: boolean = true
+    ) => {
         if (!simpleRenderCompositeImage) {
             alert("No hay imagen base para renderizar.");
             return;
@@ -2305,17 +2385,20 @@ export function App() {
             const genAI = new GoogleGenAI({ apiKey });
 
             const parts: any[] = [];
+
             parts.push({ text: "Actúa como un visualizador arquitectónico experto. Tu tarea es generar un render fotorrealista de alta calidad." });
             parts.push({ text: `INSTRUCCIONES GENERALES: ${instructions}` });
             parts.push({ text: "Por favor respeta la geometría y los elementos mostrados en las imágenes adjuntas. La primera imagen es el fondo/contexto (si existe), y la segunda es la composición completa del boceto." });
 
-            if (simpleRenderSketchImage) {
+            if (simpleRenderSketchImage && includeSketch) {
                 parts.push({ text: "IMAGEN 1: FONDO / CONTEXTO" });
                 parts.push({ inlineData: { mimeType: 'image/png', data: simpleRenderSketchImage.split(',')[1] } });
             }
 
-            parts.push({ text: "IMAGEN 2: COMPOSICIÓN DEL BOCETO (GEOMETRÍA BASE)" });
-            parts.push({ inlineData: { mimeType: 'image/png', data: simpleRenderCompositeImage.split(',')[1] } });
+            if (simpleRenderCompositeImage && includeComposite) {
+                parts.push({ text: "IMAGEN 2: COMPOSICIÓN DEL BOCETO (GEOMETRÍA BASE)" });
+                parts.push({ inlineData: { mimeType: 'image/png', data: simpleRenderCompositeImage.split(',')[1] } });
+            }
 
             // Handle Reference Images
             if (refImages && refImages.length > 0) {
@@ -2343,8 +2426,8 @@ export function App() {
                 config: {
                     mode: "Simple Render V2",
                     instructions: instructions,
-                    hasBackground: !!simpleRenderSketchImage,
-                    hasComposite: !!simpleRenderCompositeImage,
+                    hasBackground: !!simpleRenderSketchImage && includeSketch,
+                    hasComposite: !!simpleRenderCompositeImage && includeComposite,
                     referenceImagesCount: refImages?.length || 0
                 }
             });
@@ -2706,7 +2789,7 @@ export function App() {
             {activeView !== 'free' && (
                 <button
                     onClick={() => ui.setIsLeftSidebarVisible(!ui.isLeftSidebarVisible)}
-                    className={`fixed top-1/2 -translate-y-1/2 z-[60] w-6 h-24 rounded-r-xl bg-theme-bg-secondary border-y border-r border-theme-bg-tertiary shadow-md transition-all duration-300 hover:bg-theme-bg-hover flex items-center justify-center ${ui.isLeftSidebarVisible ? 'left-80' : 'left-0'}`}
+                    className={`fixed top-1/2 -translate-y-1/2 z-40 w-6 h-24 rounded-r-xl bg-theme-bg-secondary border-y border-r border-theme-bg-tertiary shadow-md transition-all duration-300 hover:bg-theme-bg-hover flex items-center justify-center ${ui.isLeftSidebarVisible ? 'left-80' : 'left-0'}`}
                     title={ui.isLeftSidebarVisible ? "Cerrar Panel Izquierdo" : "Abrir Panel Izquierdo"}
                 >
                     {ui.isLeftSidebarVisible ? <ChevronLeftIcon className="w-4 h-4 text-theme-text-secondary" /> : <ChevronRightIcon className="w-4 h-4 text-theme-text-secondary" />}
@@ -2834,7 +2917,12 @@ export function App() {
                         {/* === BOTTOM CANVAS TOOLBAR === */}
                         <CanvasToolbar
                             tool={tool} setTool={setTool} onZoomExtents={canvasView.onZoomExtents} onZoomIn={canvasView.onZoomIn} onZoomOut={canvasView.onZoomOut}
-                            onUndo={undo} onRedo={redo} onClearAll={() => ui.setShowClearConfirm(true)} canUndo={canUndo} canRedo={canRedo}
+                            onUndo={undo} onRedo={redo}
+                            onClearAll={() => ui.setShowClearConfirm(true)}
+                            onImport={() => setIsBgImportModalOpen(true)}
+                            onMergeToBackground={handleMergeToBackground}
+                            canUndo={canUndo}
+                            canRedo={canRedo}
                             isCropping={isCropping} onApplyCrop={handleApplyCrop} onCancelCrop={handleCancelCrop} isTransforming={isTransforming}
                             transformState={transformState} onApplyTransform={handleApplyTransform} onCancelTransform={handleCancelTransform}
                             isAspectRatioLocked={isAspectRatioLocked} onSetAspectRatioLocked={setAspectRatioLocked} isAngleSnapEnabled={isAngleSnapEnabled}
@@ -2963,18 +3051,7 @@ export function App() {
                         rightSidebarTopHeight={ui.rightSidebarTopHeight || 300} // Default height fallback
                         onResizeStart={ui.handlePointerDownResize}
                         sidebarRef={ui.rightSidebarRef}
-                        outlinerNode={
-                            <Outliner
-                                items={visualList} activeItemId={activeItemId} onAddItem={addItem} onCopyItem={copyItem} onDeleteItem={deleteItem} onSelectItem={handleSelectItem}
-                                onUpdateItem={updateItem} onMoveItem={handleMoveItem} onMergeItems={handleMergeItems} onUpdateBackground={handleUpdateBackground}
-                                onRemoveBackgroundImage={handleRemoveBackgroundImage} onExportItem={() => { if (activeItem) ui.setSingleExportModalOpen(true); }}
-                                onOpenCanvasSizeModal={() => ui.setCanvasSizeModalOpen(true)} activeItemState={activeItemState}
-                                onMoveItemUpDown={handleMoveItemUpDown} onMergeItemDown={handleMergeItemDown} onMergeItemUp={handleMergeItemUp}
-                                onAddObjectAbove={handleAddObjectAbove} onAddObjectBelow={handleAddObjectBelow}
-                                lastRenderedImage={renderState.resultImage} onImportRender={handleImportRenderToSketch}
-                                onAddAIObject={() => setIsAIPanelOpen(true)}
-                            />
-                        }
+                        outlinerNode={outlinerNode}
                         libraryNode={
                             <Library
                                 user={user}
@@ -2995,6 +3072,8 @@ export function App() {
                                 {...renderState}
                                 onRender={handleTriggerRender}
                                 isGenerating={renderState.isGenerating}
+                                previewBackground={integrationPreviewBg}
+                                previewComposite={integrationPreviewComp}
                             />
                         }
                         simpleRenderNode={
@@ -3013,7 +3092,7 @@ export function App() {
                 {activeView !== 'free' && (
                     <button
                         onClick={() => ui.setIsRightSidebarVisible(!ui.isRightSidebarVisible)}
-                        className={`fixed top-1/2 -translate-y-1/2 z-[60] w-6 h-24 rounded-l-xl bg-theme-bg-secondary border-y border-l border-theme-bg-tertiary shadow-md transition-all duration-300 hover:bg-theme-bg-hover flex items-center justify-center ${ui.isRightSidebarVisible ? 'right-80' : 'right-0'}`}
+                        className={`fixed top-1/2 -translate-y-1/2 z-40 w-6 h-24 rounded-l-xl bg-theme-bg-secondary border-y border-l border-theme-bg-tertiary shadow-md transition-all duration-300 hover:bg-theme-bg-hover flex items-center justify-center ${ui.isRightSidebarVisible ? 'right-80' : 'right-0'}`}
                         title={ui.isRightSidebarVisible ? "Cerrar Panel Derecho" : "Abrir Panel Derecho"}
                     >
                         {ui.isRightSidebarVisible ? <ChevronRightIcon className="w-4 h-4 text-theme-text-secondary" /> : <ChevronLeftIcon className="w-4 h-4 text-theme-text-secondary" />}

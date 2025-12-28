@@ -23,6 +23,9 @@ interface ArchitecturalRenderViewProps {
     // New: Model Selection
     selectedModel: string;
     onOpenLibrary: () => void;
+    // New: Integration Mode Inputs
+    simpleRenderSketchImage?: string | null;
+    simpleRenderCompositeImage?: string | null;
 }
 
 
@@ -95,7 +98,9 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
     deductCredit,
     onSaveToLibrary,
     selectedModel,
-    onOpenLibrary
+    onOpenLibrary,
+    simpleRenderSketchImage,
+    simpleRenderCompositeImage
 }, ref) => {
     const [sceneType, setSceneType] = useState<SceneType>('exterior');
     const [inputImage, setInputImageState] = useState<string | null>(null); // Renamed to avoid conflict
@@ -923,14 +928,39 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
             // ... (rest of logic uses activeBaseImage)
 
             const parts: any[] = [];
-            const inputBase64 = activeBaseImage!.split(',')[1];
-            parts.push({ inlineData: { mimeType: 'image/png', data: inputBase64 } });
 
-            if (styleReferenceImage) {
-                const styleBase64 = styleReferenceImage.split(',')[1];
-                parts.push({ inlineData: { mimeType: 'image/png', data: styleBase64 } });
+            if (sceneType === 'object_integration') {
+                // INTEGRATION MODE SPECIAL PIPELINE
+                if (simpleRenderSketchImage && simpleRenderCompositeImage) {
+                    // Start with explicit instructions for this mode
+                    parts.push({ text: manualPrompt });
+
+                    parts.push({ text: "IMAGE 1: BACKGROUND / CONTEXT (Do not modify perspective/lighting of this)" });
+                    parts.push({ inlineData: { mimeType: 'image/png', data: simpleRenderSketchImage.split(',')[1] } });
+
+                    parts.push({ text: "IMAGE 2: SKETCH / OBJECT TO INTEGRATE (Apply lighting/perspective from Image 1)" });
+                    parts.push({ inlineData: { mimeType: 'image/png', data: simpleRenderCompositeImage.split(',')[1] } });
+                } else {
+                    // Fallback: Use Canvas as Sketch, warn about missing background?
+                    // For now, treat Canvas as Sketch and assume no background (or single image integration)
+                    // But to be safe and consistent with the plan, let's use the active canvas as the "Sketch" 
+                    // and allow Style Ref to act as "Background"? No, that's "Style Transfer".
+                    // Let's stick to standard flow if specific inputs are missing but add a note.
+                    parts.push({ inlineData: { mimeType: 'image/png', data: activeBaseImage!.split(',')[1] } });
+                    parts.push({ text: manualPrompt });
+                    console.warn("Integration Mode selected but missing separate Background/Composite images. Using standard single-image flow.");
+                }
+            } else {
+                // STANDARD PIPELINE
+                const inputBase64 = activeBaseImage!.split(',')[1];
+                parts.push({ inlineData: { mimeType: 'image/png', data: inputBase64 } });
+
+                if (styleReferenceImage) {
+                    const styleBase64 = styleReferenceImage.split(',')[1];
+                    parts.push({ inlineData: { mimeType: 'image/png', data: styleBase64 } });
+                }
+                parts.push({ text: manualPrompt });
             }
-            parts.push({ text: manualPrompt });
 
             const contents = { parts };
             // @ts-ignore

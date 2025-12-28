@@ -1,7 +1,7 @@
 
 import { RenderStyleSettings } from '../types';
 
-export type SceneType = 'exterior' | 'interior' | 'object_interior' | 'object_exterior' | 'studio' | 'automotive';
+export type SceneType = 'exterior' | 'interior' | 'object_interior' | 'object_exterior' | 'studio' | 'automotive' | 'object_integration';
 export type RenderStyleMode = 'photorealistic' | 'watercolor' | 'colored_pencil' | 'graphite' | 'ink_marker' | 'charcoal' | 'digital_painting' | '3d_cartoon' | 'technical_plan' | 'clay_model';
 
 export interface ArchitecturalRenderOptions {
@@ -43,7 +43,15 @@ export interface ArchitecturalRenderOptions {
     renderStyleSettings?: RenderStyleSettings;
 }
 
-const getRoleAndTask = (style: RenderStyleMode) => {
+const getRoleAndTask = (style: RenderStyleMode, sceneType?: SceneType) => {
+    if (sceneType === 'object_integration') {
+        return `# ROLE
+You are an Expert Digital Artist specializing in Photobashing and Object Integration.
+
+# TASK
+Your task is to SEAMLESSLY INTEGRATE the sketched object (from the composite input) into the background image provided.`;
+    }
+
     const role = style === 'photorealistic' ? "World-Class Architectural Photographer" : "Expert Architectural Concept Artist";
     return `# ROLE
 You are a ${role}.
@@ -180,6 +188,16 @@ const getSceneContent = (options: ArchitecturalRenderOptions): string => {
         return s;
     }
 
+    if (options.sceneType === 'object_integration') {
+        return `Scene: Object Integration (Photobashing).
+INTEGRATION RULES:
+1.  **LIGHTING MATCH:** Analyze the background image's lighting direction, temperature, and intensity. Apply EXACTLY the same lighting to the integrated object.
+2.  **PERSPECTIVE MATCH:** The object must sit on the ground plane defined by the background image. Align vanishing points.
+3.  **CONTACT SHADOWS:** Generate realistic contact shadows where the object touches the ground/surface.
+4.  **REFLECTIONS/AMBIENCE:** The object must reflect the colors of the environment.
+5.  **MATERIALITY:** Render the object with high-fidelity materials as described in the prompt.`;
+    }
+
     return "Scene: General Architecture.";
 };
 
@@ -188,7 +206,7 @@ export const buildArchitecturalPrompt = (options: ArchitecturalRenderOptions): s
     const styleDetails = getDetailedStylePrompts(options.renderStyle, options.renderStyleSettings, isStrict);
     const sceneContent = getSceneContent(options);
     const creativityInstruction = getCreativityInstruction(options.creativeFreedom);
-    const roleAndTask = getRoleAndTask(options.renderStyle);
+    const roleAndTask = getRoleAndTask(options.renderStyle, options.sceneType);
 
     return `CORE INSTRUCTION:
 ANALYZE the input image strictly based on the defined CREATIVITY LEVEL.
