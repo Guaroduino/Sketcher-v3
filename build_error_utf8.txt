@@ -1,0 +1,86 @@
+﻿
+> sketcher-rc-0.5@0.0.0 build
+> vite build
+
+[36mvite v7.3.0 [32mbuilding client environment for production...[36m[39m
+transforming...
+[32mΓ£ô[39m 21 modules transformed.
+node.exe : 
+At line:1 char:1
++ & "C:\Program 
+Files\nodejs/node.exe" "C:\Program 
+Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : Not   
+ Specified: (:String) [], Remo    
+teException
+    + FullyQualifiedErrorId : Nat   
+ iveCommandError
+ 
+/checker.png referenced in 
+/checker.png didn't resolve at 
+build time, it will remain 
+unchanged to be resolved at runtime
+
+PWA v0.21.2
+mode      generateSW
+precache  8 entries (1332.32 KiB)
+files generated
+  dist/sw.js
+  dist/workbox-1ef09536.js
+[31mΓ£ù[39m Build failed in 3.88s
+[31merror during build:
+[31m[vite-plugin-pwa:build] 
+[plugin vite-plugin-pwa:build] 
+App.tsx: There was an error during 
+the build:
+  Could not resolve 
+"./components/UnifiedLeftSidebar" 
+from "App.tsx"
+Additionally, handling the error in 
+the 'buildEnd' hook caused the 
+following error:
+  Could not resolve 
+"./components/UnifiedLeftSidebar" 
+from "App.tsx"[31m
+file: [36mC:/Users/corad/OneDrive/D
+ocumentos/GitHub/Sketcher-v3/App.tsx
+[31m
+    at getRollupError (file:///C:/Us
+ers/corad/OneDrive/Documentos/GitHub
+/Sketcher-v3/node_modules/rollup/dis
+t/es/shared/parseAst.js:401:41)
+    at file:///C:/Users/corad/OneDri
+ve/Documentos/GitHub/Sketcher-v3/nod
+e_modules/rollup/dist/es/shared/node
+-entry.js:23347:39
+    at async 
+catchUnfinishedHookActions (file:///
+C:/Users/corad/OneDrive/Documentos/G
+itHub/Sketcher-v3/node_modules/rollu
+p/dist/es/shared/node-entry.js:22805
+:16)
+    at async rollupInternal (file://
+/C:/Users/corad/OneDrive/Documentos/
+GitHub/Sketcher-v3/node_modules/roll
+up/dist/es/shared/node-entry.js:2333
+0:5)
+    at async buildEnvironment (file:
+///C:/Users/corad/OneDrive/Documento
+s/GitHub/Sketcher-v3/node_modules/vi
+te/dist/node/chunks/config.js:33540:
+12)
+    at async Object.build (file:///C
+:/Users/corad/OneDrive/Documentos/Gi
+tHub/Sketcher-v3/node_modules/vite/d
+ist/node/chunks/config.js:33899:19)
+    at async Object.buildApp (file:/
+//C:/Users/corad/OneDrive/Documentos
+/GitHub/Sketcher-v3/node_modules/vit
+e/dist/node/chunks/config.js:33896:1
+53)
+    at async CAC.<anonymous> (file:/
+//C:/Users/corad/OneDrive/Documentos
+/GitHub/Sketcher-v3/node_modules/vit
+e/dist/node/cli.js:629:3)[39m

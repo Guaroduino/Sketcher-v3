@@ -189,6 +189,18 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
     const brushToolsButtonRef = useRef<HTMLButtonElement>(null);
     const flyoutRef = useRef<HTMLDivElement>(null);
 
+    // Stroke Mode State
+    const [isStrokeModeOpen, setIsStrokeModeOpen] = useState(false);
+    const [strokeModeFlyoutPos, setStrokeModeFlyoutPos] = useState({ top: 0, left: 0 });
+    const strokeModeButtonRef = useRef<HTMLButtonElement>(null);
+    const strokeModeFlyoutRef = useRef<HTMLDivElement>(null);
+
+    // Stroke Style State
+    const [isStrokeStyleOpen, setIsStrokeStyleOpen] = useState(false);
+    const [strokeStyleFlyoutPos, setStrokeStyleFlyoutPos] = useState({ top: 0, left: 0 });
+    const strokeStyleButtonRef = useRef<HTMLButtonElement>(null);
+    const strokeStyleFlyoutRef = useRef<HTMLDivElement>(null);
+
     // Close flyout when clicking outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -210,6 +222,40 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, [isBrushToolsOpen]);
+
+    // Close stroke mode flyout when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (
+                isStrokeModeOpen &&
+                strokeModeFlyoutRef.current &&
+                !strokeModeFlyoutRef.current.contains(event.target as Node) &&
+                strokeModeButtonRef.current &&
+                !strokeModeButtonRef.current.contains(event.target as Node)
+            ) {
+                setIsStrokeModeOpen(false);
+            }
+        };
+        if (isStrokeModeOpen) document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isStrokeModeOpen]);
+
+    // Close stroke style flyout when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (
+                isStrokeStyleOpen &&
+                strokeStyleFlyoutRef.current &&
+                !strokeStyleFlyoutRef.current.contains(event.target as Node) &&
+                strokeStyleButtonRef.current &&
+                !strokeStyleButtonRef.current.contains(event.target as Node)
+            ) {
+                setIsStrokeStyleOpen(false);
+            }
+        };
+        if (isStrokeStyleOpen) document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isStrokeStyleOpen]);
 
     // Helpers to access settings based on tool ID
     const getToolSettings = (id: string) => {
@@ -380,6 +426,112 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                                         />
                                     );
                                 })}
+                            </div>
+                        )}
+                    </section>
+
+                    {/* MODO DE TRAZO (Flyout Trigger) */}
+                    <section className="relative w-full">
+                        <button
+                            ref={strokeModeButtonRef}
+                            onClick={() => {
+                                const rect = strokeModeButtonRef.current?.getBoundingClientRect();
+                                const sidebar = strokeModeButtonRef.current?.closest('aside');
+                                const sidebarRect = sidebar?.getBoundingClientRect() ?? { top: 0, left: 0 };
+                                if (rect) {
+                                    setStrokeModeFlyoutPos({
+                                        top: rect.top - sidebarRect.top,
+                                        left: rect.right - sidebarRect.left + 10
+                                    });
+                                }
+                                setIsStrokeModeOpen(!isStrokeModeOpen)
+                            }}
+                            className={`w-full flex items-center justify-between text-[10px] font-bold uppercase tracking-wider py-2 px-2 rounded transition-colors ${isStrokeModeOpen ? 'bg-theme-bg-tertiary text-theme-text-primary' : 'text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary'
+                                }`}
+                        >
+                            <span className="flex items-center gap-2">
+                                {STROKE_MODES.find(m => m.id === strokeMode)?.icon}
+                                {STROKE_MODES.find(m => m.id === strokeMode)?.label || 'Modo de Trazo'}
+                            </span>
+                            <ChevronRightIcon className={`w-3 h-3 transition-transform ${isStrokeModeOpen ? 'rotate-90' : ''}`} />
+                        </button>
+
+                        {/* Flyout List - Dynamically Positioned */}
+                        {isStrokeModeOpen && (
+                            <div
+                                ref={strokeModeFlyoutRef}
+                                className="fixed w-48 bg-theme-bg-secondary border border-theme-bg-tertiary rounded-lg shadow-xl z-50 flex flex-col p-1"
+                                style={{ top: strokeModeFlyoutPos.top, left: strokeModeFlyoutPos.left }}
+                            >
+                                <div className="text-[10px] font-bold text-theme-text-tertiary px-2 py-1 border-b border-theme-bg-tertiary mb-1">
+                                    Modo de Trazo
+                                </div>
+                                {STROKE_MODES.map(mode => (
+                                    <button
+                                        key={mode.id}
+                                        onClick={() => { setStrokeMode(mode.id); setIsStrokeModeOpen(false); }}
+                                        className={`flex items-center gap-2 p-2 rounded text-[10px] transition-colors ${strokeMode === mode.id
+                                            ? 'bg-theme-accent-primary text-white font-bold'
+                                            : 'text-theme-text-secondary hover:bg-theme-bg-tertiary hover:text-theme-text-primary'
+                                            }`}
+                                    >
+                                        {mode.icon}
+                                        <span>{mode.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+
+                    {/* ESTILO DE TRAZO (Flyout Trigger) */}
+                    <section className="relative w-full">
+                        <button
+                            ref={strokeStyleButtonRef}
+                            onClick={() => {
+                                const rect = strokeStyleButtonRef.current?.getBoundingClientRect();
+                                const sidebar = strokeStyleButtonRef.current?.closest('aside');
+                                const sidebarRect = sidebar?.getBoundingClientRect() ?? { top: 0, left: 0 };
+                                if (rect) {
+                                    setStrokeStyleFlyoutPos({
+                                        top: rect.top - sidebarRect.top,
+                                        left: rect.right - sidebarRect.left + 10
+                                    });
+                                }
+                                setIsStrokeStyleOpen(!isStrokeStyleOpen)
+                            }}
+                            className={`w-full flex items-center justify-between text-[10px] font-bold uppercase tracking-wider py-2 px-2 rounded transition-colors ${isStrokeStyleOpen ? 'bg-theme-bg-tertiary text-theme-text-primary' : 'text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary'
+                                }`}
+                        >
+                            <span className="flex items-center gap-2">
+                                {STROKE_STYLES.find(s => s.id === strokeModifier.style)?.icon}
+                                {STROKE_STYLES.find(s => s.id === strokeModifier.style)?.label || 'Estilo de Trazo'}
+                            </span>
+                            <ChevronRightIcon className={`w-3 h-3 transition-transform ${isStrokeStyleOpen ? 'rotate-90' : ''}`} />
+                        </button>
+
+                        {/* Flyout List - Dynamically Positioned */}
+                        {isStrokeStyleOpen && (
+                            <div
+                                ref={strokeStyleFlyoutRef}
+                                className="fixed w-48 bg-theme-bg-secondary border border-theme-bg-tertiary rounded-lg shadow-xl z-50 flex flex-col p-1"
+                                style={{ top: strokeStyleFlyoutPos.top, left: strokeStyleFlyoutPos.left }}
+                            >
+                                <div className="text-[10px] font-bold text-theme-text-tertiary px-2 py-1 border-b border-theme-bg-tertiary mb-1">
+                                    Estilo de Trazo
+                                </div>
+                                {STROKE_STYLES.map(style => (
+                                    <button
+                                        key={style.id}
+                                        onClick={() => { setStrokeModifier({ ...strokeModifier, style: style.id }); setIsStrokeStyleOpen(false); }}
+                                        className={`flex items-center gap-2 p-2 rounded text-[10px] transition-colors ${strokeModifier.style === style.id
+                                            ? 'bg-theme-accent-primary text-white font-bold'
+                                            : 'text-theme-text-secondary hover:bg-theme-bg-tertiary hover:text-theme-text-primary'
+                                            }`}
+                                    >
+                                        {style.icon}
+                                        <span>{style.label}</span>
+                                    </button>
+                                ))}
                             </div>
                         )}
                     </section>

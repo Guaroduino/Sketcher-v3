@@ -536,18 +536,9 @@ export function useCanvasRendering({
                             );
 
                             if (cornerFull) {
-                                if (isShort) {
-                                    // Draw [VP, Corner]
-                                    endPoint = cornerFull;
-                                } else {
-                                    // Draw [VP, Infinity] passing through Corner
-                                    // Just draw huge line
-                                    const angle = Math.atan2(cornerFull.y - vp.y, cornerFull.x - vp.x);
-                                    endPoint = {
-                                        x: vp.x + Math.cos(angle) * rayLength,
-                                        y: vp.y + Math.sin(angle) * rayLength
-                                    };
-                                }
+                                // Side VP Logic:
+                                // We strictly clip at the Blue Axis (Spine) to avoid bleeding to the other side.
+                                endPoint = cornerFull;
                             }
                         }
                         // Case B: Blue VP -> Bound by Green/Red Axes ("Horizon")
@@ -609,6 +600,7 @@ export function useCanvasRendering({
                             const vecToVP = { x: vp.x - horizonPoint.x, y: vp.y - horizonPoint.y };
                             const vecAwayVP = { x: -vecToVP.x, y: -vecToVP.y };
 
+                            // Draw Segment Logic
                             const drawSegment = (vec: Point) => {
                                 // Draw from HorizonPoint along vec
                                 const ang = Math.atan2(vec.y, vec.x);
@@ -617,14 +609,12 @@ export function useCanvasRendering({
                             };
 
                             if (scope === 'above' || scope === 'both') {
-                                // Draw "Up"
-                                // If VP is Up, draw towards VP.
-                                // If VP is Down, draw Away from VP (assuming "Above" means skywards).
+                                // Draw "Up" (Towards Blue VP if Up)
                                 if (isVpUp) drawSegment(vecToVP);
                                 else drawSegment(vecAwayVP);
                             }
                             if (scope === 'below' || scope === 'both') {
-                                // Draw "Down"
+                                // Draw "Down" (Away from Blue VP if Up)
                                 if (isVpUp) drawSegment(vecAwayVP);
                                 else drawSegment(vecToVP);
                             }
@@ -646,8 +636,21 @@ export function useCanvasRendering({
                         // Side VP: Target Uniform Points on Blue Axis
                         for (let i = 0; i < steps; i++) {
                             const dist = i * spacing;
-                            drawRayThrough({ x: guidePoint.x + blueAxisVec.x * dist, y: guidePoint.y + blueAxisVec.y * dist });
-                            if (i > 0) drawRayThrough({ x: guidePoint.x - blueAxisVec.x * dist, y: guidePoint.y - blueAxisVec.y * dist });
+
+                            // SWAPPED: "Above" / "Up" direction uses -dist (Away from Blue Axis direction?)
+                            // If user says "Abajo es Arriba", then "Above" should use the direction previously associated with "Below".
+                            if (scope === 'above' || scope === 'both') {
+                                // Use NEGATIVE direction (previously "Below")
+                                if (i > 0 || scope === 'above') { // Ensure we draw the center line at least once if scope is active
+                                    drawRayThrough({ x: guidePoint.x - blueAxisVec.x * dist, y: guidePoint.y - blueAxisVec.y * dist });
+                                }
+                            }
+
+                            // SWAPPED: "Below" / "Down" direction uses +dist (Towards Blue Axis direction?)
+                            if (scope === 'below' || scope === 'both') {
+                                // Use POSITIVE direction (previously "Above")
+                                drawRayThrough({ x: guidePoint.x + blueAxisVec.x * dist, y: guidePoint.y + blueAxisVec.y * dist });
+                            }
                         }
                     } else {
                         // Blue VP: Target Uniform Points on Green/Red Axes
