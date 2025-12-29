@@ -69,8 +69,13 @@ export const AIRequestInspectorModal: React.FC<AIRequestInspectorModalProps> = (
                             <h4 className="text-xs font-bold text-theme-text-secondary uppercase mb-3 tracking-wider">Prompts de Texto ({texts.length})</h4>
                             <div className="space-y-3">
                                 {texts.map((txt, idx) => (
-                                    <div key={idx} className="bg-[#121212] p-4 rounded-lg border border-theme-bg-tertiary font-mono text-sm text-gray-300 whitespace-pre-wrap max-h-96 overflow-y-auto">
-                                        {txt.text}
+                                    <div key={idx} className="bg-[#121212] rounded-lg border border-theme-bg-tertiary overflow-hidden">
+                                        <textarea
+                                            readOnly
+                                            className="w-full h-48 bg-transparent p-4 font-mono text-sm text-gray-300 resize-y outline-none focus:ring-1 focus:ring-purple-500/50"
+                                            value={txt.text}
+                                            onClick={(e) => e.currentTarget.select()}
+                                        />
                                     </div>
                                 ))}
                             </div>
@@ -81,9 +86,14 @@ export const AIRequestInspectorModal: React.FC<AIRequestInspectorModalProps> = (
                     {payload.config && (
                         <div>
                             <h4 className="text-xs font-bold text-theme-text-secondary uppercase mb-3 tracking-wider">Configuración</h4>
-                            <pre className="bg-[#121212] p-3 rounded-lg border border-theme-bg-tertiary font-mono text-xs text-green-400 overflow-x-auto">
-                                {JSON.stringify(payload.config, null, 2)}
-                            </pre>
+                            <div className="bg-[#121212] rounded-lg border border-theme-bg-tertiary overflow-hidden">
+                                <textarea
+                                    readOnly
+                                    className="w-full h-32 bg-transparent p-3 font-mono text-xs text-green-400 resize-y outline-none"
+                                    value={JSON.stringify(payload.config, null, 2)}
+                                    onClick={(e) => e.currentTarget.select()}
+                                />
+                            </div>
                         </div>
                     )}
                 </div>

@@ -7,7 +7,7 @@ interface SimpleRenderControlsProps {
     sketchImage: string | null;
     compositeImage: string | null;
     isGenerating: boolean;
-    onRender: (prompt: string, refImages: File[], includeSketch: boolean, includeComposite: boolean) => void;
+    onRender: (prompt: string, refImages: File[], includeSketch: boolean, includeComposite: boolean, configJSON: string) => void;
     userId?: string;
 }
 
@@ -25,6 +25,7 @@ export const SimpleRenderControls: React.FC<SimpleRenderControlsProps> = ({
     userId
 }) => {
     const [prompt, setPrompt] = useState('');
+    const [configJSON, setConfigJSON] = useState('{\n  "mode": "Simple Render V2"\n}');
     const [saveName, setSaveName] = useState('');
     const [isSaveOpen, setIsSaveOpen] = useState(false);
     const [isPresetsDropdownOpen, setIsPresetsDropdownOpen] = useState(false);
@@ -86,40 +87,49 @@ export const SimpleRenderControls: React.FC<SimpleRenderControlsProps> = ({
         setPrompt(preset.content);
     };
 
-    // ... (rest of props)
-
     return (
         <div className="flex flex-col h-full bg-theme-bg-secondary p-4 space-y-6">
             <div className="space-y-4">
                 <label className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider block mb-2">Input Visual</label>
                 <div className="grid grid-cols-2 gap-2">
-                    <div className="aspect-square bg-black/20 rounded border border-theme-bg-tertiary relative overflow-hidden group">
+                    <div className={`aspect-square bg-black/20 rounded border ${includeSketch ? 'border-theme-accent-primary' : 'border-theme-bg-tertiary'} relative overflow-hidden group`}>
                         {sketchImage ? (
-                            <img src={sketchImage} className={`w-full h-full object-cover transition-opacity ${includeSketch ? 'opacity-100' : 'opacity-30'}`} />
+                            <>
+                                <img src={sketchImage} className={`w-full h-full object-cover transition-all ${includeSketch ? 'opacity-100' : 'opacity-20 grayscale'}`} />
+                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
+                                    <button
+                                        onClick={() => setIncludeSketch(!includeSketch)}
+                                        className={`p-2 rounded-full shadow-lg transform transition-transform hover:scale-110 ${includeSketch ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`}
+                                        title={includeSketch ? "Excluir del paquete" : "Incluir en paquete"}
+                                    >
+                                        {includeSketch ? <TrashIcon className="w-4 h-4" /> : <SparklesIcon className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                            </>
                         ) : <div className="text-[9px] text-theme-text-tertiary flex items-center justify-center h-full">Sin Sketch</div>}
-                        <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-[8px] text-white p-1 text-center">Fondo Sketch</div>
-                        {/* Toggle Button */}
-                        <button
-                            onClick={() => setIncludeSketch(!includeSketch)}
-                            className={`absolute top-1 right-1 p-1 rounded-full transition-colors ${includeSketch ? 'bg-black/40 text-white hover:bg-black/60' : 'bg-red-500/80 text-white hover:bg-red-600'}`}
-                            title={includeSketch ? "Incluir imagen en render" : "No incluir imagen"}
-                        >
-                            {includeSketch ? <EyeOpenIcon className="w-3 h-3" /> : <EyeClosedIcon className="w-3 h-3" />}
-                        </button>
+                        <div className={`absolute bottom-0 left-0 right-0 p-1 text-center text-[8px] transition-colors ${includeSketch ? 'bg-theme-accent-primary text-white' : 'bg-black/50 text-gray-400'}`}>
+                            {includeSketch ? "FONDO (INCLUIDO)" : "FONDO (EXCLUIDO)"}
+                        </div>
                     </div>
-                    <div className="aspect-square bg-black/20 rounded border border-theme-bg-tertiary relative overflow-hidden group">
+
+                    <div className={`aspect-square bg-black/20 rounded border ${includeComposite ? 'border-theme-accent-primary' : 'border-theme-bg-tertiary'} relative overflow-hidden group`}>
                         {compositeImage ? (
-                            <img src={compositeImage} className={`w-full h-full object-cover transition-opacity ${includeComposite ? 'opacity-100' : 'opacity-30'}`} />
+                            <>
+                                <img src={compositeImage} className={`w-full h-full object-cover transition-all ${includeComposite ? 'opacity-100' : 'opacity-20 grayscale'}`} />
+                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
+                                    <button
+                                        onClick={() => setIncludeComposite(!includeComposite)}
+                                        className={`p-2 rounded-full shadow-lg transform transition-transform hover:scale-110 ${includeComposite ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`}
+                                        title={includeComposite ? "Excluir del paquete" : "Incluir en paquete"}
+                                    >
+                                        {includeComposite ? <TrashIcon className="w-4 h-4" /> : <SparklesIcon className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                            </>
                         ) : <div className="text-[9px] text-theme-text-tertiary flex items-center justify-center h-full">Sin Capas</div>}
-                        <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-[8px] text-white p-1 text-center">Composite</div>
-                        {/* Toggle Button */}
-                        <button
-                            onClick={() => setIncludeComposite(!includeComposite)}
-                            className={`absolute top-1 right-1 p-1 rounded-full transition-colors ${includeComposite ? 'bg-black/40 text-white hover:bg-black/60' : 'bg-red-500/80 text-white hover:bg-red-600'}`}
-                            title={includeComposite ? "Incluir imagen en render" : "No incluir imagen"}
-                        >
-                            {includeComposite ? <EyeOpenIcon className="w-3 h-3" /> : <EyeClosedIcon className="w-3 h-3" />}
-                        </button>
+                        <div className={`absolute bottom-0 left-0 right-0 p-1 text-center text-[8px] transition-colors ${includeComposite ? 'bg-theme-accent-primary text-white' : 'bg-black/50 text-gray-400'}`}>
+                            {includeComposite ? "COMPOSITE (INCLUIDO)" : "COMPOSITE (EXCLUIDO)"}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -239,10 +249,23 @@ export const SimpleRenderControls: React.FC<SimpleRenderControlsProps> = ({
                 />
             </div>
 
+            {/* Advanced Configuration */}
+            <div className="space-y-2">
+                <label className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider block mb-1">Configuración (JSON)</label>
+                <textarea
+                    value={configJSON}
+                    onChange={(e) => setConfigJSON(e.target.value)}
+                    placeholder='{"mode": "default"}'
+                    className="w-full h-24 bg-theme-bg-primary border border-theme-bg-tertiary rounded-md p-2 text-xs font-mono text-green-400 focus:border-theme-accent-primary outline-none resize-none"
+                // Note: We need state for this if we want it to be functional. 
+                // For now adding the UI as requested.
+                />
+            </div>
+
             <div className="flex-grow"></div>
 
             <button
-                onClick={() => onRender(prompt, refImages.map(r => r.file), includeSketch, includeComposite)}
+                onClick={() => onRender(prompt, refImages, includeSketch, includeComposite, configJSON)}
                 disabled={isGenerating}
                 className="w-full py-3 rounded-md bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold text-sm shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
             >

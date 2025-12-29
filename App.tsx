@@ -2374,7 +2374,8 @@ export function App() {
         instructions: string,
         refImages?: { id: string, file: File }[],
         includeSketch: boolean = true,
-        includeComposite: boolean = true
+        includeComposite: boolean = true,
+        configJSON: string = ""
     ) => {
         if (!simpleRenderCompositeImage) {
             alert("No hay imagen base para renderizar.");
@@ -2391,35 +2392,39 @@ export function App() {
 
             const parts: any[] = [];
 
-            parts.push({ text: "Actúa como un visualizador arquitectónico experto. Tu tarea es generar un render fotorrealista de alta calidad." });
-            parts.push({ text: `INSTRUCCIONES GENERALES: ${instructions}` });
-            parts.push({ text: "Por favor respeta la geometría y los elementos mostrados en las imágenes adjuntas. La primera imagen es el fondo/contexto (si existe), y la segunda es la composición completa del boceto." });
+            // 1. Instructions & Config (User Payload)
+            parts.push({ text: instructions });
+
+            if (configJSON && configJSON.trim()) {
+                parts.push({ text: `CONFIGURACIÓN:\n${configJSON}` });
+            }
+
+            // 2. Images (Raw, relying on order: 1=Sketch(BG), 2=Composite, 3..N=Refs)
+            // Note: User explicitly asked to remove labels like "IMAGEN 1...".
 
             if (simpleRenderSketchImage && includeSketch) {
-                parts.push({ text: "IMAGEN 1: FONDO / CONTEXTO" });
                 parts.push({ inlineData: { mimeType: 'image/png', data: simpleRenderSketchImage.split(',')[1] } });
             }
 
             if (simpleRenderCompositeImage && includeComposite) {
-                parts.push({ text: "IMAGEN 2: COMPOSICIÓN DEL BOCETO (GEOMETRÍA BASE)" });
                 parts.push({ inlineData: { mimeType: 'image/png', data: simpleRenderCompositeImage.split(',')[1] } });
             }
 
             // Handle Reference Images
             if (refImages && refImages.length > 0) {
-                parts.push({ text: "IMÁGENES DE REFERENCIA ADICIONALES (Usa sus IDs para aplicar estilos/materiales específicos):" });
+                // No text label for refs either? strict interpretation: "mas nada".
+                // But usually refs need some separation. 
+                // User said: "las iamgenes (fondo, composite, ref, ref2, ref 3) Inturccioens generales y Configuracion."
+                // I will assume strictly no labels.
                 for (const ref of refImages) {
                     const base64Data = await new Promise<string>((resolve) => {
                         const reader = new FileReader();
                         reader.onload = (e) => {
                             const result = e.target?.result as string;
-                            // Remove data:image/...;base64, prefix
                             resolve(result.split(',')[1]);
                         };
                         reader.readAsDataURL(ref.file);
                     });
-
-                    parts.push({ text: `REF ID: ${ref.id} (Nombre: ${ref.file.name})` });
                     parts.push({ inlineData: { mimeType: ref.file.type, data: base64Data } });
                 }
             }

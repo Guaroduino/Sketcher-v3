@@ -208,6 +208,19 @@ export const buildArchitecturalPrompt = (options: ArchitecturalRenderOptions): s
     const creativityInstruction = getCreativityInstruction(options.creativeFreedom);
     const roleAndTask = getRoleAndTask(options.renderStyle, options.sceneType);
 
+    if (options.sceneType === 'object_integration') {
+        // Reduced payload for Simple Render V2
+        const parts = [];
+        if (options.additionalPrompt) {
+            parts.push(`INSTRUCCIONES GENERALES:\n\n${options.additionalPrompt}`);
+        }
+        // Note: Images are attached separately in the payload construction in aiUtils or wherever this string is used.
+        // The Prompt Builder just returns the text string. 
+        // We want to avoid adding the standard boilerplate.
+
+        return parts.join('\n\n');
+    }
+
     return `CORE INSTRUCTION:
 ANALYZE the input image strictly based on the defined CREATIVITY LEVEL.
 PRIORITY: GEOMETRY (Step 1) > MATERIALS (Step 2). Use the sketch lines as the rigid framework.
