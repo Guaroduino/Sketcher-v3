@@ -45,7 +45,7 @@ import { CanvasSizeModal } from './components/modals/CanvasSizeModal';
 import { ConfirmClearModal } from './components/modals/ConfirmClearModal';
 import { ConfirmDeleteLibraryItemModal } from './components/modals/ConfirmDeleteLibraryItemModal';
 import { ConfirmResetModal } from './components/modals/ConfirmResetModal';
-import { CropIcon, CheckIcon, XIcon, RulerIcon, PerspectiveIcon, ImageSquareIcon, OrthogonalIcon, MirrorIcon, GridIcon, IsometricIcon, LockIcon, LockOpenIcon, TransformIcon, FreeTransformIcon, SunIcon, MoonIcon, CopyIcon, CutIcon, PasteIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, GoogleIcon, LogOutIcon, ArrowUpIcon, ArrowDownIcon, SnapIcon, BookmarkIcon, SaveIcon, FolderOpenIcon, GalleryIcon, StrokeModeIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, ExpandIcon, MinimizeIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, HistoryIcon, MoreVerticalIcon, AddAboveIcon, AddBelowIcon, HandRaisedIcon, DownloadIcon, SparklesIcon, MenuIcon, ChevronDownIcon } from './components/icons';
+import { CropIcon, CheckIcon, XIcon, RulerIcon, PerspectiveIcon, ImageSquareIcon, OrthogonalIcon, MirrorIcon, GridIcon, IsometricIcon, LockIcon, LockOpenIcon, TransformIcon, FreeTransformIcon, SunIcon, MoonIcon, CopyIcon, CutIcon, PasteIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, GoogleIcon, LogOutIcon, ArrowUpIcon, ArrowDownIcon, SnapIcon, BookmarkIcon, SaveIcon, FolderOpenIcon, GalleryIcon, StrokeModeIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, ExpandIcon, MinimizeIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, HistoryIcon, MoreVerticalIcon, AddAboveIcon, AddBelowIcon, HandRaisedIcon, DownloadIcon, SparklesIcon, MenuIcon, ChevronDownIcon, TrashIcon, RefreshCwIcon } from './components/icons';
 
 import { UnifiedLeftSidebar } from './components/UnifiedLeftSidebar';
 import { DrawingToolsPanel } from './components/DrawingToolsPanel';
@@ -59,7 +59,7 @@ import { LandingGalleryCarousel } from './components/LandingGalleryCarousel';
 import { AIRequestInspectorModal } from './components/modals/AIRequestInspectorModal';
 import type { SketchObject, ItemType, Tool, CropRect, TransformState, WorkspaceTemplate, QuickAccessTool, ProjectFile, Project, StrokeMode, StrokeState, CanvasItem, StrokeModifier, ScaleUnit, Selection, ClipboardData, AppState, Point } from './types';
 import { getContentBoundingBox, createNewCanvas, createThumbnail, cloneCanvas, generateMipmaps, getCompositeCanvas, cropCanvas } from './utils/canvasUtils';
-import { prepareAIRequest } from './utils/aiUtils';
+import { prepareAIRequest, generateContentWithRetry } from './utils/aiUtils';
 import { prepareVisualPromptingRequest, VisualPromptingPayload } from './services/visualPromptingService';
 
 import { GEMINI_MODEL_ID, AI_MODELS, UI_DEFAULT_MODEL } from './utils/constants';
@@ -727,7 +727,7 @@ function useAI(
 
         try {
             // @ts-ignore
-            const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+            // const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY }); 
             const textPart = { text: finalPrompt };
             // Use selected model from state (passed as dependency/arg)
             const model = selectedModel;
@@ -743,7 +743,9 @@ function useAI(
                 }
             }
 
-            const response = await ai.models.generateContent({ model, contents, config });
+            // Replace direct call with retry utility
+            const response = await generateContentWithRetry(import.meta.env.VITE_GEMINI_API_KEY, model, contents, config);
+
 
             let newImageBase64: string | null = null;
             for (const part of response.candidates?.[0]?.content.parts || []) {
@@ -1170,7 +1172,7 @@ export function App() {
                 const skDataUrl = sketchCanvas ? sketchCanvas.toDataURL('image/png') : compositeCanvas.toDataURL('image/png');
 
                 if (bgDataUrl) {
-                    await renderState.handleRender(compositeCanvas.toDataURL('image/png'), targetDimensions, aspectRatio, { background: bgDataUrl, composite: skDataUrl });
+                    await renderState.handleRender(compositeCanvas.toDataURL('image/png'), targetDimensions, aspectRatio, { background: bgDataUrl, composite: compositeCanvas.toDataURL('image/png') });
                     return;
                 } else {
                     // If no background object, warn or just proceed?
@@ -1707,6 +1709,8 @@ export function App() {
                             // Fit to existing canvas
                             dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: img, cropToFit } });
                         }
+                        // Reset perspective guides to default when background changes
+                        guides.resetPerspective();
                     }
 
                     setIsBgImportModalOpen(false);
@@ -2285,6 +2289,7 @@ export function App() {
             setPerspectiveGridVerticalScope={(scope) => guides.setPerspectiveGuide(prev => prev ? { ...prev, gridVerticalScope: scope } : null)}
             perspectiveGridLength={guides.perspectiveGuide?.gridLength}
             setPerspectiveGridLength={(length) => guides.setPerspectiveGuide(prev => prev ? { ...prev, gridLength: length } : null)}
+            onResetPerspective={guides.resetPerspective}
 
             isSymmetryEnabled={guides.activeGuide === 'mirror'}
             setSymmetryEnabled={(enabled) => guides.onSetActiveGuide(enabled ? 'mirror' : 'none')}
@@ -2514,6 +2519,44 @@ export function App() {
         }
     }, [sidebarTab, backgroundObject, canvasSize, getCompositeCanvas, getDrawableObjects]);
 
+    const handleFullReset = useCallback(() => {
+        // 1. Reset Canvas Content
+        dispatch({ type: 'CLEAR_CANVAS' });
+
+        // 2. Reset Background
+        dispatch({ type: 'REMOVE_BACKGROUND_IMAGE' });
+
+        // 3. Reset Guides
+        guides.resetPerspective();
+        guides.onSetActiveGuide('none');
+        guides.toggleSnapToGrid(false);
+        if (guides.isOrthogonalVisible) guides.toggleOrthogonal();
+
+        // 4. Reset View
+        if (onZoomExtentsRef.current) onZoomExtentsRef.current();
+
+        // 5. Reset Tool & Selection
+        setTool('brush');
+        setSelection(null);
+        setSelectedItemIds([]);
+
+        // 6. Reset Visual Prompting
+        vp.clearAll();
+
+        // 7. Reset Simple Render / AI States
+        setSimpleRenderSketchImage(null);
+        setSimpleRenderCompositeImage(null);
+        renderState.setResultImage(null);
+
+        // 8. Close Modal
+        ui.setIsResetConfirmOpen(false);
+
+        // 9. Clear Autosave
+        localStorage.removeItem('sketcher_v3_autosave');
+
+        console.log("App Full Reset Completed");
+    }, [dispatch, guides, vp, renderState, ui]);
+
     const renderNode = useMemo(() => (
         <ArchitecturalControls
             {...renderState}
@@ -2557,7 +2600,7 @@ export function App() {
             {library.deletingLibraryItem && <ConfirmDeleteLibraryItemModal isOpen={!!library.deletingLibraryItem} onCancel={library.onCancelDeleteLibraryItem} onConfirm={library.onConfirmDeleteLibraryItem} itemToDelete={library.deletingLibraryItem} />}
             {ui.showClearConfirm && <ConfirmClearModal isOpen={ui.showClearConfirm} onCancel={() => ui.setShowClearConfirm(false)} onConfirm={handleConfirmClear} />}
             {ui.isCanvasSizeModalOpen && <CanvasSizeModal isOpen={ui.isCanvasSizeModalOpen} onClose={() => ui.setCanvasSizeModalOpen(false)} currentSize={canvasSize} onApply={(w, h, s) => { dispatch({ type: 'RESIZE_CANVAS', payload: { width: w, height: h, scale: s } }); ui.setCanvasSizeModalOpen(false); setTimeout(canvasView.onZoomExtents, 100); }} />}
-            {ui.isResetConfirmOpen && <ConfirmResetModal isOpen={ui.isResetConfirmOpen} onCancel={() => ui.setIsResetConfirmOpen(false)} onConfirm={() => { console.log("Resetting preferences..."); ui.setIsResetConfirmOpen(false); }} />}
+            {ui.isResetConfirmOpen && <ConfirmResetModal isOpen={ui.isResetConfirmOpen} onCancel={() => ui.setIsResetConfirmOpen(false)} onConfirm={handleFullReset} />}
             <WorkspaceTemplatesPopover isOpen={isWorkspacePopoverOpen} onClose={() => setWorkspacePopoverOpen(false)} templates={templates.templates} onSave={handleSaveWorkspace} onLoad={handleLoadWorkspace} onDelete={templates.deleteTemplate} onResetPreferences={() => ui.setIsResetConfirmOpen(true)} />
             {library.imageToEdit && <TransparencyEditor item={library.imageToEdit} onApply={library.onApplyTransparency} onCancel={library.onCancelEditTransparency} />}
             {isToolSelectorOpen && editingToolSlotIndex !== null && <ToolSelectorModal isOpen={isToolSelectorOpen} onClose={() => { setIsToolSelectorOpen(false); setEditingToolSlotIndex(null); }} onSelectTool={(tool) => quickAccess.updateTool(editingToolSlotIndex, tool)} fxPresets={toolSettings.brushPresets} />}
@@ -2689,11 +2732,14 @@ export function App() {
 
                         <div className="flex items-center gap-2">
                             <div className="flex items-center gap-1 mr-2 px-2 py-1 bg-theme-bg-secondary rounded-md border border-theme-bg-tertiary">
-                                {ui.deferredPrompt && (
-                                    <>
-
-                                    </>
-                                )}
+                                {/* App Reset - Desktop */}
+                                <button
+                                    onClick={() => ui.setIsResetConfirmOpen(true)}
+                                    className="p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary hover:text-red-500 transition-colors"
+                                    title="Reset Completo (Nuevo Lienzo)"
+                                >
+                                    <RefreshCwIcon className="w-4 h-4" />
+                                </button>
 
                                 <button onClick={ui.handleToggleFullscreen} className="p-1.5 rounded-md hover:bg-theme-bg-tertiary text-theme-text-secondary" title={ui.isFullscreen ? "Salir de Pantalla Completa" : "Pantalla Completa"}>
                                     {ui.isFullscreen ? <MinimizeIcon className="w-4 h-4" /> : <ExpandIcon className="w-4 h-4" />}
@@ -2846,6 +2892,8 @@ export function App() {
                             setDebugPointers={setDebugPointers}
                             isPalmRejectionEnabled={isPalmRejectionEnabled}
                             scaleUnit={scaleUnit}
+                            isPressureSensitivityEnabled={isPressureSensitivityEnabled}
+                            isSolidBox={isSolidBox}
                         />
 
                         {/* Visual Prompting Overlay - Only show if Annotations Layer is visible */}
@@ -3074,6 +3122,7 @@ export function App() {
                                 isGenerating={renderState.isGenerating}
                                 previewBackground={integrationPreviewBg}
                                 previewComposite={integrationPreviewComp}
+                                userId={user?.uid}
                             />
                         }
                         simpleRenderNode={
@@ -3082,6 +3131,7 @@ export function App() {
                                 compositeImage={simpleRenderCompositeImage}
                                 isGenerating={isSimpleRenderGenerating}
                                 onRender={handleSimpleRender}
+                                userId={user?.uid}
                             />
                         }
                         overrideContent={undefined}

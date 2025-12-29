@@ -10,7 +10,7 @@ import {
     MirrorIcon, OrthogonalIcon, UploadIcon, DownloadIcon, CropIcon,
     LassoIcon, MarqueeRectIcon, MarqueeCircleIcon, PerspectiveIcon, SquareIcon, CircleIcon, CubeIcon, MoreVerticalIcon,
     ChevronDownIcon, ChevronRightIcon, SolidMarkerIcon, AdvancedMarkerIcon, NaturalMarkerIcon, AirbrushIcon,
-    WatercolorIcon, FXBrushIcon, ExpandIcon, EyeOpenIcon, EyeClosedIcon
+    WatercolorIcon, FXBrushIcon, ExpandIcon, EyeOpenIcon, EyeClosedIcon, RefreshCwIcon,
 } from './icons';
 
 import type {
@@ -73,6 +73,7 @@ interface DrawingToolsPanelProps {
     setPerspectiveGridVerticalScope?: (scope: 'both' | 'above' | 'below') => void;
     perspectiveGridLength?: 'full' | 'short';
     setPerspectiveGridLength?: (length: 'full' | 'short') => void;
+    onResetPerspective?: () => void;
 
 
     isSymmetryEnabled: boolean;
@@ -130,7 +131,7 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
     perspectiveGridColor, setPerspectiveGridColor,
     perspectiveGridDensity, setPerspectiveGridDensity,
     perspectiveGridVerticalScope, setPerspectiveGridVerticalScope,
-    perspectiveGridLength, setPerspectiveGridLength,
+    perspectiveGridLength, setPerspectiveGridLength, onResetPerspective,
     isSymmetryEnabled, setSymmetryEnabled,
     isOrthogonalEnabled, setOrthogonalEnabled,
     isRulerEnabled, setRulerEnabled,
@@ -539,40 +540,34 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
             </section>
             <div className="h-px bg-theme-bg-tertiary opacity-50 my-2"></div>
 
-            {/* Brush Sliders (No Title) */}
-            <section className="space-y-3 px-1">
-                <div>
-                    <div className="flex justify-between text-[10px] text-theme-text-secondary mb-1">
-                        <span>Tamaño</span>
-                        <span>{brushSize}px</span>
-                    </div>
+            {/* Brush Sliders (Compact) */}
+            <section className="space-y-2 px-1">
+                <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-theme-text-secondary w-14">Tamaño</span>
                     <input
                         type="range" min="1" max="100"
                         value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                        className="w-full h-1 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary"
+                        className="flex-grow h-1 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary"
                     />
+                    <span className="text-[10px] text-theme-text-secondary w-8 text-right">{brushSize}px</span>
                 </div>
-                <div>
-                    <div className="flex justify-between text-[10px] text-theme-text-secondary mb-1">
-                        <span>Opacidad</span>
-                        <span>{Math.round(brushOpacity * 100)}%</span>
-                    </div>
+                <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-theme-text-secondary w-14">Opacidad</span>
                     <input
                         type="range" min="0" max="1" step="0.01"
                         value={brushOpacity} onChange={(e) => setBrushOpacity(parseFloat(e.target.value))}
-                        className="w-full h-1 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary"
+                        className="flex-grow h-1 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary"
                     />
+                    <span className="text-[10px] text-theme-text-secondary w-8 text-right">{Math.round(brushOpacity * 100)}%</span>
                 </div>
-                <div>
-                    <div className="flex justify-between text-[10px] text-theme-text-secondary mb-1">
-                        <span>Suavizado</span>
-                        <span>{Math.round(strokeSmoothing * 100)}%</span>
-                    </div>
+                <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-theme-text-secondary w-14">Suavizado</span>
                     <input
                         type="range" min="0" max="1" step="0.05"
                         value={strokeSmoothing} onChange={(e) => setStrokeSmoothing(parseFloat(e.target.value))}
-                        className="w-full h-1 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary"
+                        className="flex-grow h-1 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary"
                     />
+                    <span className="text-[10px] text-theme-text-secondary w-8 text-right">{Math.round(strokeSmoothing * 100)}%</span>
                 </div>
 
                 <div className="flex items-center justify-between pb-1">
@@ -597,30 +592,7 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
 
             <div className="h-px bg-theme-bg-tertiary opacity-50 my-3"></div>
 
-            {/* Colors */}
-            <section>
-                <div className="flex justify-between items-center mb-2">
-                    <label className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider block">Color</label>
-                    <input
-                        type="color"
-                        value={brushColor}
-                        onChange={(e) => setBrushColor(e.target.value)}
-                        className="w-5 h-5 cursor-pointer rounded-full overflow-hidden border border-theme-bg-tertiary p-0"
-                    />
-                </div>
-                <div className="grid grid-cols-8 gap-1.5">
-                    {PRESET_COLORS.map(c => (
-                        <button
-                            key={c}
-                            onClick={() => setBrushColor(c)}
-                            className={`aspect-square rounded-full border border-theme-bg-tertiary transition-transform ${brushColor === c ? 'ring-2 ring-theme-text-primary scale-110' : 'hover:scale-110'}`}
-                            style={{ backgroundColor: c }}
-                        />
-                    ))}
-                </div>
-            </section>
 
-            <div className="h-px bg-theme-bg-tertiary opacity-50"></div>
 
             {/* Guides */}
             <section className="space-y-2">
@@ -664,7 +636,18 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                             <PerspectiveIcon className={`w-4 h-4 ${isPerspectiveEnabled ? 'text-theme-accent-primary' : 'text-theme-text-secondary'}`} />
                             <span className={isPerspectiveEnabled ? 'font-bold text-theme-accent-primary' : ''}>Perspectiva</span>
                         </div>
-                        <input type="checkbox" checked={isPerspectiveEnabled} onChange={(e) => setPerspectiveEnabled(e.target.checked)} className="cursor-pointer" />
+                        <div className="flex items-center">
+                            <input type="checkbox" checked={isPerspectiveEnabled} onChange={(e) => setPerspectiveEnabled(e.target.checked)} className="cursor-pointer mr-2" />
+                            {isPerspectiveEnabled && onResetPerspective && (
+                                <button
+                                    onClick={onResetPerspective}
+                                    className="p-1 rounded hover:bg-theme-bg-tertiary text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                                    title="Resetear Perspectiva (Esquinas)"
+                                >
+                                    <RefreshCwIcon className="w-3 h-3" />
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {/* Grid Toggle Sub-option */}
@@ -687,7 +670,7 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                                             <label className="text-[9px] text-theme-text-secondary">Color</label>
                                             <input
                                                 type="color"
-                                                value={perspectiveGridColor?.startsWith('#') ? perspectiveGridColor : '#c8c8c8'}
+                                                value={perspectiveGridColor?.startsWith('#') ? (perspectiveGridColor.length === 4 ? `#${perspectiveGridColor[1]}${perspectiveGridColor[1]}${perspectiveGridColor[2]}${perspectiveGridColor[2]}${perspectiveGridColor[3]}${perspectiveGridColor[3]}` : perspectiveGridColor) : '#c8c8c8'}
                                                 onChange={(e) => setPerspectiveGridColor && setPerspectiveGridColor(e.target.value)}
                                                 className="w-4 h-4 p-0 border-0 bg-transparent cursor-pointer rounded-sm overflow-hidden"
                                             />

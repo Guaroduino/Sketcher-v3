@@ -8,6 +8,7 @@ interface SimpleRenderControlsProps {
     compositeImage: string | null;
     isGenerating: boolean;
     onRender: (prompt: string, refImages: File[], includeSketch: boolean, includeComposite: boolean) => void;
+    userId?: string;
 }
 
 interface RefImage {
@@ -20,7 +21,8 @@ export const SimpleRenderControls: React.FC<SimpleRenderControlsProps> = ({
     sketchImage,
     compositeImage,
     isGenerating,
-    onRender
+    onRender,
+    userId
 }) => {
     const [prompt, setPrompt] = useState('');
     const [saveName, setSaveName] = useState('');
@@ -64,7 +66,7 @@ export const SimpleRenderControls: React.FC<SimpleRenderControlsProps> = ({
         setRefImages(prev => prev.filter(img => img.id !== id));
     };
 
-    const { savedInstructions, addPreset, deletePreset } = useInstructionPresets();
+    const { savedInstructions, addPreset, deletePreset } = useInstructionPresets(userId);
 
     const handleSavePreset = () => {
         if (!saveName.trim() || !prompt.trim()) return;

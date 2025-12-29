@@ -291,7 +291,12 @@ export function useCanvasRendering({
 
         // 1. Draw background
         if (backgroundObject && backgroundObject.canvas && backgroundObject.isVisible) {
-            drawItem(backgroundObject);
+            const isBeingErased = backgroundObject.id === livePreviewLayerId;
+            if ((isTransforming && backgroundObject.id === activeItemId) || isBeingErased) {
+                // Skip drawing here, live preview will handle it
+            } else {
+                drawItem(backgroundObject);
+            }
         }
 
         // 2. Draw Grid on top of background

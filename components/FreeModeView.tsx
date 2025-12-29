@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { SendIcon, PaperClipIcon, SparklesIcon, SaveIcon, FolderIcon, TrashIcon, XIcon, DownloadIcon, EditIcon, ImageIcon, PlusIcon } from './icons';
-import { GoogleGenAI } from "@google/genai";
+// import { GoogleGenAI } from "@google/genai";
 import { GEMINI_MODEL_ID } from '../utils/constants';
+import { generateContentWithRetry } from '../utils/aiUtils';
 import { collection, addDoc, query, orderBy, onSnapshot, deleteDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { User } from 'firebase/auth';
@@ -221,7 +222,7 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
 
         try {
             // @ts-ignore
-            const client = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+            // const client = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
             const parts: any[] = [];
             // Add attachments first (common practice for multimodal)
@@ -288,11 +289,9 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
                 }
             }
 
-            const response = await client.models.generateContent({
-                model,
-                contents,
-                config
-            });
+            // Replace direct call with retry utility
+            const response = await generateContentWithRetry(import.meta.env.VITE_GEMINI_API_KEY, model, contents, config);
+
 
             // Extract Response Parts
             let newImageBase64: string | null = null;

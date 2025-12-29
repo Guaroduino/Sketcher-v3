@@ -1,5 +1,38 @@
 
 import { CanvasItem, SketchObject, CropRect } from '../types';
+import { GoogleGenAI } from "@google/genai";
+
+export const generateContentWithRetry = async (
+    apiKey: string,
+    model: string,
+    contents: any,
+    config: any = {},
+    maxRetries: number = 3
+) => {
+    let attempt = 0;
+    while (attempt < maxRetries) {
+        try {
+            // @ts-ignore
+            const ai = new GoogleGenAI({ apiKey });
+            // @ts-ignore
+            const response = await ai.models.generateContent({ model, contents, config });
+            return response;
+        } catch (error: any) {
+            attempt++;
+            const isNetworkError = error.message?.includes("fetch") || error.message?.includes("network") || error.message?.includes("Failed to fetch");
+
+            if (isNetworkError && attempt < maxRetries) {
+                const delayStr = Math.pow(2, attempt) * 1000;
+                console.warn(`AI Request failed (Attempt ${attempt}/${maxRetries}). Retrying in ${delayStr}ms...`, error);
+                await new Promise(resolve => setTimeout(resolve, delayStr));
+                continue;
+            }
+            throw error; // Re-throw if not a retryable error or max retries reached
+        }
+    }
+    throw new Error("Max retries reached for AI request.");
+};
+
 // function to convert dataURL to base64
 const dataURLtoBase64 = (dataUrl: string) => dataUrl.split(',')[1];
 
@@ -61,12 +94,24 @@ export const prepareAIRequest = (
                 // For preview, we tolerate empty prompt (show what we have)
                 const description = enhancementPrompt || "";
 
+                // FIX: Add Isolated Background Image (Requested by User: "Fondo: Como esta actualmente")
+                if (backgroundObject?.canvas && backgroundObject.isVisible && (!enhancementChromaKey || enhancementChromaKey === 'none')) {
+                    const bgUrl = backgroundObject.canvas.toDataURL('image/png');
+                    debugImages.push({ name: 'Fondo Original', url: bgUrl });
+                    parts.push({ inlineData: { mimeType: 'image/png', data: dataURLtoBase64(bgUrl) } });
+                }
+
                 // Manual Composite Logic for filteredObjects
                 const tempCanvas = document.createElement('canvas');
                 tempCanvas.width = canvasSize.width;
                 tempCanvas.height = canvasSize.height;
                 const tempCtx = tempCanvas.getContext('2d');
                 if (!tempCtx) return null;
+
+                // FIX: Include Background if available and visible
+                if (backgroundObject?.canvas && backgroundObject.isVisible) {
+                    tempCtx.drawImage(backgroundObject.canvas, 0, 0);
+                }
 
                 [...filteredObjects].reverse().forEach(obj => {
                     if (obj.canvas) {
@@ -132,18 +177,41 @@ export const prepareAIRequest = (
             break;
         }
         case 'composition': {
+            // FIX: Align with 'object' payload (Simple Render) - user calls it 'simp'
+            // 1. Isolated Background (PNG) - User calls it 'Fondo Sketch'
             if (backgroundObject?.canvas && backgroundObject.isVisible) {
-                const bgDataUrl = backgroundObject.canvas.toDataURL('image/jpeg');
-                debugImages.push({ name: 'Fondo', url: bgDataUrl });
-                parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(bgDataUrl) } });
+                const bgUrl = backgroundObject.canvas.toDataURL('image/png');
+                debugImages.push({ name: 'Fondo Sketch', url: bgUrl });
+                parts.push({ inlineData: { mimeType: 'image/png', data: dataURLtoBase64(bgUrl) } });
             }
 
-            const compositionCanvas = getCompositeCanvas(true, canvasSize, getDrawableObjects, backgroundObject);
-            if (compositionCanvas) {
-                const compDataUrl = compositionCanvas.toDataURL('image/jpeg');
-                debugImages.push({ name: 'Composición Completa', url: compDataUrl });
-                parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(compDataUrl) } });
+            // 2. Cropped Sketch Composite (PNG) - User calls it 'Composite'
+            // Use helper to ensure consistent composition (background + objects)
+            const compositionCanvas = getCompositeCanvas(true, canvasSize, () => filteredObjects, backgroundObject);
+
+            if (!compositionCanvas) return null;
+
+            let imageCanvas = compositionCanvas;
+
+            // Bbox Logic
+            const combinedBbox = getCombinedBbox(filteredObjects);
+
+            if (combinedBbox && combinedBbox.width > 0 && combinedBbox.height > 0) {
+                referenceWidth = combinedBbox.width;
+                const cropCanvas = document.createElement('canvas');
+                cropCanvas.width = combinedBbox.width;
+                cropCanvas.height = combinedBbox.height;
+                const cropCtx = cropCanvas.getContext('2d');
+                if (cropCtx) {
+                    cropCtx.drawImage(compositionCanvas, combinedBbox.x, combinedBbox.y, combinedBbox.width, combinedBbox.height, 0, 0, combinedBbox.width, combinedBbox.height);
+                    imageCanvas = cropCanvas;
+                }
             }
+
+            const dataUrl = imageCanvas.toDataURL('image/png');
+            debugImages.push({ name: 'Composite', url: dataUrl });
+            parts.push({ inlineData: { mimeType: 'image/png', data: dataURLtoBase64(dataUrl) } });
+
 
             if (payload.styleRef?.url) {
                 debugImages.push({ name: 'Referencia de Estilo', url: payload.styleRef.url });

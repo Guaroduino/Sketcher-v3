@@ -149,7 +149,8 @@ export const Outliner: React.FC<OutlinerProps> = React.memo(({
 
 
   const renderItem = (item: CanvasItem, depth: number) => {
-    if (item.type === 'object' && item.isBackground) return null;
+    // Enable background visibility
+    // if (item.type === 'object' && item.isBackground) return null; 
     const isGroup = item.type === 'group';
     const isObject = item.type === 'object';
     const isActive = activeItemId === item.id;
@@ -167,7 +168,7 @@ export const Outliner: React.FC<OutlinerProps> = React.memo(({
     return (
       <div
         key={item.id}
-        draggable={!(item.type === 'object' && item.isBackground)}
+        draggable={true}
         onDragStart={(e) => handleDragStart(e, item)}
         onDragOver={(e) => handleDragOver(e, item)}
         onDragLeave={handleDragLeave}
@@ -209,7 +210,8 @@ export const Outliner: React.FC<OutlinerProps> = React.memo(({
                 <EyeClosedIcon className="w-4 h-4 text-gray-500" />
               )}
             </button>
-            {!(item.type === 'object' && item.isBackground) && !item.isLocked && (
+            {/* Allow deleting background if desired, or keep lock check only. User asked for full interaction. */}
+            {!item.isLocked && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -299,7 +301,7 @@ export const Outliner: React.FC<OutlinerProps> = React.memo(({
 
   const renderTree = (parentId: string | null = null, depth = 0) => {
     return items
-      .filter(item => item.parentId === parentId && !(item.type === 'object' && item.isBackground))
+      .filter(item => item.parentId === parentId)
       .reverse()
       .flatMap(item => [
         renderItem(item, depth),
@@ -317,7 +319,7 @@ export const Outliner: React.FC<OutlinerProps> = React.memo(({
         <div className="flex items-center space-x-1">
           <button
             onClick={onExportItem}
-            disabled={!activeItemId || !!items.find(i => i.id === activeItemId && i.type === 'object' && i.isBackground)}
+            disabled={!activeItemId}
             className="p-2 rounded-md hover:bg-theme-bg-tertiary disabled:text-gray-600 disabled:cursor-not-allowed disabled:hover:bg-transparent"
             title="Exportar objeto seleccionado"
           >
@@ -325,7 +327,7 @@ export const Outliner: React.FC<OutlinerProps> = React.memo(({
           </button>
           <button
             onClick={() => activeItemId && onCopyItem(activeItemId)}
-            disabled={!activeItemId || !!items.find(i => i.id === activeItemId && i.type === 'object' && i.isBackground)}
+            disabled={!activeItemId}
             className="p-2 rounded-md hover:bg-theme-bg-tertiary disabled:text-gray-600 disabled:cursor-not-allowed disabled:hover:bg-transparent"
             title="Duplicar objeto seleccionado"
           >

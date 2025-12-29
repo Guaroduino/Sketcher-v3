@@ -72,6 +72,7 @@ interface ArchitecturalControlsProps {
     isGenerating: boolean;
     previewBackground?: string | null;
     previewComposite?: string | null;
+    userId?: string;
 }
 
 const CollapsiblePillGroup: React.FC<{ label: string, options: { label: string, value: string }[], value: string, onChange: (val: string) => void }> = ({ label, options, value, onChange }) => {
@@ -143,13 +144,14 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = React
     onRender,
     isGenerating,
     previewBackground,
-    previewComposite
+    previewComposite,
+    userId
 }) => {
     // Local state for debouncing additionalPrompt
     const [localPrompt, setLocalPrompt] = React.useState(additionalPrompt);
 
     // Presets State
-    const { savedInstructions, addPreset, deletePreset } = useInstructionPresets();
+    const { savedInstructions, addPreset, deletePreset } = useInstructionPresets(userId);
     const [saveName, setSaveName] = useState('');
     const [isSaveOpen, setIsSaveOpen] = useState(false);
     const [isPresetsDropdownOpen, setIsPresetsDropdownOpen] = useState(false);
@@ -191,8 +193,7 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = React
         { label: 'Objeto (Interior)', value: 'object_interior' },
         { label: 'Objeto (Exterior)', value: 'object_exterior' },
         { label: 'Fotografía de Estudio', value: 'studio' },
-        { label: 'Automotriz', value: 'automotive' },
-        { label: 'Integración Objetos', value: 'object_integration' }
+        { label: 'Automotriz', value: 'automotive' }
     ];
     const renderStyleOptions = [
         { label: 'Fotorealista', value: 'photorealistic' },
@@ -397,14 +398,14 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = React
                                 {previewBackground ? (
                                     <img src={previewBackground} className="w-full h-full object-cover" />
                                 ) : <div className="text-[9px] text-theme-text-tertiary flex items-center justify-center h-full text-center p-2">Sin Fondo<br />(Añade imagen al canvas)</div>}
-                                <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-[8px] text-white p-1 text-center font-bold">FONDO (Contexto)</div>
+                                <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-[8px] text-white p-1 text-center font-bold">Fondo Sketch</div>
                             </div>
                             {/* Sketch Preview */}
                             <div className="aspect-square bg-black/20 rounded border border-theme-bg-tertiary relative overflow-hidden group">
                                 {previewComposite ? (
                                     <img src={previewComposite} className="w-full h-full object-cover" />
                                 ) : <div className="text-[9px] text-theme-text-tertiary flex items-center justify-center h-full text-center p-2">Sin Objeto<br />(Dibuja algo)</div>}
-                                <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-[8px] text-white p-1 text-center font-bold">OBJETO (Sketch)</div>
+                                <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-[8px] text-white p-1 text-center font-bold">Composite</div>
                             </div>
                         </div>
                         <p className="text-[9px] text-theme-text-tertiary italic">

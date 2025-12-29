@@ -191,7 +191,17 @@ export function useLibrary(user: User | null) {
 
     const prepareItemForEditing = useCallback(async (id: string) => {
         const item = libraryItems.find(i => i.id === id);
-        if (!item || item.type !== 'image' || !item.dataUrl) return;
+        if (!item) {
+            console.error("Item not found in library:", id);
+            return;
+        }
+        if (item.type !== 'image') {
+            return;
+        }
+        if (!item.dataUrl) {
+            alert("Error: La imagen no tiene una URL válida. Intenta recargar la página.");
+            return;
+        }
 
         try {
             // Prefer original image if available (allows reset)
@@ -205,6 +215,9 @@ export function useLibrary(user: User | null) {
             }
 
             const response = await fetch(urlToLoad);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+            }
             const blob = await response.blob();
             const reader = new FileReader();
             reader.onloadend = () => {
@@ -214,7 +227,7 @@ export function useLibrary(user: User | null) {
             reader.readAsDataURL(blob);
         } catch (error) {
             console.error("Error preparing image for editing:", error);
-            alert("Could not load image for editing.");
+            alert(`No se pudo cargar la imagen para editar: ${error instanceof Error ? error.message : String(error)}`);
         }
     }, [libraryItems]);
 

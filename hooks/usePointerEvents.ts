@@ -1219,12 +1219,20 @@ export function usePointerEvents({
                             }
                         };
 
-                        if (corners.length >= 4) {
-                            drawLine(0, 1); drawLine(1, 2); drawLine(2, 3); drawLine(3, 0);
-                        }
-                        if (corners.length === 8) {
-                            drawLine(4, 5); drawLine(5, 6); drawLine(6, 7); drawLine(7, 4);
-                            drawLine(0, 4); drawLine(1, 5); drawLine(2, 6); drawLine(3, 7);
+                        if (isSolidBox && corners.length === 8) {
+                            const visibleEdges = getVisibleBoxEdges(corners);
+                            visibleEdges.forEach(([start, end]) => {
+                                previewCtx.moveTo(start.x, start.y);
+                                previewCtx.lineTo(end.x, end.y);
+                            });
+                        } else {
+                            if (corners.length >= 4) {
+                                drawLine(0, 1); drawLine(1, 2); drawLine(2, 3); drawLine(3, 0);
+                            }
+                            if (corners.length === 8) {
+                                drawLine(4, 5); drawLine(5, 6); drawLine(6, 7); drawLine(7, 4);
+                                drawLine(0, 4); drawLine(1, 5); drawLine(2, 6); drawLine(3, 7);
+                            }
                         }
                         previewCtx.stroke();
                     }
@@ -1533,7 +1541,7 @@ export function usePointerEvents({
         setCropRect, setTransformState, snapPointToGrid, getMinZoom, MAX_ZOOM,
         isAspectRatioLocked, isAngleSnapEnabled, angleSnapValue, isDrawingTool, activeGuide,
         rulerGuides, isOrthogonalVisible, isPerspectiveStrokeLockEnabled, perspectiveVPs, onDrawCommit, mirrorGuides,
-        strokeModifier, getBrushForTool
+        strokeModifier, getBrushForTool, isSolidBox
     ]);
 
     const onPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -1584,7 +1592,8 @@ export function usePointerEvents({
             const brush = getBrushForTool(tool);
 
             const finalPoint = snapPointToGrid(getCanvasPoint(e.nativeEvent, viewTransform, uiCanvasRef.current!) as Point);
-            const pressure = (e.pointerType === 'pen') ? e.pressure : 1.0;
+            const isPressureSensitive = strokeMode === 'freehand' && isPressureSensitivityEnabled;
+            const pressure = (isPressureSensitive && e.pointerType === 'pen') ? e.pressure : 1.0;
             const finalPointWithPressure = { ...finalPoint, pressure };
             const finalPoints = [...strokeState.points, finalPointWithPressure];
 

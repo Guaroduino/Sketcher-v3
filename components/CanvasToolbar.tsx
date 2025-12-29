@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Tool, Guide, TransformState, GridGuide, GridType, ScaleUnit, StrokeMode, OrthogonalGuide } from '../types';
-import { HandIcon, ZoomInIcon, ZoomOutIcon, UndoIcon, RedoIcon, TrashIcon, CheckIcon, XIcon, GridIcon, SnapIcon, IsometricIcon, MaximizeIcon, PerspectiveIcon, UploadIcon, PasteIcon } from './icons';
+import { HandIcon, ZoomInIcon, ZoomOutIcon, UndoIcon, RedoIcon, TrashIcon, CheckIcon, XIcon, GridIcon, SnapIcon, IsometricIcon, MaximizeIcon, PerspectiveIcon, UploadIcon, PasteIcon, CubeIcon } from './icons';
 
 interface CanvasToolbarProps {
   tool: Tool;
@@ -66,7 +66,8 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = React.memo(({
   onImport,
   hasClipboardContent,
   gridGuide, onSetGridSpacing,
-  activeGuide, isPerspectiveStrokeLockEnabled, onSetIsPerspectiveStrokeLockEnabled
+  activeGuide, isPerspectiveStrokeLockEnabled, onSetIsPerspectiveStrokeLockEnabled,
+  strokeMode, isSolidBox, setIsSolidBox
 }) => {
   const [gridSpacing, setGridSpacing] = useState('50');
   const [isGridSettingsOpen, setIsGridSettingsOpen] = useState(false);
@@ -169,6 +170,20 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = React.memo(({
               <PerspectiveIcon className="w-5 h-5" />
             </button>
             <div className="w-px h-6 bg-theme-bg-tertiary" />
+
+            {/* 3D Box Toggle - Only visible when in Parallelepiped mode */}
+            {strokeMode === 'parallelepiped' && (
+              <>
+                <button
+                  onClick={() => setIsSolidBox(!isSolidBox)}
+                  className={`p-2 rounded-md transition-colors ${isSolidBox ? 'bg-theme-accent-primary text-white' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                  title={isSolidBox ? "Mostrar líneas traseras" : "Ocultar líneas traseras"}
+                >
+                  <CubeIcon className="w-5 h-5" />
+                </button>
+                <div className="w-px h-6 bg-theme-bg-tertiary" />
+              </>
+            )}
 
             {/* 5. Clear & Import */}
             <div className="flex items-center gap-1">

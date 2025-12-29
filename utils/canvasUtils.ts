@@ -595,19 +595,45 @@ export const getVisibleBoxEdges = (corners: Point[]): Point[][] => {
     const negValid = negFaces.length > 0 && negFaces.length <= 3 && isValidSet(negFaces);
     const posValid = posFaces.length > 0 && posFaces.length <= 3 && isValidSet(posFaces);
 
+    const getSetArea = (faces: number[][]) => faces.reduce((sum, indices) => sum + Math.abs(getSignedArea(indices)), 0);
+
     if (negValid && !posValid) {
         visibleIndices = negFaces;
     } else if (posValid && !negValid) {
         visibleIndices = posFaces;
     } else if (negValid && posValid) {
-        // Both valid? This is rare. Pick the one with larger total projected area?
-        // Or default to negFaces as standard winding.
-        visibleIndices = negFaces;
+        // Both valid. Use Perspective Heuristic:
+        // The single largest projected face is always the "Front" face (closest to camera).
+        // Find the face with the absolute maximum area among ALL candidate faces.
+
+        let maxFaceArea = -1;
+        let bestFaceIndex = -1;
+
+        // Helper to calculate area
+        const getArea = (indices: number[]) => Math.abs(getSignedArea(indices));
+
+        candidateFaces.forEach((faceIndices, index) => {
+            const area = getArea(faceIndices);
+            if (area > maxFaceArea) {
+                maxFaceArea = area;
+                bestFaceIndex = index;
+            }
+        });
+
+        // Determine which set contains the best face (by index in candidateFaces)
+        // negFaces is a list of index-arrays. We need to check if the specific indices of bestFace are in it.
+        // Actually, bestFaceIndex is the index in `candidateFaces`.
+        // negFaces contains arrays from candidateFaces.
+
+        const bestFaceIndices = candidateFaces[bestFaceIndex];
+        const isBestInNeg = negFaces.includes(bestFaceIndices);
+
+        visibleIndices = isBestInNeg ? negFaces : posFaces;
     } else {
-        // Neither valid? Fallback or show all (wireframe). 
-        // Showing all might be messy, let's try to show at least something.
-        // If the box is extremely distorted, maybe just show negFaces.
-        visibleIndices = negFaces;
+        // Fallback
+        if (negFaces.length > 0 && negFaces.length <= 3) visibleIndices = negFaces;
+        else if (posFaces.length > 0 && posFaces.length <= 3) visibleIndices = posFaces;
+        else visibleIndices = negFaces;
     }
 
     const edges: Point[][] = [];
