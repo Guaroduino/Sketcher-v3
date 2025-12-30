@@ -7,6 +7,8 @@ const initialBrushSettings: BrushSettings = {
     opacity: 1,
     color: '#000000',
     fillColor: 'transparent', // Default fill transparent
+    hardness: 100,
+    softnessCurve: 'linear',
     // FIX: Corrected lineCap to be a valid value 'round' instead of an empty/truncated string.
     lineCap: 'round',
     lineJoin: 'round',
@@ -20,6 +22,7 @@ const initialEraserSettings: EraserSettings = {
     size: 50,
     opacity: 1,
     hardness: 100,
+    softnessCurve: 'linear',
     tipShape: 'round',
 };
 
@@ -72,6 +75,7 @@ const initialAdvancedMarkerSettings: AdvancedMarkerSettings = {
     tipShape: 'circle',
     tipAngle: 0,
     hardness: 80,
+    softnessCurve: 'linear',
     flow: 5,
     wetness: 10,
     spacing: 25,

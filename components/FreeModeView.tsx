@@ -460,7 +460,7 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
                                         ))}
                                     </div>
                                 )}
-                                {msg.content && <p className="whitespace-pre-wrap">{msg.content}</p>}
+                                {msg.content && <p className="whitespace-pre-wrap select-text">{msg.content}</p>}
                             </div>
                             <span className="text-[10px] text-theme-text-secondary mt-1 px-1">
                                 {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

@@ -68,12 +68,92 @@ export class PencilBrush extends BaseBrush {
         }
     }
 
+    private hexToRgba(hex: string, alpha: number) {
+        // Ensure hex is valid
+        if (!hex || typeof hex !== 'string') return `rgba(0,0,0,${alpha})`;
+
+        let c: any;
+        if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
+            c = hex.substring(1).split('');
+            if (c.length === 3) {
+                c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+            }
+            c = '0x' + c.join('');
+            return 'rgba(' + [(c >> 16) & 255, (c >> 8) & 255, c & 255].join(',') + ',' + alpha + ')';
+        }
+
+        // Handle basic color names causing issues if passed directly (though UI mostly sends hex)
+        // Or handle cases where regex failed due to casing or small typos.
+        // Fallback: Use a canvas to parse strict colors?
+        // Actually, for Gradient Stops, we NEED the explicit R,G,B values to avoid interpolating to (0,0,0,0).
+        // If hex is invalid, we might default to black, which causes the fringing.
+
+        // Simple manual conversion map for common name based fallbacks if needed, 
+        // but let's assume valid Hex/RGB inputs for now or fix upstream.
+        // The most critical part is returning `rgba(r,g,b, alpha)` and NOT potentially black if parsing fails,
+        // although if parsing fails we probably want black? 
+        // The issue 'blends with black' happens when we fade from Color(r,g,b,1) to Transparent(0,0,0,0).
+        // Browser gradients interpolate r,g,b,a separately.
+        // So (255,0,0,1) -> (0,0,0,0) middle is (127, 0, 0, 0.5) -> Dark Red. Correct.
+        // Wait, (255,0,0,1) -> (255,0,0,0) middle is (255, 0, 0, 0.5) -> Light Red (Pinkish transparent). Correct.
+        // The PREVIOUS implementation returned `rgba(r,g,b,alpha)` CORRECTLY for hex.
+        // BUT if it fell back to `return hex` (line 81), that's just "#FF0000".
+        // And `hexToRgba(color, 0)` is used for the transparent stop.
+        // If `hexToRgba` failed regex, it returned valid HEX string? No, line 81 returned input `hex`.
+        // If input `hex` was passed as 2nd arg to gradient, it's opaque.
+        // But the code called `this.hexToRgba(color, 0)`.
+        // If `color` was not matched by regex (e.g. "red" or mismatched hex), it returned "red".
+        // Gradient stop 1: "red" (alpha 1 implicitly).
+        // This means it didn't fade out.
+        // BUT the user says "se mezcla con negro" (mixes with black).
+        // This implies it IS fading, but to black.
+        // This usually happens if the stop is `rgba(0,0,0,0)`.
+        // So `hexToRgba` MUST ensure it keeps the r,g,b of the start color even if alpha is 0.
+
+        return `rgba(0,0,0,${alpha})`; // Fallback
+    }
+
     private drawDab(ctx: CanvasRenderingContext2D, p: Point, pressure: number) {
-        const { size, pressureControl } = this.settings;
+        const { size, pressureControl, hardness, color } = this.settings;
         const width = (pressure && pressureControl.size) ? pressure * size : size;
+
         if (width > 0.5) {
             ctx.beginPath();
             ctx.arc(p.x, p.y, width / 2, 0, Math.PI * 2);
+
+            if (hardness < 100) {
+                const gradient = ctx.createRadialGradient(p.x, p.y, (width / 2) * (hardness / 100), p.x, p.y, width / 2);
+                const curve = this.settings.softnessCurve || 'linear';
+
+                // Get transparent version using improved parser
+                const transparentColor = this.hexToRgba(color, 0);
+
+                try {
+                    if (curve === 'linear') {
+                        // Linear falloff (Standard Cone)
+                        gradient.addColorStop(0, color);
+                        gradient.addColorStop(1, transparentColor);
+                    } else if (curve === 'smooth') {
+                        // Gaussian-like: Natural soft falloff
+                        gradient.addColorStop(0, color);
+                        gradient.addColorStop(0.4, this.hexToRgba(color, 0.6));
+                        gradient.addColorStop(0.8, this.hexToRgba(color, 0.1));
+                        gradient.addColorStop(1, transparentColor);
+                    } else if (curve === 'bell') {
+                        // Hyper-Soft (Spike): Rapid falloff for "much much softer" feel
+                        gradient.addColorStop(0, color);
+                        gradient.addColorStop(0.15, this.hexToRgba(color, 0.5));
+                        gradient.addColorStop(0.4, this.hexToRgba(color, 0.1));
+                        gradient.addColorStop(1, transparentColor);
+                    }
+                    ctx.fillStyle = gradient;
+                } catch (e) {
+                    ctx.fillStyle = color;
+                }
+            } else {
+                ctx.fillStyle = color;
+            }
+
             ctx.fill();
         }
     }

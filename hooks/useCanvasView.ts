@@ -13,8 +13,44 @@ export function useCanvasView(
     const [viewTransform, setViewTransform] = useState<ViewTransform>({ zoom: window.innerWidth < 640 ? 0.6 : 1, pan: { x: 0, y: 0 } });
 
     const getMinZoom = useCallback(() => {
+        // Return a fixed small value to allow "unlimited" zoom out
+        return 0.05;
+    }, []);
+
+    useEffect(() => {
+        let timeoutId: number;
+
+        const updateSizeAndCenter = () => {
+            if (mainAreaRef.current) {
+                const viewWidth = mainAreaRef.current.offsetWidth;
+                const viewHeight = mainAreaRef.current.offsetHeight;
+
+                setViewTransform(v => {
+                    const newPanX = (viewWidth - canvasSize.width * v.zoom) / 2;
+                    const newPanY = (viewHeight - canvasSize.height * v.zoom) / 2;
+                    return { zoom: v.zoom, pan: { x: newPanX, y: newPanY } };
+                });
+            }
+        };
+
+        const debouncedUpdate = () => {
+            window.clearTimeout(timeoutId);
+            timeoutId = window.setTimeout(updateSizeAndCenter, 100);
+        };
+
+        window.addEventListener('resize', debouncedUpdate);
+        // Initial call
+        updateSizeAndCenter();
+
+        return () => {
+            window.removeEventListener('resize', debouncedUpdate);
+            window.clearTimeout(timeoutId);
+        };
+    }, [canvasSize.width, canvasSize.height, mainAreaRef]);
+
+    const calculateFitZoom = useCallback(() => {
         if (!mainAreaRef.current || !canvasSize.width || !canvasSize.height) {
-            return 0.01;
+            return 1;
         }
         const viewWidth = mainAreaRef.current.offsetWidth;
         const viewHeight = mainAreaRef.current.offsetHeight;
@@ -26,28 +62,8 @@ export function useCanvasView(
 
         const scaleX = viewWidth / targetWidth;
         const scaleY = viewHeight / targetHeight;
-        return Math.max(0.01, Math.min(scaleX, scaleY) * padding);
+        return Math.min(scaleX, scaleY) * padding;
     }, [mainAreaRef, canvasSize.width, canvasSize.height, contentRect]);
-
-    useEffect(() => {
-        const updateSizeAndCenter = () => {
-            if (mainAreaRef.current) {
-                const viewWidth = mainAreaRef.current.offsetWidth;
-                const viewHeight = mainAreaRef.current.offsetHeight;
-
-                setViewTransform(v => {
-                    const newPanX = (viewWidth - canvasSize.width * v.zoom) / 2;
-                    const newPanY = (viewHeight - canvasSize.height * v.zoom) / 2;
-                    // By explicitly constructing the object, we ensure `pan` is always
-                    // present, fixing the race condition where `v` could be a partial state.
-                    return { zoom: v.zoom, pan: { x: newPanX, y: newPanY } };
-                });
-            }
-        };
-        window.addEventListener('resize', updateSizeAndCenter);
-        updateSizeAndCenter();
-        return () => window.removeEventListener('resize', updateSizeAndCenter);
-    }, [canvasSize.width, canvasSize.height, mainAreaRef]);
 
     const handleZoomExtents = useCallback(() => {
         if (!mainAreaRef.current || canvasSize.width === 0) return;
@@ -55,7 +71,7 @@ export function useCanvasView(
         const viewWidth = mainAreaRef.current.offsetWidth;
         const viewHeight = mainAreaRef.current.offsetHeight;
 
-        const newZoom = getMinZoom();
+        const newZoom = calculateFitZoom();
 
         // If contentRect is available, we center on it. 
         // Otherwise we center on the full canvas.
@@ -68,7 +84,7 @@ export function useCanvasView(
         const newPanY = (viewHeight - targetHeight * newZoom) / 2 - targetY * newZoom;
 
         setViewTransform({ zoom: newZoom, pan: { x: newPanX, y: newPanY } });
-    }, [canvasSize.width, canvasSize.height, mainAreaRef, getMinZoom, contentRect]);
+    }, [canvasSize.width, canvasSize.height, mainAreaRef, calculateFitZoom, contentRect]);
 
     const handleZoom = useCallback((zoomFactor: number) => {
         if (!mainAreaRef.current) return;

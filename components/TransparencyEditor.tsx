@@ -22,11 +22,11 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
 
     const [activeTool, setActiveTool] = useState<Tool>('picker');
     const [viewTransform, setViewTransform] = useState({ zoom: 1, pan: { x: 0, y: 0 } });
-    const [tolerance, setTolerance] = useState(30);
+    const [tolerance, setTolerance] = useState(2);
     const [eraserSettings, setEraserSettings] = useState({ size: 50 });
-    const [scaleFactor, setScaleFactor] = useState(5); // Always in px/mm
+    const [scaleFactor, setScaleFactor] = useState(1); // Always in px/mm
     const [scaleUnit, setScaleUnit] = useState<ScaleUnit>('mm');
-    const [scaleInputValue, setScaleInputValue] = useState('5');
+    const [scaleInputValue, setScaleInputValue] = useState('1');
     const [imageElement, setImageElement] = useState<HTMLImageElement | null>(null);
 
     const [history, setHistory] = useState<HistoryState[]>([]);
@@ -51,12 +51,12 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
 
     useEffect(() => {
         if (item) {
-            const initialScaleFactor = item.scaleFactor || 5;
+            const initialScaleFactor = item.scaleFactor || 1;
             const initialScaleUnit = item.scaleUnit || 'mm';
             setScaleFactor(initialScaleFactor);
             setScaleUnit(initialScaleUnit);
             setScaleInputValue(String(Number((initialScaleFactor * unitMultipliers[initialScaleUnit]).toFixed(2))));
-            setTolerance(item.tolerance !== undefined ? item.tolerance : 30);
+            setTolerance(item.tolerance !== undefined ? item.tolerance : 2);
             const img = new Image();
             img.crossOrigin = "anonymous";
             img.onload = () => {
@@ -442,7 +442,7 @@ export const TransparencyEditor: React.FC<TransparencyEditorProps> = ({ item, on
 
     return (
         <div className="fixed inset-0 bg-black/75 z-40 flex items-center justify-center p-4">
-            <div className="bg-theme-bg-secondary rounded-lg shadow-xl w-full h-full max-w-6xl max-h-[90vh] flex flex-col">
+            <div className="bg-theme-bg-secondary rounded-lg shadow-xl w-full h-full max-w-4xl max-h-[85vh] flex flex-col">
                 <div className="flex-shrink-0 flex items-center justify-between p-2 border-b border-theme-bg-tertiary">
                     <h2 className="text-lg font-bold">Editar Transparencia: {item.name}</h2>
                     <div className="flex items-center gap-4">

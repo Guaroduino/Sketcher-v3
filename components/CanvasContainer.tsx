@@ -436,22 +436,30 @@ export const CanvasContainerComponent: React.FC<CanvasContainerPropsWithRef> = (
         const canvases = [mainCanvasRef.current, previewCanvasRef.current, previewCursorCanvasRef.current, uiCanvasRef.current, guideCanvasRef.current, selectionCanvasRef.current];
         if (!container || canvases.some(c => !c)) return;
 
+        let timeoutId: number;
+
         const resizeObserver = new ResizeObserver(entries => {
-            const entry = entries[0];
-            const { width, height } = entry.contentRect;
-            canvases.forEach(canvas => {
-                if (canvas) {
-                    canvas.width = width;
-                    canvas.height = height;
-                }
-            });
-            redrawMainCanvas();
-            redrawGuides();
-            redrawUI();
+            window.clearTimeout(timeoutId);
+            timeoutId = window.setTimeout(() => {
+                const entry = entries[0];
+                const { width, height } = entry.contentRect;
+                canvases.forEach(canvas => {
+                    if (canvas) {
+                        canvas.width = width;
+                        canvas.height = height;
+                    }
+                });
+                redrawMainCanvas();
+                redrawGuides();
+                redrawUI();
+            }, 100);
         });
 
         resizeObserver.observe(container);
-        return () => resizeObserver.disconnect();
+        return () => {
+            resizeObserver.disconnect();
+            window.clearTimeout(timeoutId);
+        };
     }, [redrawMainCanvas, redrawGuides, redrawUI]);
 
     useEffect(() => {

@@ -15,24 +15,24 @@ export class EraserBrush extends BaseBrush {
 
     protected updatePreview(context: BrushContext): void {
         const { previewCtx, mainCtx, viewTransform } = context;
-        
+
         // 1. Clear the entire preview canvas (in screen space)
         this.clearPreview(context);
-    
+
         // 2. Set the transform for the preview to match the main view
         previewCtx.save();
         previewCtx.setTransform(viewTransform.zoom, 0, 0, viewTransform.zoom, viewTransform.pan.x, viewTransform.pan.y);
-    
+
         // 3. Draw the active layer's current content, transformed into the view
         previewCtx.drawImage(mainCtx.canvas, 0, 0);
-    
+
         // 4. Draw the erase stroke on top of this, which will erase it
         this.drawWithMirroring(previewCtx, this.points, context);
-    
+
         // 5. Restore context
         previewCtx.restore();
     }
-    
+
     protected drawStroke(ctx: CanvasRenderingContext2D, points: Point[], context: BrushContext): void {
         ctx.globalCompositeOperation = 'destination-out';
         const { size, hardness, tipShape, opacity } = this.settings;
@@ -53,8 +53,21 @@ export class EraserBrush extends BaseBrush {
                 ctx.fillStyle = `rgba(0,0,0,${opacity})`;
             } else { // Soft eraser uses a radial gradient for feathered edges
                 const gradient = ctx.createRadialGradient(p.x, p.y, (size / 2) * (hardness / 100), p.x, p.y, size / 2);
-                gradient.addColorStop(0, `rgba(0,0,0,${opacity})`);
-                gradient.addColorStop(1, 'rgba(0,0,0,0)');
+                const curve = this.settings.softnessCurve || 'linear';
+
+                if (curve === 'linear') {
+                    gradient.addColorStop(0, `rgba(0,0,0,${opacity})`);
+                    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+                } else if (curve === 'smooth') {
+                    gradient.addColorStop(0, `rgba(0,0,0,${opacity})`);
+                    gradient.addColorStop(0.5, `rgba(0,0,0,${opacity * 0.5})`);
+                    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+                } else if (curve === 'bell') {
+                    gradient.addColorStop(0, `rgba(0,0,0,${opacity})`);
+                    gradient.addColorStop(0.2, `rgba(0,0,0,${opacity})`);
+                    gradient.addColorStop(0.8, `rgba(0,0,0,${opacity * 0.1})`);
+                    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+                }
                 ctx.fillStyle = gradient;
             }
             ctx.fill();
@@ -71,10 +84,10 @@ export class EraserBrush extends BaseBrush {
             const point = points[i];
             const dist = Math.hypot(point.x - lastPoint.x, point.y - lastPoint.y);
             const angle = Math.atan2(point.y - lastPoint.y, point.x - lastPoint.x);
-            
+
             // Adjust spacing based on size to ensure a smooth line
-            const spacing = Math.max(1, size * 0.1); 
-            
+            const spacing = Math.max(1, size * 0.1);
+
             for (let d = 0; d < dist; d += spacing) {
                 const x = lastPoint.x + Math.cos(angle) * d;
                 const y = lastPoint.y + Math.sin(angle) * d;

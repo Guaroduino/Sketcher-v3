@@ -369,14 +369,18 @@ function appReducer(state: AppState, action: Action): AppState {
             if (itemIndex === -1) return state;
 
             const originalItem = state.objects[itemIndex];
-            if (originalItem.type === 'object' && originalItem.isBackground) return state;
+            // Allow copying background, but convert to regular object
+            // if (originalItem.type === 'object' && originalItem.isBackground) return state;
 
             let newItem: CanvasItem;
 
             const newSketchItem: SketchObject = {
                 ...originalItem,
                 id: `${originalItem.type}-${Date.now()}`,
-                name: `Copia de ${originalItem.name}`,
+                name: originalItem.isBackground ? `Copia de Fondo` : `Copia de ${originalItem.name}`,
+                isBackground: false, // Ensure copy is not background
+                backgroundImage: undefined, // Remove background semantics
+                color: undefined,
             };
             if (originalItem.canvas) {
                 const { canvas, context } = createNewCanvas(originalItem.canvas.width, originalItem.canvas.height);

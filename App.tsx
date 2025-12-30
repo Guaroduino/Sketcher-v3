@@ -1280,39 +1280,41 @@ export function App() {
     }, [tool, toolSettings]);
 
     const handleSelectColor = useCallback((color: string) => {
-        switch (tool) {
-            case 'brush': toolSettings.setBrushSettings(s => ({ ...s, color })); break;
-            // FIX: Renamed 'solid-marker' to 'simple-marker' and using setSimpleMarkerSettings.
-            case 'simple-marker': toolSettings.setSimpleMarkerSettings(s => ({ ...s, color })); break;
-            case 'natural-marker': toolSettings.setNaturalMarkerSettings(s => ({ ...s, color })); break;
-            case 'airbrush': toolSettings.setAirbrushSettings(s => ({ ...s, color })); break;
-            case 'fx-brush': toolSettings.setFxBrushSettings(s => ({ ...s, color })); break;
-        }
-    }, [tool, toolSettings]);
+        // Global Color Sync: Update ALL drawing tools
+        toolSettings.setBrushSettings(s => ({ ...s, color }));
+        toolSettings.setSimpleMarkerSettings(s => ({ ...s, color }));
+        toolSettings.setNaturalMarkerSettings(s => ({ ...s, color }));
+        toolSettings.setAirbrushSettings(s => ({ ...s, color }));
+        toolSettings.setFxBrushSettings(s => ({ ...s, color }));
+        toolSettings.setAdvancedMarkerSettings(s => ({ ...s, color }));
+        toolSettings.setWatercolorSettings(s => ({ ...s, color }));
+        toolSettings.setTextSettings(s => ({ ...s, color }));
+    }, [toolSettings]);
 
     const handleSelectSize = useCallback((size: number) => {
         switch (tool) {
             case 'brush': toolSettings.setBrushSettings(s => ({ ...s, size })); break;
             case 'eraser': toolSettings.setEraserSettings(s => ({ ...s, size })); break;
-            // FIX: Renamed 'solid-marker' to 'simple-marker' and using setSimpleMarkerSettings.
             case 'simple-marker': toolSettings.setSimpleMarkerSettings(s => ({ ...s, size })); break;
             case 'natural-marker': toolSettings.setNaturalMarkerSettings(s => ({ ...s, size })); break;
             case 'airbrush': toolSettings.setAirbrushSettings(s => ({ ...s, size })); break;
             case 'fx-brush': toolSettings.setFxBrushSettings(s => ({ ...s, size })); break;
+            case 'advanced-marker': toolSettings.setAdvancedMarkerSettings(s => ({ ...s, size })); break;
+            case 'watercolor': toolSettings.setWatercolorSettings(s => ({ ...s, size })); break;
+            case 'text': toolSettings.setTextSettings(s => ({ ...s, size })); break;
         }
     }, [tool, toolSettings]);
 
     const handleSelectFillColor = useCallback((color: string) => {
-        switch (tool) {
-            case 'brush': toolSettings.setBrushSettings(s => ({ ...s, fillColor: color })); break;
-            case 'simple-marker': toolSettings.setSimpleMarkerSettings(s => ({ ...s, fillColor: color })); break;
-            case 'natural-marker': toolSettings.setNaturalMarkerSettings(s => ({ ...s, fillColor: color })); break;
-            case 'airbrush': toolSettings.setAirbrushSettings(s => ({ ...s, fillColor: color })); break;
-            case 'fx-brush': toolSettings.setFxBrushSettings(s => ({ ...s, fillColor: color })); break;
-            case 'advanced-marker': toolSettings.setAdvancedMarkerSettings(s => ({ ...s, fillColor: color })); break;
-            case 'watercolor': toolSettings.setWatercolorSettings(s => ({ ...s, fillColor: color })); break;
-        }
-    }, [tool, toolSettings]);
+        // Global Fill Color Sync: Update ALL relevant tools
+        toolSettings.setBrushSettings(s => ({ ...s, fillColor: color }));
+        toolSettings.setSimpleMarkerSettings(s => ({ ...s, fillColor: color }));
+        toolSettings.setNaturalMarkerSettings(s => ({ ...s, fillColor: color }));
+        toolSettings.setAirbrushSettings(s => ({ ...s, fillColor: color }));
+        toolSettings.setFxBrushSettings(s => ({ ...s, fillColor: color }));
+        toolSettings.setAdvancedMarkerSettings(s => ({ ...s, fillColor: color }));
+        toolSettings.setWatercolorSettings(s => ({ ...s, fillColor: color }));
+    }, [toolSettings]);
 
     const handleSetScaleFactor = useCallback((factor: number) => dispatch({ type: 'SET_SCALE_FACTOR', payload: factor }), [dispatch]);
     const handleSetScaleUnit = useCallback((unit: ScaleUnit) => dispatch({ type: 'SET_SCALE_UNIT', payload: unit }), [dispatch]);
@@ -1841,14 +1843,35 @@ export function App() {
         if (!selection || !activeItem || activeItem.type !== 'object' || !activeItem.context) return;
         const { boundingBox, path } = selection;
         const ctx = activeItem.context;
+
+        // Round dimensions and position to integer values to prevent sub-pixel interpolation (blur)
+        const x = Math.round(boundingBox.x);
+        const y = Math.round(boundingBox.y);
+        const width = Math.round(boundingBox.width);
+        const height = Math.round(boundingBox.height);
+
+        if (width <= 0 || height <= 0) return;
+
         const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = boundingBox.width; tempCanvas.height = boundingBox.height;
+        tempCanvas.width = width;
+        tempCanvas.height = height;
         const tempCtx = tempCanvas.getContext('2d');
         if (!tempCtx) return;
-        tempCtx.drawImage(ctx.canvas, boundingBox.x, boundingBox.y, boundingBox.width, boundingBox.height, 0, 0, boundingBox.width, boundingBox.height);
-        tempCtx.globalCompositeOperation = 'destination-in'; tempCtx.save(); tempCtx.translate(-boundingBox.x, -boundingBox.y); tempCtx.fillStyle = 'black'; tempCtx.fill(path); tempCtx.restore();
-        const imageData = tempCtx.getImageData(0, 0, boundingBox.width, boundingBox.height);
-        setClipboard({ imageData, sourceRect: boundingBox });
+
+        // Disable smoothing for exact pixel copy
+        tempCtx.imageSmoothingEnabled = false;
+
+        tempCtx.drawImage(ctx.canvas, x, y, width, height, 0, 0, width, height);
+        tempCtx.globalCompositeOperation = 'destination-in';
+        tempCtx.save();
+        tempCtx.translate(-x, -y);
+        tempCtx.fillStyle = 'black';
+        tempCtx.fill(path);
+        tempCtx.restore();
+
+        const imageData = tempCtx.getImageData(0, 0, width, height);
+        // Store the rounded source rect so paste can place it exactly back if needed
+        setClipboard({ imageData, sourceRect: { ...boundingBox, x, y, width, height } });
     }, [selection, activeItem]);
 
     const handleCutSelection = useCallback(() => { handleCopySelection(); handleDeleteSelection(); }, [handleCopySelection, handleDeleteSelection]);
@@ -1948,7 +1971,8 @@ export function App() {
 
     const visualList = useMemo(() => {
         const getVisibleTree = (parentId: string | null = null): CanvasItem[] => {
-            return objects.filter(item => item.parentId === parentId && (item.type !== 'object' || !item.isBackground)).flatMap(child => [child, ...(child.type === 'group' ? getVisibleTree(child.id) : [])]);
+            // Allow background to be visible
+            return objects.filter(item => item.parentId === parentId).flatMap(child => [child, ...(child.type === 'group' ? getVisibleTree(child.id) : [])]);
         };
         const list = getVisibleTree();
 
@@ -2260,6 +2284,8 @@ export function App() {
             // Specific Tool Settings
             brushSettings={toolSettings.brushSettings}
             setBrushSettings={toolSettings.setBrushSettings}
+            eraserSettings={toolSettings.eraserSettings}
+            setEraserSettings={toolSettings.setEraserSettings}
             simpleMarkerSettings={toolSettings.simpleMarkerSettings}
             setSimpleMarkerSettings={toolSettings.setSimpleMarkerSettings}
             advancedMarkerSettings={toolSettings.advancedMarkerSettings}
@@ -2993,6 +3019,7 @@ export function App() {
                             scaleUnit={currentState.scaleUnit} onPaste={handlePaste} hasClipboardContent={!!clipboard}
                             strokeSmoothing={strokeSmoothing} setStrokeSmoothing={setStrokeSmoothing}
                             strokeMode={strokeMode} isSolidBox={isSolidBox} setIsSolidBox={setIsSolidBox}
+                            zoomLevel={canvasView.viewTransform.zoom}
                         />
                     </div>
 

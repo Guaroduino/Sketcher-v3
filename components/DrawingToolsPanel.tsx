@@ -44,6 +44,8 @@ interface DrawingToolsPanelProps {
     // Specific Tool Settings (for popover configuration)
     brushSettings: BrushSettings;
     setBrushSettings: (settings: React.SetStateAction<BrushSettings>) => void;
+    eraserSettings: EraserSettings;
+    setEraserSettings: (settings: React.SetStateAction<EraserSettings>) => void;
     simpleMarkerSettings: SimpleMarkerSettings;
     setSimpleMarkerSettings: (settings: React.SetStateAction<SimpleMarkerSettings>) => void;
     advancedMarkerSettings: AdvancedMarkerSettings;
@@ -117,6 +119,7 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
 
     // Specific Tool Settings
     brushSettings: _brushSettings, setBrushSettings, // Rename to avoid conflict with individual props if any, though we mostly use these objects now
+    eraserSettings, setEraserSettings,
     simpleMarkerSettings, setSimpleMarkerSettings,
     advancedMarkerSettings, setAdvancedMarkerSettings,
     naturalMarkerSettings, setNaturalMarkerSettings,
@@ -144,6 +147,67 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
     onOpenCanvasSizeModal, onUpdateBackground, backgroundColor,
     isBackgroundVisible, onToggleBackgroundVisibility
 }) => {
+
+    // Helper Component for Optimized Sliders
+    const ThrottledSlider = ({
+        value,
+        onChange,
+        min,
+        max,
+        label,
+        valueLabel,
+        step = 1
+    }: {
+        value: number;
+        onChange: (val: number) => void;
+        min: number;
+        max: number;
+        label: string;
+        valueLabel: string;
+        step?: number;
+    }) => {
+        const [localValue, setLocalValue] = useState(value);
+        const [isDragging, setIsDragging] = useState(false);
+
+        useEffect(() => {
+            if (!isDragging) {
+                setLocalValue(value);
+            }
+        }, [value, isDragging]);
+
+        const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+            const val = parseFloat(e.target.value);
+            setLocalValue(val);
+        };
+
+        const handleCommit = () => {
+            setIsDragging(false);
+            if (localValue !== value) {
+                onChange(localValue);
+            }
+        };
+
+        return (
+            <div className="flex items-center gap-2">
+                <span className="text-[10px] text-theme-text-secondary w-14">{label}</span>
+                <input
+                    type="range"
+                    min={min}
+                    max={max}
+                    step={step}
+                    value={localValue}
+                    onChange={handleChange}
+                    onPointerDown={() => setIsDragging(true)}
+                    onPointerUp={handleCommit}
+                    onBlur={handleCommit} // Ensure we commit if focus is lost
+                    className="flex-grow h-1 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary"
+                />
+                <span className="text-[10px] text-theme-text-secondary w-8 text-right">
+                    {valueLabel || localValue}
+                </span>
+            </div>
+        );
+    };
 
     const TOOLS = [
         { id: 'select', icon: <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSI1IDkgMiAxMiA1IDE1Ii8+PHBvbHlsaW5lIHBvaW50cz0iOSA1IDEyIDIgMTUgNSIvPjxwb2x5bGluZSBwb2ludHM9IjE1IDE5IDEyIDIyIDkgMTkiLz48cG9seWxpbmUgcG9pbnRzPSIxOSA5IDIyIDEyIDE5IDE1Ii8+PGxpbmUgeDE9IjIiIHkxPSIxMiIgeDI9IjIyIiB5Mj0iMTIiLz48bGluZSB4MT0iMTIiIHkxPSIyIiB4Mj0iMTIiIHkyPSIyMiIvPjwvc3ZnPg==" className="w-5 h-5" />, label: 'Seleccionar' }, // MoveIcon placeholder
@@ -542,33 +606,156 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
 
             {/* Brush Sliders (Compact) */}
             <section className="space-y-2 px-1">
-                <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-theme-text-secondary w-14">Tamaño</span>
-                    <input
-                        type="range" min="1" max="100"
-                        value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                        className="flex-grow h-1 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary"
-                    />
-                    <span className="text-[10px] text-theme-text-secondary w-8 text-right">{brushSize}px</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-theme-text-secondary w-14">Opacidad</span>
-                    <input
-                        type="range" min="0" max="1" step="0.01"
-                        value={brushOpacity} onChange={(e) => setBrushOpacity(parseFloat(e.target.value))}
-                        className="flex-grow h-1 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary"
-                    />
-                    <span className="text-[10px] text-theme-text-secondary w-8 text-right">{Math.round(brushOpacity * 100)}%</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-theme-text-secondary w-14">Suavizado</span>
-                    <input
-                        type="range" min="0" max="1" step="0.05"
-                        value={strokeSmoothing} onChange={(e) => setStrokeSmoothing(parseFloat(e.target.value))}
-                        className="flex-grow h-1 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary"
-                    />
-                    <span className="text-[10px] text-theme-text-secondary w-8 text-right">{Math.round(strokeSmoothing * 100)}%</span>
-                </div>
+                <ThrottledSlider
+                    label="Tamaño"
+                    min={1}
+                    max={100}
+                    value={(() => {
+                        switch (tool) {
+                            case 'brush': return brushSize;
+                            case 'eraser': return eraserSettings.size;
+                            case 'simple-marker': return simpleMarkerSettings.size;
+                            case 'natural-marker': return naturalMarkerSettings.size;
+                            case 'advanced-marker': return advancedMarkerSettings.size;
+                            case 'airbrush': return airbrushSettings.size;
+                            case 'watercolor': return watercolorSettings.size;
+                            default: return brushSize;
+                        }
+                    })()}
+                    valueLabel={(() => {
+                        const val = (() => {
+                            switch (tool) {
+                                case 'brush': return brushSize;
+                                case 'eraser': return eraserSettings.size;
+                                case 'simple-marker': return simpleMarkerSettings.size;
+                                case 'natural-marker': return naturalMarkerSettings.size;
+                                case 'advanced-marker': return advancedMarkerSettings.size;
+                                case 'airbrush': return airbrushSettings.size;
+                                case 'watercolor': return watercolorSettings.size;
+                                default: return brushSize;
+                            }
+                        })();
+                        return `${val}px`;
+                    })()}
+                    onChange={(val) => {
+                        switch (tool) {
+                            case 'brush': setBrushSize(val); break;
+                            case 'eraser': setEraserSettings(s => ({ ...s, size: val })); break;
+                            case 'simple-marker': setSimpleMarkerSettings(s => ({ ...s, size: val })); break;
+                            case 'natural-marker': setNaturalMarkerSettings(s => ({ ...s, size: val })); break;
+                            case 'advanced-marker': setAdvancedMarkerSettings(s => ({ ...s, size: val })); break;
+                            case 'airbrush': setAirbrushSettings(s => ({ ...s, size: val })); break;
+                            case 'watercolor': setWatercolorSettings(s => ({ ...s, size: val })); break;
+                            default: setBrushSize(val); break;
+                        }
+                    }}
+                />
+                <ThrottledSlider
+                    label={(tool === 'airbrush' || tool === 'advanced-marker') ? 'Flujo' : 'Opacidad'}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={(() => {
+                        switch (tool) {
+                            case 'brush': return brushOpacity;
+                            case 'eraser': return eraserSettings.opacity;
+                            case 'simple-marker': return simpleMarkerSettings.opacity;
+                            case 'natural-marker': return naturalMarkerSettings.opacity;
+                            case 'advanced-marker': return (advancedMarkerSettings.flow ?? 100) / 100;
+                            case 'airbrush': return airbrushSettings.flow;
+                            case 'watercolor': return watercolorSettings.opacity;
+                            default: return brushOpacity;
+                        }
+                    })()}
+                    valueLabel={(() => {
+                        const val = (() => {
+                            switch (tool) {
+                                case 'brush': return brushOpacity;
+                                case 'eraser': return eraserSettings.opacity;
+                                case 'simple-marker': return simpleMarkerSettings.opacity;
+                                case 'natural-marker': return naturalMarkerSettings.opacity;
+                                case 'advanced-marker': return (advancedMarkerSettings.flow ?? 100) / 100;
+                                case 'airbrush': return airbrushSettings.flow;
+                                case 'watercolor': return watercolorSettings.opacity;
+                                default: return brushOpacity;
+                            }
+                        })();
+                        return `${Math.round(val * 100)}%`;
+                    })()}
+                    onChange={(val) => {
+                        switch (tool) {
+                            case 'brush': setBrushOpacity(val); break;
+                            case 'eraser': setEraserSettings(s => ({ ...s, opacity: val })); break;
+                            case 'simple-marker': setSimpleMarkerSettings(s => ({ ...s, opacity: val })); break;
+                            case 'natural-marker': setNaturalMarkerSettings(s => ({ ...s, opacity: val })); break;
+                            case 'advanced-marker': setAdvancedMarkerSettings(s => ({ ...s, flow: val * 100 })); break;
+                            case 'airbrush': setAirbrushSettings(s => ({ ...s, flow: val })); break;
+                            case 'watercolor': setWatercolorSettings(s => ({ ...s, opacity: val })); break;
+                            default: setBrushOpacity(val); break;
+                        }
+                    }}
+                />
+                <ThrottledSlider
+                    label="Suavizado"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={strokeSmoothing}
+                    valueLabel={`${Math.round(strokeSmoothing * 100)}%`}
+                    onChange={(val) => setStrokeSmoothing(val)}
+                />
+
+                {/* Softness Slider (Only for supported tools) */}
+                {(tool === 'brush' || tool === 'eraser' || tool === 'advanced-marker') && (
+                    <div className="space-y-2">
+                        <ThrottledSlider
+                            label="Suavidad"
+                            min={0}
+                            max={100}
+                            step={1}
+                            value={
+                                tool === 'eraser' ? (100 - eraserSettings.hardness) :
+                                    tool === 'advanced-marker' ? (100 - advancedMarkerSettings.hardness) :
+                                        (100 - _brushSettings.hardness)
+                            }
+                            valueLabel={(() => {
+                                const val = tool === 'eraser' ? (100 - eraserSettings.hardness) :
+                                    tool === 'advanced-marker' ? (100 - advancedMarkerSettings.hardness) :
+                                        (100 - _brushSettings.hardness);
+                                return `${val}%`;
+                            })()}
+                            onChange={(softness) => {
+                                const hardness = 100 - softness;
+                                if (tool === 'eraser') setEraserSettings(prev => ({ ...prev, hardness }));
+                                else if (tool === 'advanced-marker') setAdvancedMarkerSettings(prev => ({ ...prev, hardness }));
+                                else if (tool === 'brush') setBrushSettings(prev => ({ ...prev, hardness }));
+                            }}
+                        />
+
+                        {/* Curve Selector Row */}
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-theme-text-secondary w-14">Perfil</span>
+                            <select
+                                className="flex-grow h-6 text-[10px] bg-theme-bg-tertiary text-theme-text-primary rounded border border-theme-border-primary outline-none cursor-pointer px-1"
+                                value={
+                                    tool === 'eraser' ? (eraserSettings.softnessCurve || 'linear') :
+                                        tool === 'advanced-marker' ? (advancedMarkerSettings.softnessCurve || 'linear') :
+                                            (_brushSettings.softnessCurve || 'linear')
+                                }
+                                onChange={(e) => {
+                                    const curve = e.target.value as 'linear' | 'smooth' | 'bell';
+                                    if (tool === 'eraser') setEraserSettings(prev => ({ ...prev, softnessCurve: curve }));
+                                    else if (tool === 'advanced-marker') setAdvancedMarkerSettings(prev => ({ ...prev, softnessCurve: curve }));
+                                    else if (tool === 'brush') setBrushSettings(prev => ({ ...prev, softnessCurve: curve }));
+                                }}
+                            >
+                                <option value="linear">Lineal</option>
+                                <option value="smooth">Suave</option>
+                                <option value="bell">Campana</option>
+                            </select>
+                        </div>
+                    </div>
+                )}
 
                 <div className="flex items-center justify-between pb-1">
                     <label className={`text-[10px] ${strokeMode === 'freehand' ? 'text-theme-text-secondary' : 'text-theme-text-tertiary'}`}>

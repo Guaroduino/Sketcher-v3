@@ -55,6 +55,7 @@ interface CanvasToolbarProps {
   strokeMode: StrokeMode;
   isSolidBox: boolean;
   setIsSolidBox: (v: boolean) => void;
+  zoomLevel: number;
 }
 
 export const CanvasToolbar: React.FC<CanvasToolbarProps> = React.memo(({
@@ -67,7 +68,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = React.memo(({
   hasClipboardContent,
   gridGuide, onSetGridSpacing,
   activeGuide, isPerspectiveStrokeLockEnabled, onSetIsPerspectiveStrokeLockEnabled,
-  strokeMode, isSolidBox, setIsSolidBox
+  strokeMode, isSolidBox, setIsSolidBox, zoomLevel
 }) => {
   const [gridSpacing, setGridSpacing] = useState('50');
   const [isGridSettingsOpen, setIsGridSettingsOpen] = useState(false);
@@ -142,6 +143,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = React.memo(({
 
             {/* 2. Zoom */}
             <button onClick={onZoomIn} className="p-2 rounded-md text-theme-text-secondary hover:bg-theme-bg-hover" title="Acercar"><ZoomInIcon className="w-5 h-5" /></button>
+            <div className="px-2 text-xs font-mono font-bold text-theme-text-secondary select-none min-w-[3rem] text-center" title="Nivel de Zoom">{Math.round(zoomLevel * 100)}%</div>
             <button onClick={onZoomOut} className="p-2 rounded-md text-theme-text-secondary hover:bg-theme-bg-hover" title="Alejar"><ZoomOutIcon className="w-5 h-5" /></button>
             <div className="w-px h-6 bg-theme-bg-tertiary" />
 

@@ -36,6 +36,8 @@ export interface BrushSettings {
   opacity: number;
   color: string;
   fillColor: string; // New fill color property
+  hardness: number; // 0-100 (100 = hard edge)
+  softnessCurve?: 'linear' | 'smooth' | 'bell'; // New curve profile
   lineCap: 'butt' | 'round' | 'square';
   lineJoin: 'round' | 'bevel' | 'miter';
   hasStrokeCaps: boolean;
@@ -48,6 +50,7 @@ export interface EraserSettings {
   size: number;
   opacity: number; // 0-1, acts like flow
   hardness: number; // 0-100
+  softnessCurve?: 'linear' | 'smooth' | 'bell';
   tipShape: 'round' | 'square';
 }
 
@@ -79,6 +82,7 @@ export interface AdvancedMarkerSettings {
   tipShape: 'circle' | 'square';
   tipAngle: number; // 0-360
   hardness: number; // 0-100
+  softnessCurve?: 'linear' | 'smooth' | 'bell';
   flow: number; // 0-100, opacity build-up
   wetness: number; // 0-100, color blending
   spacing: number; // 1-100 (% of size)

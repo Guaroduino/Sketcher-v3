@@ -246,6 +246,9 @@ export const FloatingQuickAccessBar: React.FC<FloatingQuickAccessBarProps> = ({
                 <button onClick={onToggleHeader} className="p-2 rounded-lg text-theme-text-secondary hover:bg-theme-bg-tertiary transition-colors flex-shrink-0" title={isHeaderVisible ? "Ocultar Encabezado" : "Mostrar Encabezado"}>
                     {isHeaderVisible ? <ChevronUpIcon className="w-5 h-5" /> : <ChevronDownIcon className="w-5 h-5" />}
                 </button>
+
+
+
                 <div className="w-px h-6 bg-theme-bg-tertiary" />
 
                 {/* 2. Active Colors Indicators */}
