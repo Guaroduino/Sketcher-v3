@@ -3,6 +3,7 @@ import { SendIcon, PaperClipIcon, SparklesIcon, SaveIcon, FolderIcon, TrashIcon,
 // import { GoogleGenAI } from "@google/genai";
 import { GEMINI_MODEL_ID } from '../utils/constants';
 import { generateContentWithRetry } from '../utils/aiUtils';
+import { resizeImageForAI } from '../utils/imageUtils';
 import { collection, addDoc, query, orderBy, onSnapshot, deleteDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { User } from 'firebase/auth';
@@ -228,12 +229,17 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
             // Add attachments first (common practice for multimodal)
             for (const att of newUserMessage.attachments || []) {
                 try {
-                    const { mimeType, data } = await fetchAsBase64(att);
-                    if (data) {
+                    const { mimeType: rawMime, data: rawData } = await fetchAsBase64(att);
+                    if (rawData) {
+                        const fullDataUrl = `data:${rawMime};base64,${rawData}`;
+                        // Resize (always to JPEG 90% 1536px)
+                        const resizedDataUrl = await resizeImageForAI(fullDataUrl);
+                        const resizedBase64 = resizedDataUrl.split(',')[1];
+
                         parts.push({
                             inlineData: {
-                                mimeType: mimeType,
-                                data: data
+                                mimeType: 'image/jpeg',
+                                data: resizedBase64
                             }
                         });
                     }

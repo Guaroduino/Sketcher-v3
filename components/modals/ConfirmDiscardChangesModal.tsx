@@ -10,7 +10,7 @@ export const ConfirmDiscardChangesModal: React.FC<ConfirmDiscardChangesModalProp
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[200] p-4">
             <div className="bg-theme-bg-secondary text-theme-text-primary rounded-lg shadow-xl p-6 w-full max-w-sm border border-theme-bg-tertiary">
                 <h2 className="text-xl font-bold mb-4">Cambios sin guardar</h2>
                 <p className="text-theme-text-secondary mb-6">

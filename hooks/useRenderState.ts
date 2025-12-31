@@ -9,7 +9,7 @@ import { resizeImageForAI } from '../utils/imageUtils';
 // Define the Hook
 export function useRenderState(
     credits: number | null,
-    deductCredit: (() => Promise<boolean>) | undefined,
+    deductCredit: ((amount?: number) => Promise<boolean>) | undefined,
     selectedModel: string,
     onRenderCompleteRequest?: (dataUrl: string) => void,
     onInspectRequest?: (payload: { model: string; parts: any[]; config?: any }) => Promise<boolean>
@@ -93,7 +93,8 @@ export function useRenderState(
 
 
     // Actions
-    const handleRender = async (sourceImage: string, targetDimensions?: { width: number, height: number }, aspectRatio?: number, overrideImages?: { background?: string, composite?: string }) => {
+    // Actions
+    const handleRender = async (sourceImage: string, targetDimensions?: { width: number, height: number }, aspectRatio?: number, overrideImages?: { background?: string, composite?: string }, overrideSceneType?: SceneType) => {
         if (aspectRatio !== undefined) {
             canvasAspectRatio.current = aspectRatio;
             // Force prompt update for aspect ratio changes
@@ -113,11 +114,44 @@ export function useRenderState(
             return;
         }
 
-        const cost = selectedModel.includes('gemini-3') ? 5 : 1;
+        const activeSceneType = overrideSceneType || sceneType;
+        const is4K = activeSceneType === '4k_render';
+        const activeModel = is4K ? 'gemini-3-pro-image-preview' : selectedModel; // Force Gemini 3 for 4K
+
+        let cost = 1;
+        if (is4K) {
+            cost = 7;
+        } else if (activeModel.includes('gemini-3')) {
+            cost = 5;
+        }
 
         if (credits < cost) {
             alert(`No tienes suficientes créditos. Se requieren ${cost} créditos.`);
             return;
+        }
+
+        // Calculate Prompt for Override or Use State
+        let promptToUse = manualPrompt;
+        if (overrideSceneType) {
+            // Need to build prompt specifically for this override
+            const tempOptions: ArchitecturalRenderOptions = {
+                sceneType: overrideSceneType,
+                renderStyle,
+                creativeFreedom,
+                additionalPrompt,
+                archStyle,
+                hasStyleReference: !!styleReferenceImage,
+                canvasAspectRatio: canvasAspectRatio.current,
+                renderStyleSettings,
+                matchMateriality,
+                styleReferenceDescription,
+                // Include other props just in case, though 4K render ignores most
+                timeOfDay, weather, roomType, lighting,
+                studioLighting, studioBackground, studioShot,
+                carAngle, carEnvironment, carColor,
+                objectMaterial, objectDoF, objectContext
+            };
+            promptToUse = buildArchitecturalPrompt(tempOptions);
         }
 
         setIsGenerating(true);
@@ -127,13 +161,12 @@ export function useRenderState(
         try {
             // @ts-ignore
             const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
-            const model = selectedModel;
 
             const parts: any[] = [];
 
-            if (sceneType === 'object_integration' && overrideImages && overrideImages.background && overrideImages.composite) {
+            if (activeSceneType === 'object_integration' && overrideImages && overrideImages.background && overrideImages.composite) {
                 // INTEGRATION MODE SPECIAL PIPELINE
-                parts.push({ text: manualPrompt });
+                parts.push({ text: promptToUse });
 
                 parts.push({ text: "IMAGE 1: BACKGROUND / CONTEXT (Do not modify perspective/lighting of this)" });
                 const bgOptimized = await resizeImageForAI(overrideImages.background);
@@ -145,32 +178,77 @@ export function useRenderState(
             } else {
                 // STANDARD PIPELINE
                 // OPTIMIZATION: Resize Input Image
-                const optimizedInput = await resizeImageForAI(sourceImage);
+                // FIX: If 4K mode, allow up to 4096px (or native limit), else 1536px
+                const maxSide = activeSceneType === '4k_render' ? 4096 : 1536;
+                const optimizedInput = await resizeImageForAI(sourceImage, maxSide);
                 const inputBase64 = optimizedInput.split(',')[1];
+
+                // [DEBUG LOG] Track input dimensions for 4K
+                if (is4K) {
+                    const tempImg = new Image();
+                    tempImg.src = optimizedInput;
+                    await new Promise(r => tempImg.onload = r);
+                    console.log(`[4K DEBUG] Optimized Input Dimensions: ${tempImg.naturalWidth}x${tempImg.naturalHeight}`);
+                }
+
                 parts.push({ inlineData: { mimeType: 'image/jpeg', data: inputBase64 } });
 
-                if (styleReferenceImage) {
+                if (styleReferenceImage && activeSceneType !== '4k_render') { // 4K render should probably ignore reference image style mapping unless strictly defined? PROMPT SAYS: "INPUT: IMAGE_SOURCE: A reference image...". 
+                    // Wait, 4K prompt says "INPUT: IMAGE_SOURCE". It uses the input as reference.
+                    // If styleReferenceImage exists, should we include it? 
+                    // "Identity Preservation: (preservation)". 
+                    // "Input image (regardless of subject matter)".
+                    // The main input is the source. The style reference might be confusing. 
+                    // Let's exclude styleReferenceImage for 4K mode to ensure purity, or keep it if the user wants style transfer?
+                    // The user prompt for 4K mode says: "regenerate it... while strictly preserving its original identity."
+                    // This implies standard "upscaling" behavior on ONE image. 
+                    // So I will UNCONDITIONALLY exclude styleReferenceImage for 4K mode unless the user explicitly requested it?
+                    // The instructions didn't specify, but "Visual Twin" implies upscaling the SOURCE.
+                    // Adding a style reference might conflict with "Strictly preserving its original identity".
+                    // I'll exclude it for safety in 4K mode.
+
                     // OPTIMIZATION: Resize Reference Image
                     const optimizedStyle = await resizeImageForAI(styleReferenceImage);
                     const styleBase64 = optimizedStyle.split(',')[1];
                     parts.push({ inlineData: { mimeType: 'image/jpeg', data: styleBase64 } });
                 }
-                parts.push({ text: manualPrompt });
+                parts.push({ text: promptToUse });
             }
 
             const contents = { parts };
 
+            // Config construction
+            const generationConfig: any = {};
+
+            // Calculate Aspect Ratio string if aspect ratio is provided
+            if (aspectRatio) {
+                const ratio = aspectRatio;
+                let targetAspectRatio = "1:1";
+                if (Math.abs(ratio - 16 / 9) < 0.2) targetAspectRatio = "16:9";
+                else if (Math.abs(ratio - 9 / 16) < 0.2) targetAspectRatio = "9:16";
+                else if (Math.abs(ratio - 4 / 3) < 0.2) targetAspectRatio = "4:3";
+                else if (Math.abs(ratio - 3 / 4) < 0.2) targetAspectRatio = "3:4";
+                generationConfig.aspectRatio = targetAspectRatio;
+            }
+
+            if (is4K) {
+                generationConfig.temperature = 0.15;
+                // @ts-ignore
+                generationConfig.sampleImageSize = "2048";
+            }
+
             // INSPECTOR CHECK
             if (onInspectRequest) {
                 const confirmed = await onInspectRequest({
-                    model,
+                    model: activeModel,
                     parts: contents.parts,
                     config: lastOptions.current || {
                         sceneType,
                         renderStyle,
                         creativeFreedom,
                         archStyle,
-                        aspectRatio: canvasAspectRatio.current
+                        aspectRatio: canvasAspectRatio.current,
+                        generationConfig
                     }
                 });
                 if (!confirmed) {
@@ -179,19 +257,35 @@ export function useRenderState(
                 }
             }
 
-            const response = await ai.models.generateContent({ model, contents });
+            // @ts-ignore - SDK types might vary
+            const response = await ai.models.generateContent({
+                model: activeModel,
+                contents,
+                config: generationConfig
+            });
 
             let newImageBase64: string | null = null;
+            let responseMimeType = 'image/png'; // Default fallback
             for (const part of response.candidates?.[0]?.content.parts || []) {
-                if (part.inlineData) { newImageBase64 = part.inlineData.data; break; }
+                if (part.inlineData) {
+                    newImageBase64 = part.inlineData.data;
+                    responseMimeType = part.inlineData.mimeType || 'image/png';
+                    break;
+                }
             }
 
             if (newImageBase64) {
                 if (deductCredit) await deductCredit(cost);
-                let newResultUrl = `data:image/png;base64,${newImageBase64}`;
+                let newResultUrl = `data:${responseMimeType};base64,${newImageBase64}`;
 
-                // Force Resize if targetDimensions provided
-                if (targetDimensions && targetDimensions.width && targetDimensions.height) {
+                // [DEBUG LOG] Track raw AI output dimensions
+                const rawImg = new Image();
+                rawImg.src = newResultUrl;
+                await new Promise(r => rawImg.onload = r);
+                console.log(`[${is4K ? '4K ' : ''}DEBUG] Raw AI Output Dimensions: ${rawImg.naturalWidth}x${rawImg.naturalHeight}`);
+
+                // Process output if NOT 4K (4K should keep native resolution)
+                if (!is4K && targetDimensions && targetDimensions.width && targetDimensions.height) {
                     const tempCanvas = document.createElement('canvas');
                     tempCanvas.width = targetDimensions.width;
                     tempCanvas.height = targetDimensions.height;
@@ -199,11 +293,53 @@ export function useRenderState(
                     if (ctx) {
                         const img = new Image();
                         await new Promise((resolve) => {
-                            img.onload = resolve;
+                            img.onload = () => resolve(null);
                             img.src = newResultUrl;
                         });
                         ctx.drawImage(img, 0, 0, targetDimensions.width, targetDimensions.height);
                         newResultUrl = tempCanvas.toDataURL('image/png');
+                    }
+                } else if (is4K) {
+                    // [4K FIX] Force output to 4K resolution (4096px) regardless of source resolution
+                    // This ensures low-res inputs are upscaled to true 4K output.
+                    const img = new Image();
+                    await new Promise((resolve) => {
+                        img.onload = () => resolve(null);
+                        img.src = newResultUrl;
+                    });
+
+                    // Target 4K dimensions (4096px on longest side)
+                    const targetMax = 4096;
+                    const aiW = img.naturalWidth;
+                    const aiH = img.naturalHeight;
+                    const ratio = aiW / aiH;
+
+                    let targetW = targetMax;
+                    let targetH = targetMax;
+
+                    if (ratio > 1) { // Landscape
+                        targetW = targetMax;
+                        targetH = Math.round(targetMax / ratio);
+                    } else { // Portrait / Square
+                        targetH = targetMax;
+                        targetW = Math.round(targetMax * ratio);
+                    }
+
+                    // Always upscale if it's not already at the target 4K resolution
+                    if (aiW !== targetW || aiH !== targetH) {
+                        console.log(`[4K RE-SCALE] Forcing 4K Output. AI: ${aiW}x${aiH} -> Target: ${targetW}x${targetH}`);
+                        const upscaleCanvas = document.createElement('canvas');
+                        upscaleCanvas.width = targetW;
+                        upscaleCanvas.height = targetH;
+                        const uCtx = upscaleCanvas.getContext('2d');
+                        if (uCtx) {
+                            uCtx.imageSmoothingEnabled = true;
+                            uCtx.imageSmoothingQuality = 'high';
+                            uCtx.drawImage(img, 0, 0, targetW, targetH);
+                            newResultUrl = upscaleCanvas.toDataURL('image/png');
+                        }
+                    } else {
+                        console.log(`[4K DEBUG] AI output already at target 4K resolution: ${aiW}x${aiH}`);
                     }
                 }
 

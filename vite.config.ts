@@ -41,6 +41,15 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       emptyOutDir: true,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage'],
+            'vendor-ai': ['@google/genai'],
+            'vendor-react': ['react', 'react-dom'],
+          }
+        }
+      }
     },
     resolve: {
       alias: {

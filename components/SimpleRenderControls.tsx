@@ -9,6 +9,7 @@ interface SimpleRenderControlsProps {
     isGenerating: boolean;
     onRender: (prompt: string, refImages: File[], includeSketch: boolean, includeComposite: boolean, configJSON: string) => void;
     userId?: string;
+    selectedModel?: string;
 }
 
 interface RefImage {
@@ -22,7 +23,8 @@ export const SimpleRenderControls: React.FC<SimpleRenderControlsProps> = ({
     compositeImage,
     isGenerating,
     onRender,
-    userId
+    userId,
+    selectedModel
 }) => {
     const [prompt, setPrompt] = useState('');
     const [configJSON, setConfigJSON] = useState('{\n  "mode": "Simple Render V2"\n}');
@@ -269,7 +271,12 @@ export const SimpleRenderControls: React.FC<SimpleRenderControlsProps> = ({
                 disabled={isGenerating}
                 className="w-full py-3 rounded-md bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold text-sm shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
             >
-                {isGenerating ? "Generando..." : <><SparklesIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" /> Renderizar V2</>}
+                {isGenerating ? "Generando..." : (
+                    <>
+                        <SparklesIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                        Renderizar V2 ({(selectedModel && selectedModel.includes('gemini-3')) ? '5' : '1'} Créditos)
+                    </>
+                )}
             </button>
         </div >
     );

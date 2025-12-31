@@ -815,7 +815,7 @@ function useAI(
         return { canvas, transparentColors: uniqueColors, tolerance };
     };
 
-    const handleUpdateDebugInfo = useCallback((
+    const handleUpdateDebugInfo = useCallback(async (
         payload: any,
         canvasSize: { width: number, height: number },
         getDrawableObjects: () => CanvasItem[],
@@ -823,7 +823,7 @@ function useAI(
         activeItemId: string | null,
         allObjects: CanvasItem[]
     ) => {
-        const result = prepareAIRequest(payload, canvasSize, getDrawableObjects, backgroundObject, activeItemId, allObjects, getCompositeCanvas, getCombinedBbox);
+        const result = await prepareAIRequest(payload, canvasSize, getDrawableObjects, backgroundObject, activeItemId, allObjects, getCompositeCanvas, getCombinedBbox);
         if (result) {
             setDebugInfo({ prompt: result.finalPrompt, images: result.debugImages });
         }
@@ -840,7 +840,7 @@ function useAI(
         setDebugInfo(null);
         setIsEnhancing(true);
 
-        const requestData = prepareAIRequest(payload, canvasSize, getDrawableObjects, backgroundObject, activeItemId, allObjects, getCompositeCanvas, getCombinedBbox);
+        const requestData = await prepareAIRequest(payload, canvasSize, getDrawableObjects, backgroundObject, activeItemId, allObjects, getCompositeCanvas, getCombinedBbox);
         if (!requestData) {
             setIsEnhancing(false);
             alert("No se pudo preparar la solicitud. Verifica los campos requeridos.");
@@ -1304,58 +1304,7 @@ export function App() {
     // -- Visual Prompting State --
     const vp = useVisualPrompting();
 
-    const handleTriggerRender = async () => {
-        const compositeCanvas = getCompositeCanvas(true, canvasSize, getDrawableObjects, backgroundObject);
-        if (compositeCanvas) {
-            const targetDimensions = { width: canvasSize.width, height: canvasSize.height };
-            const aspectRatio = canvasSize.width / canvasSize.height;
 
-            // Handle Object Integration Mode
-            if (renderState.sceneType === 'object_integration') {
-                let bgDataUrl = '';
-                // 1. Get Background
-                if (backgroundObject?.canvas) {
-                    bgDataUrl = backgroundObject.canvas.toDataURL('image/png');
-                }
-
-                // 2. Get Sketch Only (Composite without Background)
-                // We want the "object" to integrate.
-                const getterSketches = () => getDrawableObjects().filter(o => !o.isBackground);
-                const sketchCanvas = getCompositeCanvas(true, canvasSize, getterSketches, undefined, { transparent: true });
-                const skDataUrl = sketchCanvas ? sketchCanvas.toDataURL('image/png') : compositeCanvas.toDataURL('image/png');
-
-                if (bgDataUrl) {
-                    await renderState.handleRender(compositeCanvas.toDataURL('image/png'), targetDimensions, aspectRatio, { background: bgDataUrl, composite: compositeCanvas.toDataURL('image/png') });
-                    return;
-                } else {
-                    // If no background object, warn or just proceed?
-                    console.warn("Object Integration mode selected but no Background Object found. Proceeding with standard render.");
-                }
-            }
-
-            if (isAnnotationsVisible && layeredCanvasRef.current && vp.regions.length > 0) {
-                const overlayDataUrl = await layeredCanvasRef.current.getVisualGuideSnapshot();
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = canvasSize.width;
-                tempCanvas.height = canvasSize.height;
-                const ctx = tempCanvas.getContext('2d');
-                if (ctx) {
-                    ctx.drawImage(compositeCanvas, 0, 0);
-                    const img = new Image();
-                    await new Promise((resolve) => {
-                        img.onload = resolve;
-                        img.src = overlayDataUrl;
-                    });
-                    ctx.drawImage(img, 0, 0, canvasSize.width, canvasSize.height);
-                    const finalDataUrl = tempCanvas.toDataURL('image/png');
-                    await renderState.handleRender(finalDataUrl, targetDimensions, aspectRatio);
-                    return;
-                }
-            }
-
-            await renderState.handleRender(compositeCanvas.toDataURL('image/png'), targetDimensions, aspectRatio);
-        }
-    };
 
     const handleSelectItem = useCallback((id: string | null) => {
         setSelectedItemIds(id ? [id] : []);
@@ -1365,7 +1314,8 @@ export function App() {
     }, [selection]);
 
     const handleStartPendingImportRef = useRef<((img: string | HTMLImageElement, scale?: number) => void) | null>(null);
-    const ai = useAI(dispatch, library.onImportToLibrary, handleSelectItem, setTool, scaleFactor, credits, deductCredit, selectedModel, inspectAIRequest, (img) => handleStartPendingImportRef.current?.(img));
+    const handleAIImportRef = useRef<((img: string | HTMLImageElement, scale?: number) => void) | null>(null);
+    const ai = useAI(dispatch, library.onImportToLibrary, handleSelectItem, setTool, scaleFactor, credits, deductCredit, selectedModel, inspectAIRequest, (img) => handleAIImportRef.current?.(img));
     const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
 
     const loadAllToolSettings = useCallback((settings: any) => {
@@ -2161,6 +2111,24 @@ export function App() {
         handleStartPendingImportRef.current = handleStartPendingImport;
     }, [handleStartPendingImport]);
 
+    // AI Import Handler (With Modal)
+    const handleAIImport = useCallback((imageSrc: string | HTMLImageElement, _unusedScale?: number) => {
+        const src = typeof imageSrc === 'string' ? imageSrc : imageSrc.src;
+        // Convert to File to leverage existing Modal Logic
+        fetch(src).then(res => res.blob()).then(blob => {
+            const file = new File([blob], `AI_Generado_${Date.now()}.png`, { type: 'image/png' });
+            setPendingBgFile(file);
+            setIsBgImportModalOpen(true);
+        }).catch(err => {
+            console.error("Error preparing AI image for import modal:", err);
+            alert("Error al preparar la imagen para importar.");
+        });
+    }, []);
+
+    useEffect(() => {
+        handleAIImportRef.current = handleAIImport;
+    }, [handleAIImport]);
+
     // Ref to track latest transform state to avoid stale closures in callbacks
     const transformStateRef = useRef(transformState);
     useEffect(() => { transformStateRef.current = transformState; }, [transformState]);
@@ -2938,13 +2906,96 @@ export function App() {
         window.location.reload();
     }, []);
 
+    const handleTriggerRender = useCallback(async (overrideSceneType?: any) => {
+        // Handle 4K Logic: Needs Background, ignores active item requirement
+        const is4K = overrideSceneType === '4k_render';
+
+        if (!activeItem && !backgroundObject && !is4K) {
+            alert("No hay ningún objeto seleccionado para renderizar.");
+            return;
+        }
+
+        let sourceImage = '';
+
+        if (is4K) {
+            // STRICT 4K REQUIREMENT: BACKGROUND ONLY
+            // FIX: Use the original High-Res image if available, not the downscaled canvas
+            if (backgroundObject?.backgroundImage) {
+                const img = backgroundObject.backgroundImage;
+                // Check if it's an HTMLImageElement to get natural dimensions
+                const width = (img instanceof HTMLImageElement) ? img.naturalWidth : img.width;
+                const height = (img instanceof HTMLImageElement) ? img.naturalHeight : img.height;
+
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = width;
+                tempCanvas.height = height;
+                const ctx = tempCanvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0, width, height);
+                    sourceImage = tempCanvas.toDataURL('image/png');
+                    console.log(`[4K SOURCE] Using original background image: ${width}x${height}`);
+                    // [DEBUG LOG] Verify data URL quality/size if needed
+                    console.log(`[4K SOURCE] DataURL Length: ${sourceImage.length} chars`);
+                } else {
+                    // Fallback should normally not happen
+                    sourceImage = backgroundObject.canvas?.toDataURL('image/png') || '';
+                }
+            }
+            // Fallback if no backgroundImage stored (e.g. solid color or painted)
+            else if (backgroundObject?.canvas) {
+                console.warn("[4K SOURCE] Original background image missing, using canvas source.");
+                sourceImage = backgroundObject.canvas.toDataURL('image/png');
+            } else {
+                alert("Para usar el Upscaler 4K, debes tener una imagen de fondo importada.");
+                return;
+            }
+        } else {
+            // STANDARD PIPELINE
+            // Capture Composite (Sketch + Objects + BG if needed, or usually BG acts as context separately)
+            // Standard architectural render usually takes the composite of the viewport.
+            const compositeCanvas = getCompositeCanvas(true, canvasSize, getDrawableObjects, backgroundObject);
+
+            if (!compositeCanvas) {
+                alert("Lienzo vacío.");
+                return;
+            }
+            sourceImage = compositeCanvas.toDataURL('image/png');
+        }
+
+        // Render
+        const aspectRatio = canvasSize.width / canvasSize.height;
+
+        // Check if we are in "Object Integration" mode
+        // If so, we need to pass overrideImages (background vs composite)
+        let overrideImages = undefined;
+        // Access renderState via the hook result which we have in `renderState` variable.
+        // But we can't access state directly inside this callback if it's stale? 
+        // renderState is in dependency array.
+
+        if (renderState.sceneType === 'object_integration' && backgroundObject && !is4K) {
+            // Prepare Object Integration Images
+            let bgDataUrl = backgroundObject.canvas.toDataURL('image/png');
+            let compDataUrl = getCompositeCanvas(true, canvasSize, getDrawableObjects, backgroundObject)?.toDataURL('image/png');
+
+            if (compDataUrl) {
+                overrideImages = {
+                    background: bgDataUrl,
+                    composite: compDataUrl
+                };
+            }
+        }
+
+        await renderState.handleRender(sourceImage, { width: canvasSize.width, height: canvasSize.height }, aspectRatio, overrideImages, overrideSceneType);
+    }, [activeItem, canvasSize, getDrawableObjects, getCompositeCanvas, backgroundObject, renderState]);
+
     const renderNode = useMemo(() => (
         <ArchitecturalControls
             {...renderState}
+            selectedModel={selectedModel}
             onRender={handleTriggerRender}
             isGenerating={renderState.isGenerating}
         />
-    ), [renderState, handleTriggerRender]);
+    ), [renderState, handleTriggerRender, selectedModel]);
 
 
     if (ui.showSplash) {
@@ -3365,7 +3416,7 @@ export function App() {
                             onInspectRequest={role === 'admin' ? inspectAIRequest : undefined}
                             libraryItems={library.libraryItems}
                             selectedModel={selectedModel}
-                            onSendToSketch={(url) => handleImportRenderToSketch(url)}
+                            onSendToSketch={(url) => handleSendFreeToSketch(url)}
                         />
                     </div>
                 </main>
@@ -3509,6 +3560,7 @@ export function App() {
                                 previewBackground={integrationPreviewBg}
                                 previewComposite={integrationPreviewComp}
                                 userId={user?.uid}
+                                selectedModel={selectedModel}
                             />
                         }
                         simpleRenderNode={
@@ -3518,6 +3570,7 @@ export function App() {
                                 isGenerating={isSimpleRenderGenerating}
                                 onRender={handleSimpleRender}
                                 userId={user?.uid}
+                                selectedModel={selectedModel}
                             />
                         }
                         visualPromptingNode={visualPromptingNode}
@@ -3674,7 +3727,7 @@ export function App() {
                                         } else {
                                             // STANDARD RENDER/SKETCH: Import as Object via Delayed Rasterization
                                             setActiveView('sketch');
-                                            handleStartPendingImportRef.current?.(renderState.resultImage);
+                                            handleAIImport(renderState.resultImage);
                                             renderState.setResultImage(null);
                                         }
                                     }

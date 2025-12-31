@@ -1,6 +1,7 @@
 
 import { CanvasItem, SketchObject, CropRect } from '../types';
 import { GoogleGenAI } from "@google/genai";
+import { resizeImageForAI } from './imageUtils';
 
 export const generateContentWithRetry = async (
     apiKey: string,
@@ -38,7 +39,7 @@ const dataURLtoBase64 = (dataUrl: string) => dataUrl.split(',')[1];
 
 // Helper to prepare the AI request payload
 // This function needs to be pure or explicitly passed all dependencies
-export const prepareAIRequest = (
+export const prepareAIRequest = async (
     payload: any,
     canvasSize: { width: number, height: number },
     getDrawableObjects: () => CanvasItem[],
@@ -97,8 +98,9 @@ export const prepareAIRequest = (
                 // FIX: Add Isolated Background Image (Requested by User: "Fondo: Como esta actualmente")
                 if (backgroundObject?.canvas && backgroundObject.isVisible && (!enhancementChromaKey || enhancementChromaKey === 'none')) {
                     const bgUrl = backgroundObject.canvas.toDataURL('image/png');
-                    debugImages.push({ name: 'Fondo Original', url: bgUrl });
-                    parts.push({ inlineData: { mimeType: 'image/png', data: dataURLtoBase64(bgUrl) } });
+                    const resizedBg = await resizeImageForAI(bgUrl);
+                    debugImages.push({ name: 'Fondo Original', url: resizedBg });
+                    parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(resizedBg) } });
                 }
 
                 // Manual Composite Logic for filteredObjects
@@ -152,8 +154,10 @@ export const prepareAIRequest = (
                 }
 
                 const dataUrl = finalImageCanvas.toDataURL('image/png');
-                debugImages.push({ name: 'Imagen de Entrada', url: dataUrl });
-                parts.push({ inlineData: { mimeType: 'image/png', data: dataURLtoBase64(dataUrl) } });
+                const resizedDataUrl = await resizeImageForAI(dataUrl);
+
+                debugImages.push({ name: 'Imagen de Entrada', url: resizedDataUrl });
+                parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(resizedDataUrl) } });
 
                 let creativityInstruction = '';
                 if (enhancementCreativity <= 40) creativityInstruction = 'Sé muy fiel a la imagen de entrada y a la descripción proporcionada. Realiza solo los cambios solicitados.';
@@ -181,8 +185,9 @@ export const prepareAIRequest = (
             // 1. Isolated Background (PNG) - User calls it 'Fondo Sketch'
             if (backgroundObject?.canvas && backgroundObject.isVisible) {
                 const bgUrl = backgroundObject.canvas.toDataURL('image/png');
-                debugImages.push({ name: 'Fondo Sketch', url: bgUrl });
-                parts.push({ inlineData: { mimeType: 'image/png', data: dataURLtoBase64(bgUrl) } });
+                const resizedBg = await resizeImageForAI(bgUrl);
+                debugImages.push({ name: 'Fondo Sketch', url: resizedBg });
+                parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(resizedBg) } });
             }
 
             // 2. Cropped Sketch Composite (PNG) - User calls it 'Composite'
@@ -209,13 +214,16 @@ export const prepareAIRequest = (
             }
 
             const dataUrl = imageCanvas.toDataURL('image/png');
-            debugImages.push({ name: 'Composite', url: dataUrl });
-            parts.push({ inlineData: { mimeType: 'image/png', data: dataURLtoBase64(dataUrl) } });
+            const resizedComposite = await resizeImageForAI(dataUrl);
+
+            debugImages.push({ name: 'Composite', url: resizedComposite });
+            parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(resizedComposite) } });
 
 
             if (payload.styleRef?.url) {
-                debugImages.push({ name: 'Referencia de Estilo', url: payload.styleRef.url });
-                parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(payload.styleRef.url) } });
+                const resizedRef = await resizeImageForAI(payload.styleRef.url);
+                debugImages.push({ name: 'Referencia de Estilo', url: resizedRef });
+                parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(resizedRef) } });
             }
 
 
@@ -264,14 +272,15 @@ NEGATIVE PROMPT: The text "${userStyleInstruction}" rendered literally, red box,
         case 'free': {
             const slots: ('main' | 'a' | 'b' | 'c')[] = ['main', 'a', 'b', 'c'];
             const slotNames = ['Objeto Principal', 'Elemento A', 'Elemento B', 'Elemento C'];
-            slots.forEach((slot, index) => {
+            for (const [index, slot] of slots.entries()) {
                 const slotData = payload.freeFormSlots[slot];
                 if (slotData?.url) {
-                    debugImages.push({ name: slotNames[index], url: slotData.url });
+                    const resizedSlot = await resizeImageForAI(slotData.url);
+                    debugImages.push({ name: slotNames[index], url: resizedSlot });
                     parts.push({ text: `[Imagen: ${slotNames[index]}]` });
-                    parts.push({ inlineData: { mimeType: 'image/png', data: dataURLtoBase64(slotData.url) } });
+                    parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(resizedSlot) } });
                 }
-            });
+            }
             finalPrompt = payload.freeFormPrompt || '';
             break;
         }
@@ -284,8 +293,13 @@ NEGATIVE PROMPT: The text "${userStyleInstruction}" rendered literally, red box,
 
             if (compositionCanvas) {
                 const compDataUrl = compositionCanvas.toDataURL('image/png'); // High quality PNG
-                debugImages.push({ name: 'Imagen a Escalar', url: compDataUrl });
-                parts.push({ inlineData: { mimeType: 'image/png', data: dataURLtoBase64(compDataUrl) } });
+                // For upscale, we MIGHT want to keep resolution, but user rule says "Todos los envios".
+                // Let's apply resize for now to be safe with payload limits, or maybe 2048 if explicitly needed?
+                // User said "1536px... o 2048px ... aumenta riesgo error".
+                // Let's stick to 1536px for consistency as requested "dame un plan para aplicar esto, se debe aplicar a todos los envios"
+                const resizedUpscale = await resizeImageForAI(compDataUrl);
+                debugImages.push({ name: 'Imagen a Escalar', url: resizedUpscale });
+                parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(resizedUpscale) } });
             }
 
             // 2. High-Res Prompt Engineering
@@ -328,8 +342,9 @@ NEGATIVE PROMPT: The text "${userStyleInstruction}" rendered literally, red box,
             const compositionCanvas = getCompositeCanvas(true, canvasSize, getDrawableObjects, backgroundObject);
             if (compositionCanvas) {
                 const compDataUrl = compositionCanvas.toDataURL('image/png');
-                debugImages.push({ name: 'Imagen Base', url: compDataUrl });
-                parts.push({ inlineData: { mimeType: 'image/png', data: dataURLtoBase64(compDataUrl) } });
+                const resizedSketch = await resizeImageForAI(compDataUrl);
+                debugImages.push({ name: 'Imagen Base', url: resizedSketch });
+                parts.push({ inlineData: { mimeType: 'image/jpeg', data: dataURLtoBase64(resizedSketch) } });
             }
 
             // 2. Construct Prompt Hierarchy

@@ -68,11 +68,12 @@ interface ArchitecturalControlsProps {
     styleReferenceDescription?: string;
     isAnalyzingReference?: boolean;
     analyzeReferenceImage?: () => void;
-    onRender: () => void;
+    onRender: (overrideSceneType?: any) => void;
     isGenerating: boolean;
     previewBackground?: string | null;
     previewComposite?: string | null;
     userId?: string;
+    selectedModel?: string;
 }
 
 const CollapsiblePillGroup: React.FC<{ label: string, options: { label: string, value: string }[], value: string, onChange: (val: string) => void }> = ({ label, options, value, onChange }) => {
@@ -145,7 +146,8 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = React
     isGenerating,
     previewBackground,
     previewComposite,
-    userId
+    userId,
+    selectedModel
 }) => {
     // Local state for debouncing additionalPrompt
     const [localPrompt, setLocalPrompt] = React.useState(additionalPrompt);
@@ -565,14 +567,43 @@ export const ArchitecturalControls: React.FC<ArchitecturalControlsProps> = React
             </div>
 
             {/* Footer with Render Button */}
-            <div className="p-4 border-t border-theme-bg-tertiary space-y-3 bg-theme-bg-secondary flex-shrink-0">
+            <div className="p-4 border-t border-theme-bg-tertiary space-y-3 bg-theme-bg-secondary flex-shrink-0 overflow-y-auto max-h-[250px]">
+                {/* Standard Render */}
                 <button
-                    onClick={onRender}
+                    onClick={() => onRender()}
                     disabled={isGenerating}
                     className="w-full py-3 rounded-md bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold text-sm shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
                 >
-                    {isGenerating ? "Generando..." : <><SparklesIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" /> Renderizar</>}
+                    {isGenerating ? "Generando..." : (
+                        <>
+                            <SparklesIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                            Renderizar ({(selectedModel && selectedModel.includes('gemini-3')) ? '5' : '1'} Créditos)
+                        </>
+                    )}
                 </button>
+
+                {/* Separator Section */}
+                <div className="pt-4 border-t border-theme-bg-tertiary">
+                    <div className="mb-2 flex items-center gap-2 px-1">
+                        <span className="text-[10px] font-bold text-theme-text-tertiary uppercase tracking-wider">Herramientas Avanzadas</span>
+                    </div>
+
+                    <button
+                        onClick={() => onRender('4k_render')}
+                        disabled={isGenerating}
+                        className="w-full py-3 rounded-md bg-gradient-to-r from-pink-500 to-orange-500 text-white font-bold text-sm shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group border border-white/20"
+                    >
+                        {isGenerating ? "Generando..." : (
+                            <>
+                                <SparklesIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                                Upscaler 4K (7 Créditos)
+                            </>
+                        )}
+                    </button>
+                    <p className="text-[10px] text-theme-text-tertiary text-center mt-2 px-2 leading-tight">
+                        Modo independiente de alta fidelidad. Ignora configuraciones de estilo anteriores.
+                    </p>
+                </div>
             </div>
         </div>
     );

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Tool, Guide, TransformState, GridGuide, GridType, ScaleUnit, StrokeMode, OrthogonalGuide } from '../types';
-import { HandIcon, ZoomInIcon, ZoomOutIcon, UndoIcon, RedoIcon, TrashIcon, CheckIcon, XIcon, GridIcon, SnapIcon, IsometricIcon, MaximizeIcon, PerspectiveIcon, UploadIcon, PasteIcon, CubeIcon } from './icons';
+import { HandIcon, ZoomInIcon, ZoomOutIcon, UndoIcon, RedoIcon, TrashIcon, CheckIcon, XIcon, GridIcon, SnapIcon, IsometricIcon, MaximizeIcon, PerspectiveIcon, UploadIcon, PasteIcon, CubeIcon, LockIcon, LockOpenIcon } from './icons';
 
 interface CanvasToolbarProps {
   tool: Tool;
@@ -69,7 +69,8 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = React.memo(({
   gridGuide, onSetGridSpacing,
   activeGuide, isPerspectiveStrokeLockEnabled, onSetIsPerspectiveStrokeLockEnabled,
   strokeMode, isSolidBox, setIsSolidBox, zoomLevel,
-  isAngleSnapEnabled, onToggleAngleSnap, angleSnapValue
+  isAngleSnapEnabled, onToggleAngleSnap, angleSnapValue,
+  isAspectRatioLocked, onSetAspectRatioLocked
 }) => {
   const [gridSpacing, setGridSpacing] = useState('50');
   const [isGridSettingsOpen, setIsGridSettingsOpen] = useState(false);
@@ -125,6 +126,14 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = React.memo(({
           <>
             {isTransforming && (
               <>
+                <button
+                  onClick={() => onSetAspectRatioLocked(p => !p)}
+                  className={`p-2 rounded-md transition-colors ${isAspectRatioLocked ? 'bg-theme-accent-primary text-white' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                  title={isAspectRatioLocked ? "Escala Uniforme (Activado)" : "Escala Uniforme (Desactivado)"}
+                >
+                  {isAspectRatioLocked ? <LockIcon className="w-5 h-5" /> : <LockOpenIcon className="w-5 h-5" />}
+                </button>
+                <div className="w-px h-6 bg-theme-bg-tertiary mx-1" />
                 <button
                   onClick={onToggleAngleSnap}
                   className={`p-2 rounded-md transition-colors ${isAngleSnapEnabled ? 'bg-theme-accent-primary text-white' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}

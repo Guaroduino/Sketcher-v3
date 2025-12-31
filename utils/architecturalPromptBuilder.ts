@@ -1,7 +1,7 @@
 
 import { RenderStyleSettings } from '../types';
 
-export type SceneType = 'exterior' | 'interior' | 'object_interior' | 'object_exterior' | 'studio' | 'automotive' | 'object_integration';
+export type SceneType = 'exterior' | 'interior' | 'object_interior' | 'object_exterior' | 'studio' | 'automotive' | 'object_integration' | '4k_render';
 export type RenderStyleMode = 'photorealistic' | 'watercolor' | 'colored_pencil' | 'graphite' | 'ink_marker' | 'charcoal' | 'digital_painting' | '3d_cartoon' | 'technical_plan' | 'clay_model';
 
 export interface ArchitecturalRenderOptions {
@@ -202,6 +202,24 @@ INTEGRATION RULES:
 };
 
 export const buildArchitecturalPrompt = (options: ArchitecturalRenderOptions): string => {
+    if (options.sceneType === '4k_render') {
+        const negativePrompt = "Blurry, pixelated, noise, artifacts, low res, changing style, shifting colors, altered subject, flat textures, smooth plastic look.";
+
+        return `SYSTEM: EXPERT AI GENERATIVE RESTORATION ENGINE. 
+TASK: Reconstruct the input image into a Photorealistic 4K Masterpiece.
+EXECUTION PROTOCOL:
+1. SEMANTIC ANALYSIS: Identify all materials (stone, metal, skin, wood, foliage, fabric).
+2. DETAIL SYNTHESIS: Generate NEW high-frequency pixels and micro-textures that would be visible in a 4K medium-format photograph.
+   - For Organic: Synthesize pores, individual fibers, and natural imperfections.
+   - For Hard Surfaces: Reconstruct sharp edges, micro-scratches, and realistic specular highlights.
+3. PRESERVATION: Maintain exact composition, lighting, and global identity.
+4. QUALITY: Eliminate all compression noise/artifacts. Output must be surgically sharp and rich in texture.
+
+NEGATIVE PROMPT: ${negativePrompt}
+
+${options.additionalPrompt ? `ADDITIONAL INSTRUCTIONS: ${options.additionalPrompt}` : ""}`.trim();
+    }
+
     const isStrict = options.creativeFreedom <= 39;
     const styleDetails = getDetailedStylePrompts(options.renderStyle, options.renderStyleSettings, isStrict);
     const sceneContent = getSceneContent(options);

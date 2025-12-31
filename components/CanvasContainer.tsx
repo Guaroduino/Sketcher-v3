@@ -497,12 +497,13 @@ export const CanvasContainerComponent: React.FC<CanvasContainerPropsWithRef> = (
                 position: 'absolute',
                 top: 0,
                 left: 0,
-                width: `${transformSourceBbox.width}px`,
                 height: `${transformSourceBbox.height}px`,
                 willChange: 'transform',
                 imageRendering: 'pixelated',
                 transformOrigin: 'top left',
                 transform: finalTransform,
+                maxWidth: 'none',
+                maxHeight: 'none',
             };
         } else if (transformState.type === 'free') {
             const { corners } = transformState;
@@ -530,6 +531,8 @@ export const CanvasContainerComponent: React.FC<CanvasContainerPropsWithRef> = (
                 imageRendering: 'pixelated',
                 transformOrigin: 'top left',
                 transform: finalTransform,
+                maxWidth: 'none',
+                maxHeight: 'none',
             };
         }
     }
