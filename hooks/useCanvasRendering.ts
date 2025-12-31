@@ -292,7 +292,8 @@ export function useCanvasRendering({
         // 1. Draw background
         if (backgroundObject && backgroundObject.canvas && backgroundObject.isVisible) {
             const isBeingErased = backgroundObject.id === livePreviewLayerId;
-            if ((isTransforming && backgroundObject.id === activeItemId) || isBeingErased) {
+            // FIX: Only hide active item if we are actively transforming (have transformState) to show preview
+            if ((isTransforming && transformState && backgroundObject.id === activeItemId) || isBeingErased) {
                 // Skip drawing here, live preview will handle it
             } else {
                 drawItem(backgroundObject);
@@ -308,7 +309,8 @@ export function useCanvasRendering({
 
             const isBeingErased = item.id === livePreviewLayerId;
 
-            if ((isTransforming && item.id === activeItemId) || isBeingErased) {
+            // FIX: Only hide active item if we are actively transforming (have transformState)
+            if ((isTransforming && transformState && item.id === activeItemId) || isBeingErased) {
                 // This item is being transformed or erased. Skip it here.
             } else {
                 drawItem(item);

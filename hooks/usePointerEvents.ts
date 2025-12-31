@@ -363,6 +363,19 @@ export function usePointerEvents({
             return;
         }
 
+        // FIX: If Palm Rejection is enabled and we are ALREADY drawing (pen touches first, then palm),
+        // we must IGNORE the second touch (palm) effectively, or at least NOT start a gesture that cancels the stroke.
+        // If we are actively drawing (dragAction type is 'draw'), we should ignore this new pointer if it would trigger a gesture cancel.
+        if (activeBrushRef.current?.isDrawing && isPalmRejectionEnabled) {
+            // We interpret this as an accidental palm touch while drawing.
+            // Do NOT add to activePointers for gesture calculation?
+            // Or better, just RETURN here and don't let it trigger the gesture logic below.
+            // However, we already added it to activePointers above. We should probably remove it or just return.
+            // Removing it is safer so it doesn't get processed in `onPointerMove`.
+            activePointers.current.delete(e.pointerId);
+            return;
+        }
+
         if (activePointers.current.size >= 2) {
             wasInGestureRef.current = true;
             if (activeBrushRef.current?.isDrawing) {
@@ -932,6 +945,13 @@ export function usePointerEvents({
             const dy = p2.y - p1.y;
             const distance = Math.hypot(dx, dy);
 
+            // FIX: If Palm Rejection is active and we are currently drawing, we should IGNORE 2-finger gestures
+            // that might be caused by palm + pen.
+            if (activeBrushRef.current?.isDrawing && isPalmRejectionEnabled) {
+                // Do NOT process zoom/pan
+                return;
+            }
+
             if (!gestureBaseRef.current) {
                 gestureBaseRef.current = { distance, midpoint, zoom: viewTransform.zoom, pan: viewTransform.pan };
             }
@@ -1458,7 +1478,7 @@ export function usePointerEvents({
             return;
         }
         if (currentAction.type === 'transform' && transformState) {
-            const pointToUse = rawPoint;
+            const pointToUse = snapPointToGrid(rawPoint);
             if (currentAction.startState.type === 'affine') {
                 const { startState, startPoint, handle } = currentAction;
                 const center = (currentAction as { center?: Point }).center;
@@ -1738,7 +1758,13 @@ export function usePointerEvents({
 
         setViewTransform(currentTransform => {
             const minZoom = getMinZoom();
-            const newZoom = Math.max(minZoom, Math.min(currentTransform.zoom * zoomFactor, MAX_ZOOM));
+            let newZoom = Math.max(minZoom, Math.min(currentTransform.zoom * zoomFactor, MAX_ZOOM));
+
+            // Snap to 100% if close
+            if (newZoom > 0.95 && newZoom < 1.05) {
+                newZoom = 1;
+            }
+
             const pointerCanvasX = (pointerViewX - currentTransform.pan.x) / currentTransform.zoom;
             const pointerCanvasY = (pointerViewY - currentTransform.pan.y) / currentTransform.zoom;
             const newPanX = pointerViewX - pointerCanvasX * newZoom;

@@ -12,6 +12,7 @@ export function useCanvasModes(
     libraryItems: LibraryItem[],
     canvasSize: { width: number, height: number },
     globalScaleFactor: number,
+    onStartPendingImport?: (img: string | HTMLImageElement) => void
 ) {
     const onDropOnCanvas = (draggedItem: DragState, activeItemId: string | null, setSelectedItemIds: (ids: string[]) => void) => {
         // FIX: The type of dragged item is 'library-item', not 'library'.
@@ -19,7 +20,21 @@ export function useCanvasModes(
 
         const libraryItem = libraryItems.find(item => item.id === draggedItem.id);
         // FIX: Add type guard to ensure library item is an image and has a dataUrl before proceeding.
-        if (!libraryItem || libraryItem.type !== 'image' || !libraryItem.dataUrl) return;
+        if (!libraryItem) {
+            console.error("Debug: Library Item not found", draggedItem.id);
+            return;
+        }
+        if (libraryItem.type !== 'image') return;
+
+        if (!libraryItem.dataUrl) {
+            alert(`Debug: Image "${libraryItem.name}" has no Data URL (Download URL). Please wait for it to load or check internet connection.`);
+            return;
+        }
+
+        if (onStartPendingImport) {
+            onStartPendingImport(libraryItem.dataUrl);
+            return;
+        }
 
         const newItemId = `object-${Date.now()}`;
 

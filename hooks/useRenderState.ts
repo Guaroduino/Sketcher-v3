@@ -113,8 +113,10 @@ export function useRenderState(
             return;
         }
 
-        if (credits <= 0) {
-            alert("No tienes suficientes créditos.");
+        const cost = selectedModel.includes('gemini-3') ? 5 : 1;
+
+        if (credits < cost) {
+            alert(`No tienes suficientes créditos. Se requieren ${cost} créditos.`);
             return;
         }
 
@@ -185,7 +187,7 @@ export function useRenderState(
             }
 
             if (newImageBase64) {
-                if (deductCredit) await deductCredit();
+                if (deductCredit) await deductCredit(cost);
                 let newResultUrl = `data:image/png;base64,${newImageBase64}`;
 
                 // Force Resize if targetDimensions provided

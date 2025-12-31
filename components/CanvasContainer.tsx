@@ -284,7 +284,9 @@ export const CanvasContainerComponent: React.FC<CanvasContainerPropsWithRef> = (
     };
 
     useEffect(() => {
-        if (isTransforming && activeItem?.type === 'object' && activeItem?.canvas && transformSourceBbox) {
+        if (isTransforming && transformState && 'pendingImage' in transformState && transformState.pendingImage) {
+            setTransformPreviewDataUrl(transformState.pendingImage.src);
+        } else if (isTransforming && activeItem?.type === 'object' && activeItem?.canvas && transformSourceBbox) {
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = transformSourceBbox.width;
             tempCanvas.height = transformSourceBbox.height;
@@ -305,7 +307,7 @@ export const CanvasContainerComponent: React.FC<CanvasContainerPropsWithRef> = (
         } else {
             setTransformPreviewDataUrl(null);
         }
-    }, [isTransforming, activeItem, transformSourceBbox]);
+    }, [isTransforming, activeItem, transformSourceBbox, transformState]);
 
     useEffect(() => {
         const handleMove = (e: PointerEvent) => {

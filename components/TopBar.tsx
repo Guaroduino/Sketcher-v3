@@ -44,6 +44,7 @@ interface TopBarProps {
     onUpdatePreset: (id: string, updates: Partial<BrushPreset>) => void;
     onLoadPreset: (id: string) => void;
     onDeletePreset: (id: string) => void;
+    palmRejectionToggleNode?: React.ReactNode;
 }
 
 const Accordion: React.FC<{ title: string, children: React.ReactNode, defaultOpen?: boolean }> = ({ title, children, defaultOpen = false }) => {
@@ -467,6 +468,11 @@ export const TopBar: React.FC<TopBarProps> = ({
             <Btn onClick={onExportClick} title="Exportar">
                 <ExportIcon className="w-5 h-5" />
             </Btn>
+
+            <div className="w-px h-6 bg-theme-bg-tertiary mx-1" />
+
+            {/* Palm Rejection Toggle */}
+            {props.palmRejectionToggleNode}
 
 
             {/* Settings Panel Popover */}

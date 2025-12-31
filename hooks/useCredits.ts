@@ -60,17 +60,17 @@ export function useCredits(user: User | null) {
         return () => unsubscribe();
     }, [user]);
 
-    const deductCredit = async (): Promise<boolean> => {
+    const deductCredit = async (amount: number = 1): Promise<boolean> => {
         if (!user || credits === null) return false;
 
-        if (credits <= 0) {
+        if (credits < amount) {
             return false;
         }
 
         try {
             const userDocRef = doc(db, 'users', user.uid);
             await updateDoc(userDocRef, {
-                credits: increment(-1)
+                credits: increment(-amount)
             });
             return true;
         } catch (error) {

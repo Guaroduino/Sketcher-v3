@@ -140,7 +140,7 @@ export type Action =
     | { type: 'REDO' }
     | { type: 'SNAPSHOT' }
     | { type: 'INITIALIZE_CANVASES'; payload: { width: number, height: number } }
-    | { type: 'ADD_ITEM'; payload: { type: 'group' | 'object', activeItemId: string | null, canvasSize: { width: number, height: number }, newItemId?: string, imageElement?: HTMLImageElement, name?: string, initialDimensions?: { width: number, height: number } } }
+    | { type: 'ADD_ITEM'; payload: { type: 'group' | 'object', activeItemId: string | null, canvasSize: { width: number, height: number }, newItemId?: string, imageElement?: HTMLImageElement, name?: string, initialDimensions?: { width: number, height: number }, targetRect?: { x: number, y: number, width: number, height: number, rotation?: number } } }
     | { type: 'ADD_ITEM_BELOW'; payload: { targetId: string, canvasSize: { width: number, height: number }, newItemId: string } }
     | { type: 'PASTE_FROM_CLIPBOARD'; payload: { newItemId: string, clipboard: ClipboardData, canvasSize: { width: number, height: number }, activeItemId: string | null } }
     | { type: 'DELETE_ITEM'; payload: { id: string } }
@@ -180,7 +180,7 @@ function appReducer(state: AppState, action: Action): AppState {
             return { ...state, objects: newObjects, canvasSize: { width, height } };
         }
         case 'ADD_ITEM': {
-            const { type, activeItemId, canvasSize, newItemId, imageElement, name, initialDimensions } = action.payload;
+            const { type, activeItemId, canvasSize, newItemId, imageElement, name, initialDimensions, targetRect } = action.payload;
             const activeItem = activeItemId ? state.objects.find(i => i.id === activeItemId) : null;
             let parentId: string | null = null;
             if (activeItem) {
@@ -214,7 +214,24 @@ function appReducer(state: AppState, action: Action): AppState {
                 sketchObject.context = context;
 
                 if (imageElement) {
-                    if (initialDimensions) {
+                    if (targetRect) {
+                        // Apply transformed placement
+                        if (targetRect.rotation) {
+                            const cx = targetRect.x + targetRect.width / 2;
+                            const cy = targetRect.y + targetRect.height / 2;
+                            context.save();
+                            context.translate(cx, cy);
+                            context.rotate(targetRect.rotation);
+                            if (targetRect.width > 0 && targetRect.height > 0) {
+                                context.drawImage(imageElement, -targetRect.width / 2, -targetRect.height / 2, targetRect.width, targetRect.height);
+                            }
+                            context.restore();
+                        } else {
+                            if (targetRect.width > 0 && targetRect.height > 0) {
+                                context.drawImage(imageElement, targetRect.x, targetRect.y, targetRect.width, targetRect.height);
+                            }
+                        }
+                    } else if (initialDimensions) {
                         const x = (canvasSize.width - initialDimensions.width) / 2;
                         const y = (canvasSize.height - initialDimensions.height) / 2;
                         context.drawImage(imageElement, x, y, initialDimensions.width, initialDimensions.height);
@@ -678,9 +695,19 @@ function appReducer(state: AppState, action: Action): AppState {
             const { id, transform, sourceBbox } = action.payload;
             const itemIndex = state.objects.findIndex(i => i.id === id);
             if (itemIndex === -1) return state;
+            console.log("Reducer: APPLY_TRANSFORM", { id, transformType: transform.type, sourceBbox });
 
             const item = state.objects[itemIndex];
-            if (!item.canvas || !item.context) return state;
+            if (!item.canvas || !item.context) {
+                console.error("Reducer: APPLY_TRANSFORM failed - item has no canvas");
+                return state;
+            }
+
+            // Safety check for dimensions
+            if (sourceBbox.width < 1 || sourceBbox.height < 1) {
+                console.warn("Reducer: APPLY_TRANSFORM aborted - invalid sourceBbox dimensions", sourceBbox);
+                return state;
+            }
 
             // Create a temporary canvas containing only the content being transformed
             const tempCanvas = document.createElement('canvas');
@@ -700,10 +727,7 @@ function appReducer(state: AppState, action: Action): AppState {
             newCtx.drawImage(item.canvas, 0, 0);
 
             // Erase the old content that is being replaced
-            newCtx.save();
-            newCtx.globalCompositeOperation = 'destination-out';
-            newCtx.fillRect(sourceBbox.x, sourceBbox.y, sourceBbox.width, sourceBbox.height);
-            newCtx.restore();
+            newCtx.clearRect(sourceBbox.x, sourceBbox.y, sourceBbox.width, sourceBbox.height);
 
             // Draw the transformed content onto the new canvas
             if (transform.type === 'free') {
@@ -713,12 +737,16 @@ function appReducer(state: AppState, action: Action): AppState {
                 newCtx.save();
                 newCtx.translate(transform.x + transform.width / 2, transform.y + transform.height / 2);
                 newCtx.rotate(transform.rotation);
-                newCtx.scale(transform.width / sourceBbox.width, transform.height / sourceBbox.height);
+                // Protect against division by zero if sourceBbox is somehow 0 (caught above, but good practice)
+                const scaleX = sourceBbox.width > 0 ? transform.width / sourceBbox.width : 1;
+                const scaleY = sourceBbox.height > 0 ? transform.height / sourceBbox.height : 1;
+                newCtx.scale(scaleX, scaleY);
                 newCtx.drawImage(tempCanvas, -tempCanvas.width / 2, -tempCanvas.height / 2);
                 newCtx.restore();
             }
 
-            const updatedItem = { ...item, canvas: newCanvas, context: newCtx };
+            const mipmaps = generateMipmaps(newCanvas);
+            const updatedItem = { ...item, canvas: newCanvas, context: newCtx, mipmaps };
 
             const newObjects = [...state.objects];
             newObjects[itemIndex] = updatedItem;
@@ -803,7 +831,9 @@ export function historyReducer(state: HistoryState, action: Action): HistoryStat
             objects: present.objects.map(obj => {
                 if (obj.id === activeItemId && obj.type === 'object') {
                     // For the active item, use the canvas from before the draw.
-                    return { ...obj, canvas: beforeCanvas, context: beforeContext };
+                    // We also need to REGENERATE MIPMAPS because the content has changed.
+                    const mipmaps = generateMipmaps(beforeCanvas);
+                    return { ...obj, canvas: beforeCanvas, context: beforeContext, mipmaps };
                 }
                 // For all OTHER items, clone their current canvas to prevent future mutations from affecting this snapshot.
                 if (obj.type === 'object' && obj.canvas) {

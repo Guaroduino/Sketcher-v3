@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useRef, useReducer, useMemo, u
 import { GoogleGenAI, Modality } from "@google/genai";
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { auth, db, storage } from './firebaseConfig';
-import { collection, query, orderBy, onSnapshot, addDoc, doc, deleteDoc, serverTimestamp, getDocs, where } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, doc, deleteDoc, serverTimestamp, getDocs, where, setDoc, updateDoc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 import { TopBar } from './components/TopBar';
@@ -45,6 +45,7 @@ import { CanvasSizeModal } from './components/modals/CanvasSizeModal';
 import { ConfirmClearModal } from './components/modals/ConfirmClearModal';
 import { ConfirmDeleteLibraryItemModal } from './components/modals/ConfirmDeleteLibraryItemModal';
 import { ConfirmResetModal } from './components/modals/ConfirmResetModal';
+import { ConfirmDiscardChangesModal } from './components/modals/ConfirmDiscardChangesModal';
 import { CropIcon, CheckIcon, XIcon, RulerIcon, PerspectiveIcon, ImageSquareIcon, OrthogonalIcon, MirrorIcon, GridIcon, IsometricIcon, LockIcon, LockOpenIcon, TransformIcon, FreeTransformIcon, SunIcon, MoonIcon, CopyIcon, CutIcon, PasteIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon, GoogleIcon, LogOutIcon, ArrowUpIcon, ArrowDownIcon, SnapIcon, BookmarkIcon, SaveIcon, FolderOpenIcon, GalleryIcon, StrokeModeIcon, FreehandIcon, LineIcon, PolylineIcon, ArcIcon, BezierIcon, ExpandIcon, MinimizeIcon, SolidLineIcon, DashedLineIcon, DottedLineIcon, DashDotLineIcon, HistoryIcon, MoreVerticalIcon, AddAboveIcon, AddBelowIcon, HandRaisedIcon, DownloadIcon, SparklesIcon, MenuIcon, ChevronDownIcon, TrashIcon, RefreshCwIcon } from './components/icons';
 
 import { UnifiedLeftSidebar } from './components/UnifiedLeftSidebar';
@@ -57,7 +58,7 @@ import { LandingGalleryCarousel } from './components/LandingGalleryCarousel';
 
 
 import { AIRequestInspectorModal } from './components/modals/AIRequestInspectorModal';
-import type { SketchObject, ItemType, Tool, CropRect, TransformState, WorkspaceTemplate, QuickAccessTool, ProjectFile, Project, StrokeMode, StrokeState, CanvasItem, StrokeModifier, ScaleUnit, Selection, ClipboardData, AppState, Point } from './types';
+import type { SketchObject, ItemType, Tool, CropRect, TransformState, WorkspaceTemplate, QuickAccessTool, ProjectFile, Project, StrokeMode, StrokeState, CanvasItem, StrokeModifier, ScaleUnit, Selection, ClipboardData, AppState, Point, LibraryItem } from './types';
 import { getContentBoundingBox, createNewCanvas, createThumbnail, cloneCanvas, generateMipmaps, getCompositeCanvas, cropCanvas } from './utils/canvasUtils';
 import { prepareAIRequest, generateContentWithRetry } from './utils/aiUtils';
 import { prepareVisualPromptingRequest, VisualPromptingPayload } from './services/visualPromptingService';
@@ -138,9 +139,35 @@ function useAppUI() {
     };
 
     const handleSaveUiScale = () => {
-        localStorage.setItem('sketcher-ui-scale', String(uiScale));
-        alert("Configuración de tamaño guardada correctamente para futuros inicios.");
+        localStorage.setItem('sketcher-ui-scale', uiScale.toString());
+        // Could add a toast here
     };
+
+    // --- UNSAVED CHANGES WARNING ---
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [pendingLoadAction, setPendingLoadAction] = useState<(() => void) | null>(null);
+    const [isDiscardConfirmOpen, setIsDiscardConfirmOpen] = useState(false);
+
+    const requestActionWithUnsavedCheck = (action: () => void) => {
+        if (hasUnsavedChanges) {
+            setPendingLoadAction(() => action);
+            setIsDiscardConfirmOpen(true);
+        } else {
+            action();
+        }
+    };
+
+    const handleConfirmDiscard = () => {
+        if (pendingLoadAction) pendingLoadAction();
+        setPendingLoadAction(null);
+        setIsDiscardConfirmOpen(false);
+        setHasUnsavedChanges(false); // Reset after forceful load
+    };
+
+
+
+
+
 
     useEffect(() => {
         if (rightSidebarRef.current && rightSidebarTopHeight === undefined) {
@@ -250,6 +277,12 @@ function useAppUI() {
         selectedModel,
         setSelectedModel,
         isInstallable: !!deferredPrompt,
+        hasUnsavedChanges,
+        setHasUnsavedChanges,
+        requestActionWithUnsavedCheck,
+        handleConfirmDiscard,
+        isDiscardConfirmOpen,
+        setIsDiscardConfirmOpen,
     };
 }
 
@@ -270,6 +303,7 @@ function useProjectManager(
 ) {
     const [projects, setProjects] = useState<Project[]>([]);
     const [projectsLoading, setProjectsLoading] = useState(true);
+    const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
 
     useEffect(() => {
         if (user) {
@@ -279,17 +313,35 @@ function useProjectManager(
                 const projectPromises = snapshot.docs.map(async (doc) => {
                     const data = doc.data();
                     try {
-                        const thumbnailUrl = await getDownloadURL(ref(storage, data.thumbnailPath));
+                        let thumbnailUrl = '';
+                        if (data.type !== 'folder' && data.thumbnailPath) {
+                            thumbnailUrl = await getDownloadURL(ref(storage, data.thumbnailPath));
+                        }
                         return {
                             id: doc.id,
                             name: data.name,
+                            type: data.type || 'project',
+                            parentId: data.parentId || null,
                             projectFilePath: data.projectFilePath,
                             thumbnailPath: data.thumbnailPath,
                             thumbnailUrl,
+                            createdAt: data.createdAt?.toMillis() || Date.now(),
+                            updatedAt: data.updatedAt?.toMillis() || Date.now(),
                         } as Project;
                     } catch (error) {
                         console.warn(`Could not get thumbnail for project ${data.name}`, error);
-                        return null;
+                        // Return valid project even if thumbnail fails
+                        return {
+                            id: doc.id,
+                            name: data.name,
+                            type: data.type || 'project',
+                            parentId: data.parentId || null,
+                            projectFilePath: data.projectFilePath,
+                            thumbnailPath: data.thumbnailPath, // Keep path even if url failed
+                            thumbnailUrl: '',
+                            createdAt: data.createdAt?.toMillis() || Date.now(),
+                            updatedAt: data.updatedAt?.toMillis() || Date.now(),
+                        } as Project;
                     }
                 });
                 const loadedProjects = (await Promise.all(projectPromises)).filter(Boolean) as Project[];
@@ -300,7 +352,6 @@ function useProjectManager(
                 setProjectsLoading(false);
             });
             return () => unsubscribe();
-        } else {
             setProjects([]);
             setProjectsLoading(false);
         }
@@ -438,29 +489,50 @@ function useProjectManager(
         }
     }, [getFullProjectStateAsFile]);
 
-    const handleSaveProject = useCallback(async (name: string, getStateToSave: () => any) => {
+    const handleSaveProject = useCallback(async (name: string, getStateToSave: () => any, existingProjectId?: string, parentId?: string | null) => {
         if (!user) {
             alert("Please log in to save projects to the cloud.");
-            return;
+            return null;
         }
 
         const { projectBlob, thumbnailBlob } = await getFullProjectStateAsFile(getStateToSave);
-        const projectId = doc(collection(db, 'dummy')).id;
+
+        // Determine ID: use existing or generate new
+        const projectId = existingProjectId || doc(collection(db, 'dummy')).id;
+
         const projectFilePath = `users/${user.uid}/projects/${projectId}.sketcher`;
         const thumbnailPath = `users/${user.uid}/projects/thumbnails/${projectId}.png`;
 
         const projectFileRef = ref(storage, projectFilePath);
         const thumbnailRef = ref(storage, thumbnailPath);
 
+        // Upload files (overwrite if exists)
         await uploadBytes(projectFileRef, projectBlob);
         await uploadBytes(thumbnailRef, thumbnailBlob);
 
-        await addDoc(collection(db, `users/${user.uid}/projects`), {
-            name: name,
-            projectFilePath: projectFilePath,
-            thumbnailPath: thumbnailPath,
-            createdAt: serverTimestamp(),
-        });
+        // Update or Create Firestore Doc
+        if (existingProjectId) {
+            // Update existing
+            await updateDoc(doc(db, `users/${user.uid}/projects`, projectId), {
+                name: name,
+                // Do not change projectFilePath/thumbnailPath as they rely on ID which is same
+                updatedAt: serverTimestamp(),
+            });
+        } else {
+            // Create new
+            await setDoc(doc(db, `users/${user.uid}/projects`, projectId), {
+                name: name,
+                type: 'project',
+                parentId: parentId || null,
+                projectFilePath: projectFilePath,
+                thumbnailPath: thumbnailPath,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            });
+        }
+
+        if (projectId) setActiveProjectId(projectId);
+        return projectId;
     }, [user, getFullProjectStateAsFile]);
 
     const handleLoadProject = useCallback(async (project: Project) => {
@@ -471,6 +543,7 @@ function useProjectManager(
             const blob = await response.blob();
             const file = new File([blob], `${project.name}.sketcher`);
             await handleLoadFromFile(file);
+            setActiveProjectId(project.id);
         } catch (error) {
             console.error("Error loading project from cloud:", error);
             alert("Failed to load project.");
@@ -495,15 +568,86 @@ function useProjectManager(
         }
     }, [user]);
 
+    const handleCreateFolder = useCallback(async (name: string, parentId: string | null) => {
+        if (!user) return;
+        try {
+            await addDoc(collection(db, `users/${user.uid}/projects`), {
+                name,
+                type: 'folder',
+                parentId,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            });
+        } catch (error) {
+            console.error("Error creating folder:", error);
+            alert("Failed to create folder.");
+        }
+    }, [user]);
+
+    const handleMoveProject = useCallback(async (project: Project, targetParentId: string | null) => {
+        if (!user) return;
+        try {
+            await updateDoc(doc(db, `users/${user.uid}/projects`, project.id), {
+                parentId: targetParentId,
+                updatedAt: serverTimestamp(),
+            });
+        } catch (error) {
+            console.error("Error moving project:", error);
+            alert("Failed to move project.");
+        }
+    }, [user]);
+
     return {
         projects,
         projectsLoading,
+        activeProjectId,
+        setActiveProjectId,
         saveProject: handleSaveProject,
         loadProject: handleLoadProject,
         deleteProject: handleDeleteProject,
         saveLocally: handleSaveLocally,
         loadFromFile: handleLoadFromFile,
         getFullProjectStateAsFile,
+        createFolder: handleCreateFolder,
+        moveProject: handleMoveProject,
+        duplicateProject: async (project: Project) => {
+            if (!user) return;
+            try {
+                // 1. Download original project file
+                const projectUrl = await getDownloadURL(ref(storage, project.projectFilePath));
+                const projectRes = await fetch(projectUrl);
+                const projectBlob = await projectRes.blob();
+
+                // 2. Download original thumbnail
+                const thumbUrl = await getDownloadURL(ref(storage, project.thumbnailPath));
+                const thumbRes = await fetch(thumbUrl);
+                const thumbBlob = await thumbRes.blob();
+
+                // 3. Create new ID
+                const newProjectId = doc(collection(db, 'dummy')).id;
+                const newProjectFilePath = `users/${user.uid}/projects/${newProjectId}.sketcher`;
+                const newThumbnailPath = `users/${user.uid}/projects/thumbnails/${newProjectId}.png`;
+
+                // 4. Upload copies
+                await uploadBytes(ref(storage, newProjectFilePath), projectBlob);
+                await uploadBytes(ref(storage, newThumbnailPath), thumbBlob);
+
+                // 5. Create Firestore Doc
+                await setDoc(doc(db, `users/${user.uid}/projects`, newProjectId), {
+                    name: `Copia de ${project.name}`,
+                    type: 'project',
+                    parentId: project.parentId || null, // Keep same folder
+                    projectFilePath: newProjectFilePath,
+                    thumbnailPath: newThumbnailPath,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                });
+
+            } catch (error) {
+                console.error("Error duplicating project:", error);
+                alert("Failed to duplicate project.");
+            }
+        },
     };
 }
 
@@ -520,7 +664,8 @@ function useAI(
     credits: number | null,
     deductCredit: () => Promise<boolean>,
     selectedModel: string, // Accept from hook
-    inspectRequest?: (payload: { model: string; parts: any[]; config?: any }) => Promise<boolean>
+    inspectRequest?: (payload: { model: string; parts: any[]; config?: any }) => Promise<boolean>,
+    onStartPendingImport?: (img: string | HTMLImageElement) => void
 ) {
     const [isEnhancing, setIsEnhancing] = useState(false);
     const [enhancementPreview, setEnhancementPreview] = useState<{
@@ -898,7 +1043,7 @@ function useAI(
                     if (payload.shouldAddToLibrary) {
                         fetch(processedDataUrl).then(res => res.blob()).then(blob => {
                             if (blob) onImportToLibrary(new File([blob], `${newName}.png`, { type: 'image/png' }), null, {
-                                scaleFactor: 0, // Force 0 scale factor for AI generated images so they use the smart scaling logic (50% viewport) on drag & drop
+                                scaleFactor: 1, // Force 1 scale factor for AI generated images (1mm = 1px)
                                 transparentColors,
                                 tolerance,
                                 originalFile
@@ -909,24 +1054,29 @@ function useAI(
                     // 2. Add to Canvas (If Checked)
                     // For composition, this means adding the full scene as a new layer object.
                     if (payload.shouldAddToCanvas) {
-                        const newItemId = `object-${Date.now()}`;
-                        dispatch({
-                            type: 'ADD_ITEM',
-                            payload: {
-                                type: 'object',
-                                activeItemId: null,
-                                newItemId,
-                                imageElement: finalImg,
-                                canvasSize,
-                                name: newName,
-                                initialDimensions: {
-                                    width: referenceWidth, // For composition, referenceWidth is usually canvas width
-                                    height: referenceWidth * (img.height / img.width)
+                        if (onStartPendingImport) {
+                            onStartPendingImport(finalImg);
+                        } else {
+                            // Fallback if no pending import handler
+                            const newItemId = `object-${Date.now()}`;
+                            dispatch({
+                                type: 'ADD_ITEM',
+                                payload: {
+                                    type: 'object',
+                                    activeItemId: null,
+                                    newItemId,
+                                    imageElement: finalImg,
+                                    canvasSize,
+                                    name: newName,
+                                    initialDimensions: {
+                                        width: referenceWidth, // For composition, referenceWidth is usually canvas width
+                                        height: referenceWidth * (img.height / img.width)
+                                    }
                                 }
-                            }
-                        });
-                        handleSelectItem(newItemId);
-                        setTool('select');
+                            });
+                            handleSelectItem(newItemId);
+                            setTool('select');
+                        }
                     }
 
                     // 3. Remove Content Logic
@@ -1009,7 +1159,7 @@ export function App() {
 
     // -- View State --
     const [activeView, setActiveView] = useState<'sketch' | 'free'>('sketch'); // 'render' merged into 'sketch'
-    const [sidebarTab, setSidebarTab] = useState<'sketch' | 'render' | 'simple_render'>('sketch');
+    const [sidebarTab, setSidebarTab] = useState<'sketch' | 'render' | 'simple_render' | 'visual_prompting'>('sketch');
     const [leftSidebarTab, setLeftSidebarTab] = useState<'visual-prompting' | 'tools'>('tools');
 
     // -- Simple Render State --
@@ -1117,6 +1267,9 @@ export function App() {
     const {
         isExportModalOpen, setExportModalOpen,
         isSingleExportModalOpen, setSingleExportModalOpen,
+        hasUnsavedChanges, setHasUnsavedChanges,
+        requestActionWithUnsavedCheck, handleConfirmDiscard,
+        isDiscardConfirmOpen, setIsDiscardConfirmOpen,
         selectedModel, setSelectedModel,
     } = ui;
 
@@ -1211,7 +1364,8 @@ export function App() {
         }
     }, [selection]);
 
-    const ai = useAI(dispatch, library.onImportToLibrary, handleSelectItem, setTool, scaleFactor, credits, deductCredit, selectedModel, inspectAIRequest);
+    const handleStartPendingImportRef = useRef<((img: string | HTMLImageElement, scale?: number) => void) | null>(null);
+    const ai = useAI(dispatch, library.onImportToLibrary, handleSelectItem, setTool, scaleFactor, credits, deductCredit, selectedModel, inspectAIRequest, (img) => handleStartPendingImportRef.current?.(img));
     const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
 
     const loadAllToolSettings = useCallback((settings: any) => {
@@ -1239,7 +1393,86 @@ export function App() {
         (state) => { if (freeModeRef.current) freeModeRef.current.setFullState(state); }
     );
 
-    const { onDropOnCanvas } = useCanvasModes(tool, setTool, dispatch, library.libraryItems, canvasSize, currentState.scaleFactor);
+
+
+    const handleAppLoadProject = (project: Project) => {
+        requestActionWithUnsavedCheck(() => projects.loadProject(project));
+    };
+
+    const handleAppLoadFromFile = (file: File) => {
+        requestActionWithUnsavedCheck(() => projects.loadFromFile(file));
+    };
+
+    const handleAppSaveProject = async (name: string, parentId?: string | null) => {
+        await projects.saveProject(name, () => ({
+            currentState,
+            guides: {
+                activeGuide: guides.activeGuide, isOrthogonalVisible: guides.isOrthogonalVisible, rulerGuides: guides.rulerGuides,
+                mirrorGuides: guides.mirrorGuides, perspectiveGuide: guides.perspectiveGuide, orthogonalGuide: guides.orthogonalGuide,
+                gridGuide: guides.gridGuide, areGuidesLocked: guides.areGuidesLocked, isPerspectiveStrokeLockEnabled: guides.isPerspectiveStrokeLockEnabled,
+                isSnapToGridEnabled: guides.isSnapToGridEnabled,
+            },
+            toolSettings: { ...toolSettings },
+            quickAccess: quickAccess.quickAccessSettings,
+            archRenderState: renderState.getFullState(),
+            freeModeState: freeModeRef.current?.getFullState()
+        }), projects.activeProjectId, parentId);
+        setHasUnsavedChanges(false);
+    };
+
+    const handleAppSaveAsProject = async (name: string, parentId?: string | null) => {
+        // Force new project by passing undefined for existingId
+        await projects.saveProject(name, () => ({
+            currentState,
+            guides: {
+                activeGuide: guides.activeGuide, isOrthogonalVisible: guides.isOrthogonalVisible, rulerGuides: guides.rulerGuides,
+                mirrorGuides: guides.mirrorGuides, perspectiveGuide: guides.perspectiveGuide, orthogonalGuide: guides.orthogonalGuide,
+                gridGuide: guides.gridGuide, areGuidesLocked: guides.areGuidesLocked, isPerspectiveStrokeLockEnabled: guides.isPerspectiveStrokeLockEnabled,
+                isSnapToGridEnabled: guides.isSnapToGridEnabled,
+            },
+            toolSettings: { ...toolSettings },
+            quickAccess: quickAccess.quickAccessSettings,
+            archRenderState: renderState.getFullState(),
+            freeModeState: freeModeRef.current?.getFullState()
+        }), undefined, parentId);
+        setHasUnsavedChanges(false);
+    };
+
+    const handleAppSaveLocally = async (name: string) => {
+        await projects.saveLocally(name, () => ({
+            currentState,
+            guides: {
+                activeGuide: guides.activeGuide, isOrthogonalVisible: guides.isOrthogonalVisible, rulerGuides: guides.rulerGuides,
+                mirrorGuides: guides.mirrorGuides, perspectiveGuide: guides.perspectiveGuide, orthogonalGuide: guides.orthogonalGuide,
+                gridGuide: guides.gridGuide, areGuidesLocked: guides.areGuidesLocked, isPerspectiveStrokeLockEnabled: guides.isPerspectiveStrokeLockEnabled,
+                isSnapToGridEnabled: guides.isSnapToGridEnabled,
+            },
+            toolSettings: { ...toolSettings },
+            quickAccess: quickAccess.quickAccessSettings,
+            archRenderState: renderState.getFullState(),
+            freeModeState: freeModeRef.current?.getFullState()
+        }));
+        setHasUnsavedChanges(false);
+    };
+
+    const handleAppOverwriteProject = async (project: Project) => {
+        await projects.saveProject(project.name, () => ({
+            currentState,
+            guides: {
+                activeGuide: guides.activeGuide, isOrthogonalVisible: guides.isOrthogonalVisible, rulerGuides: guides.rulerGuides,
+                mirrorGuides: guides.mirrorGuides, perspectiveGuide: guides.perspectiveGuide, orthogonalGuide: guides.orthogonalGuide,
+                gridGuide: guides.gridGuide, areGuidesLocked: guides.areGuidesLocked, isPerspectiveStrokeLockEnabled: guides.isPerspectiveStrokeLockEnabled,
+                isSnapToGridEnabled: guides.isSnapToGridEnabled,
+            },
+            toolSettings: { ...toolSettings },
+            quickAccess: quickAccess.quickAccessSettings,
+            archRenderState: renderState.getFullState(),
+            freeModeState: freeModeRef.current?.getFullState()
+        }), project.id);
+        setHasUnsavedChanges(false);
+    };
+
+    const { onDropOnCanvas } = useCanvasModes(tool, setTool, dispatch, library.libraryItems, canvasSize, currentState.scaleFactor, (img) => handleStartPendingImportRef.current?.(img));
 
     const [isInitialized, setIsInitialized] = useState(false);
     const [isWorkspacePopoverOpen, setWorkspacePopoverOpen] = useState(false);
@@ -1373,17 +1606,50 @@ export function App() {
         return () => unsubscribe();
     }, []);
 
-    // Exit Confirmation
+    // 1. Initial Load of Colors from User Profile
     useEffect(() => {
-        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-            if (objects.filter(o => !o.isBackground).length > 0 || lastRenderedImage) {
-                e.preventDefault();
-                e.returnValue = '';
+        if (!user) return;
+        const fetchUserProfile = async () => {
+            try {
+                const userDocRef = doc(db, 'users', user.uid);
+                const userDoc = await getDoc(userDocRef);
+                if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    if (data.quickAccessColors && Array.isArray(data.quickAccessColors)) {
+                        // Merge with existing but prefer persisted colors
+                        const mergedSettings = {
+                            ...quickAccess.quickAccessSettings,
+                            colors: data.quickAccessColors
+                        };
+                        quickAccess.loadState(mergedSettings);
+                    }
+                }
+            } catch (error) {
+                console.error("Error loading user settings:", error);
             }
         };
-        window.addEventListener('beforeunload', handleBeforeUnload);
-        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-    }, [objects, lastRenderedImage]);
+        fetchUserProfile();
+    }, [user]); // Run when user logs in
+
+    // 2. Persist Colors on Change (Debounced)
+    useEffect(() => {
+        // If user not logged in or no colors, don't save.
+        if (!user || !quickAccess.quickAccessSettings.colors) return;
+
+        const colorsToSave = quickAccess.quickAccessSettings.colors;
+        const timer = setTimeout(async () => {
+            try {
+                const userDocRef = doc(db, 'users', user.uid);
+                // We use setDoc with merge: true to avoid overwriting other fields
+                await setDoc(userDocRef, {
+                    quickAccessColors: colorsToSave,
+                    updatedAt: serverTimestamp() // Optional tracking
+                }, { merge: true });
+            } catch (e) { console.error("Error saving colors:", e); }
+        }, 1000); // 1s debounce
+
+        return () => clearTimeout(timer);
+    }, [quickAccess.quickAccessSettings.colors, user]);
 
     // Debounced Autosave
     useEffect(() => {
@@ -1612,12 +1878,13 @@ export function App() {
         const newItemId = `${type}-${Date.now()}`;
         dispatch({ type: 'ADD_ITEM', payload: { type, activeItemId, canvasSize, newItemId } });
         setSelectedItemIds([newItemId]);
+        setHasUnsavedChanges(true); // Dirty
         return newItemId;
     }, [activeItemId, canvasSize, dispatch]);
-    const copyItem = useCallback((id: string) => dispatch({ type: 'COPY_ITEM', payload: { id } }), [dispatch]);
+    const copyItem = useCallback((id: string) => { dispatch({ type: 'COPY_ITEM', payload: { id } }); setHasUnsavedChanges(true); }, [dispatch]);
     const deleteItem = useCallback((id: string) => ui.setDeletingItemId(id), [ui]);
-    const handleMoveItem = useCallback((draggedId: string, targetId: string, position: 'top' | 'bottom' | 'middle') => dispatch({ type: 'MOVE_ITEM', payload: { draggedId, targetId, position } }), [dispatch]);
-    const handleDrawCommit = useCallback((id: string, beforeCanvas: HTMLCanvasElement) => dispatch({ type: 'COMMIT_DRAWING', payload: { activeItemId: id, beforeCanvas } }), [dispatch]);
+    const handleMoveItem = useCallback((draggedId: string, targetId: string, position: 'top' | 'bottom' | 'middle') => { dispatch({ type: 'MOVE_ITEM', payload: { draggedId, targetId, position } }); setHasUnsavedChanges(true); }, [dispatch]);
+    const handleDrawCommit = useCallback((id: string, beforeCanvas: HTMLCanvasElement) => { dispatch({ type: 'COMMIT_DRAWING', payload: { activeItemId: id, beforeCanvas } }); setHasUnsavedChanges(true); }, [dispatch]);
     const updateItem = useCallback((id: string, updates: Partial<CanvasItem>) => {
         if (id === 'annotations-root-id') {
             if (updates.isVisible !== undefined) setIsAnnotationsVisible(updates.isVisible);
@@ -1820,13 +2087,124 @@ export function App() {
         ctx.restore();
         dispatch({ type: 'COMMIT_DRAWING', payload: { activeItemId: textState.activeItemId, beforeCanvas } });
         setTextEditState(null);
+
     }, [objects, toolSettings.textSettings, dispatch]);
 
     // Crop & Transform handlers
     const handleApplyCrop = () => { if (cropRect) { dispatch({ type: 'CROP_CANVAS', payload: { cropRect } }); setTool('select'); } };
     const handleCancelCrop = () => setTool('select');
-    const handleApplyTransform = () => { if (transformState && transformSourceBbox && activeItem) { dispatch({ type: 'APPLY_TRANSFORM', payload: { id: activeItem.id, transform: transformState, sourceBbox: transformSourceBbox } }); setTool('select'); } };
-    const handleCancelTransform = () => setTool('select');
+    // Pending Import Handler
+    const handleStartPendingImport = useCallback((imageSrc: string | HTMLImageElement, initialScaleFactor = 1) => {
+        const startImport = (image: HTMLImageElement) => {
+            // 1. Calculate Initial Dimensions (Fit to Viewport logic or reuse logic?)
+            // User wants transform mode. Let's default to a reasonable size: 50% viewport or natural if smaller?
+            // Or allow full size if it fits?
+
+            let width = image.width;
+            let height = image.height;
+
+            // Logic from useCanvasModes but adapted
+            // If manual scale requested?
+
+            // Enforce reasonable bounds for initial view (80% of canvas)
+            const maxW = canvasSize.width * 0.8;
+            const maxH = canvasSize.height * 0.8;
+
+            // If image is larger than 80% viewport, scale down
+            if (width > maxW || height > maxH) {
+                const aspect = width / height;
+                if (width / maxW > height / maxH) {
+                    width = maxW;
+                    height = width / aspect;
+                } else {
+                    height = maxH;
+                    width = height * aspect;
+                }
+            }
+
+            // Center
+            const x = (canvasSize.width - width) / 2;
+            const y = (canvasSize.height - height) / 2;
+
+            setSelection(null);
+            setSelectedItemIds([]);
+
+            setTransformSourceBbox({ x: 0, y: 0, width: image.width, height: image.height });
+            setTransformState({
+                type: 'affine',
+                x, y, width, height, rotation: 0,
+                pendingImage: image
+            });
+            setIsTransforming(true);
+            setTool('transform');
+        };
+
+        if (typeof imageSrc === 'string') {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                // alert(`Debug: Image loaded. Size: ${img.width}x${img.height}`);
+                startImport(img);
+            };
+            img.onerror = (e) => {
+                console.error("Error loading image for import:", e);
+                alert("Error al cargar la imagen (onerror fired).");
+            };
+            img.src = imageSrc;
+        } else {
+            startImport(imageSrc);
+        }
+    }, [canvasSize, setTool, setSelection, setSelectedItemIds, setIsTransforming]);
+
+    // Update Ref for hoisting
+    useEffect(() => {
+        handleStartPendingImportRef.current = handleStartPendingImport;
+    }, [handleStartPendingImport]);
+
+    // Ref to track latest transform state to avoid stale closures in callbacks
+    const transformStateRef = useRef(transformState);
+    useEffect(() => { transformStateRef.current = transformState; }, [transformState]);
+
+    const handleApplyTransform = useCallback(() => {
+        // Use Ref to ensure we have the very latest state
+        const currentTransformState = transformStateRef.current;
+        console.log("handleApplyTransform triggered", { currentTransformState, transformSourceBbox, activeItem: activeItem?.id });
+
+        if (currentTransformState && 'pendingImage' in currentTransformState && currentTransformState.pendingImage) {
+            // Handle Pending Import Rasterization
+            if (currentTransformState.type === 'affine') {
+                const newItemId = `object-${Date.now()}`;
+                dispatch({
+                    type: 'ADD_ITEM',
+                    payload: {
+                        type: 'object',
+                        activeItemId,
+                        canvasSize,
+                        newItemId,
+                        imageElement: currentTransformState.pendingImage,
+                        targetRect: {
+                            x: currentTransformState.x,
+                            y: currentTransformState.y,
+                            width: currentTransformState.width,
+                            height: currentTransformState.height,
+                            rotation: currentTransformState.rotation
+                        }
+                    }
+                });
+                setTransformState(null);
+                setTool('select');
+                handleSelectItem(newItemId);
+            }
+        }
+        else if (currentTransformState && transformSourceBbox && activeItem) {
+            dispatch({ type: 'APPLY_TRANSFORM', payload: { id: activeItem.id, transform: currentTransformState, sourceBbox: transformSourceBbox } });
+            setTool('select');
+        } else {
+            console.warn("handleApplyTransform aborted: missing state", { currentTransformState, transformSourceBbox, activeItem: !!activeItem });
+        }
+    }, [transformSourceBbox, activeItem, dispatch, setTool, activeItemId, canvasSize, handleSelectItem]);
+
+    const handleCancelTransform = useCallback(() => setTool('select'), [setTool]);
 
     // Selection handlers
     const handleDeselect = useCallback(() => setSelection(null), []);
@@ -1877,7 +2255,7 @@ export function App() {
     const handleCutSelection = useCallback(() => { handleCopySelection(); handleDeleteSelection(); }, [handleCopySelection, handleDeleteSelection]);
     const handlePaste = useCallback(() => {
         if (!clipboard) return;
-        const newItemId = `object-${Date.now()}`;
+        const newItemId = `object - ${Date.now()} `;
         dispatch({ type: 'PASTE_FROM_CLIPBOARD', payload: { newItemId, clipboard, canvasSize, activeItemId } });
         handleSelectItem(newItemId);
         setTool('transform');
@@ -2077,8 +2455,8 @@ export function App() {
         }
     }, [activeItemState.canMergeUp, visualList, handleMergeItems]);
 
-    const handleAddObjectAbove = useCallback((id: string) => { const newItemId = `object-${Date.now()}`; dispatch({ type: 'ADD_ITEM', payload: { type: 'object', activeItemId: id, canvasSize, newItemId } }); setSelectedItemIds([newItemId]); }, [canvasSize, dispatch]);
-    const handleAddObjectBelow = useCallback((id: string) => { const newItemId = `object-${Date.now()}`; dispatch({ type: 'ADD_ITEM_BELOW', payload: { targetId: id, canvasSize, newItemId } }); setSelectedItemIds([newItemId]); }, [canvasSize, dispatch]);
+    const handleAddObjectAbove = useCallback((id: string) => { const newItemId = `object - ${Date.now()} `; dispatch({ type: 'ADD_ITEM', payload: { type: 'object', activeItemId: id, canvasSize, newItemId } }); setSelectedItemIds([newItemId]); }, [canvasSize, dispatch]);
+    const handleAddObjectBelow = useCallback((id: string) => { const newItemId = `object - ${Date.now()} `; dispatch({ type: 'ADD_ITEM_BELOW', payload: { targetId: id, canvasSize, newItemId } }); setSelectedItemIds([newItemId]); }, [canvasSize, dispatch]);
 
     const dimensionDisplay = useMemo(() => {
         if (canvasSize.width > 0 && scaleFactor > 0) {
@@ -2143,7 +2521,7 @@ export function App() {
             const aspectRatio = canvasSize.width / canvasSize.height;
             const ratioText = aspectRatio > 1 ? "landscape" : aspectRatio < 1 ? "portrait" : "square";
             const dimensionInstruction = `\n\nCRITICAL DIMENSION RULES:
-- Target Aspect Ratio: ${aspectRatio.toFixed(2)} (${ratioText}).
+        - Target Aspect Ratio: ${aspectRatio.toFixed(2)} (${ratioText}).
 - CONTENT AREA: You MUST generate/edit the content to fill the ENTIRE frame from edge to edge without any internal white borders or padding.`;
 
             const payload: VisualPromptingPayload = {
@@ -2179,8 +2557,26 @@ export function App() {
 
             // 4. Call AI
             const genAI = new GoogleGenAI({ apiKey });
+
+            // Calculate Aspect Ratio string for Gemini 3
+            // Supported: "1:1", "3:4", "4:3", "9:16", "16:9"
+            const ratio = canvasSize.width / canvasSize.height;
+            let targetAspectRatio = "1:1";
+            if (Math.abs(ratio - 16 / 9) < 0.2) targetAspectRatio = "16:9";
+            else if (Math.abs(ratio - 9 / 16) < 0.2) targetAspectRatio = "9:16";
+            else if (Math.abs(ratio - 4 / 3) < 0.2) targetAspectRatio = "4:3";
+            else if (Math.abs(ratio - 3 / 4) < 0.2) targetAspectRatio = "3:4";
+
             // @ts-ignore
-            const response = await genAI.models.generateContent({ model: selectedModel, contents });
+            const response = await genAI.models.generateContent({
+                model: selectedModel,
+                contents,
+                config: {
+                    responseMimeType: "image/jpeg",
+                    aspectRatio: targetAspectRatio,
+                    sampleCount: 1
+                } as any
+            });
 
             // Extract Image
             let newImageBase64: string | null = null;
@@ -2195,28 +2591,14 @@ export function App() {
             }
 
             if (newImageBase64) {
-                if (deductCredit) await deductCredit();
+                // Calculate Credit Cost
+                const cost = selectedModel.includes('gemini-3') ? 5 : 1;
+
+                if (deductCredit) await deductCredit(cost);
                 const aiResultUrl = `data:image/png;base64,${newImageBase64}`;
 
-                // Force full canvas replacement
-                const img = new Image();
-                img.onload = () => {
-                    const finalCanvas = document.createElement('canvas');
-                    finalCanvas.width = canvasSize.width;
-                    finalCanvas.height = canvasSize.height;
-                    const fCtx = finalCanvas.getContext('2d');
-                    if (fCtx) {
-                        // We scale the result to exactly match the canvas dimensions
-                        fCtx.drawImage(img, 0, 0, canvasSize.width, canvasSize.height);
-                        const finalImg = new Image();
-                        finalImg.onload = () => {
-                            dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: finalImg } });
-                            setTimeout(canvasView.onZoomExtents, 100);
-                        };
-                        finalImg.src = finalCanvas.toDataURL('image/png');
-                    }
-                };
-                img.src = aiResultUrl;
+                // Show Result Modal instead of auto-applying
+                renderState.setResultImage(aiResultUrl);
             } else {
                 alert("La IA no generó una imagen.");
             }
@@ -2488,7 +2870,8 @@ export function App() {
             }
 
             if (newImageBase64) {
-                if (deductCredit) await deductCredit();
+                const cost = selectedModel.includes('gemini-3') ? 5 : 1;
+                if (deductCredit) await deductCredit(cost);
                 const url = `data:image/png;base64,${newImageBase64}`;
                 renderState.setResultImage(url); // Use existing render result display?
                 // Or maybe we want to show it in the Simple tab?
@@ -2551,42 +2934,9 @@ export function App() {
     }, [sidebarTab, backgroundObject, canvasSize, getCompositeCanvas, getDrawableObjects]);
 
     const handleFullReset = useCallback(() => {
-        // 1. Reset Canvas Content
-        dispatch({ type: 'CLEAR_CANVAS' });
-
-        // 2. Reset Background
-        dispatch({ type: 'REMOVE_BACKGROUND_IMAGE' });
-
-        // 3. Reset Guides
-        guides.resetPerspective();
-        guides.onSetActiveGuide('none');
-        guides.toggleSnapToGrid(false);
-        if (guides.isOrthogonalVisible) guides.toggleOrthogonal();
-
-        // 4. Reset View
-        if (onZoomExtentsRef.current) onZoomExtentsRef.current();
-
-        // 5. Reset Tool & Selection
-        setTool('brush');
-        setSelection(null);
-        setSelectedItemIds([]);
-
-        // 6. Reset Visual Prompting
-        vp.clearAll();
-
-        // 7. Reset Simple Render / AI States
-        setSimpleRenderSketchImage(null);
-        setSimpleRenderCompositeImage(null);
-        renderState.setResultImage(null);
-
-        // 8. Close Modal
-        ui.setIsResetConfirmOpen(false);
-
-        // 9. Clear Autosave
-        localStorage.removeItem('sketcher_v3_autosave');
-
-        console.log("App Full Reset Completed");
-    }, [dispatch, guides, vp, renderState, ui]);
+        // Just reload the application to reset memory state, preserving preferences.
+        window.location.reload();
+    }, []);
 
     const renderNode = useMemo(() => (
         <ArchitecturalControls
@@ -2636,49 +2986,33 @@ export function App() {
             {library.imageToEdit && <TransparencyEditor item={library.imageToEdit} onApply={library.onApplyTransparency} onCancel={library.onCancelEditTransparency} />}
             {isToolSelectorOpen && editingToolSlotIndex !== null && <ToolSelectorModal isOpen={isToolSelectorOpen} onClose={() => { setIsToolSelectorOpen(false); setEditingToolSlotIndex(null); }} onSelectTool={(tool) => quickAccess.updateTool(editingToolSlotIndex, tool)} fxPresets={toolSettings.brushPresets} />}
 
+            <ConfirmDiscardChangesModal isOpen={isDiscardConfirmOpen} onCancel={() => setIsDiscardConfirmOpen(false)} onConfirm={handleConfirmDiscard} />
+
             <ProjectGalleryModal
                 isOpen={ui.isProjectGalleryOpen}
                 onClose={() => ui.setProjectGalleryOpen(false)}
                 user={user}
                 projects={projects.projects}
                 isLoading={projects.projectsLoading}
-                onSave={(name) => projects.saveProject(name, () => ({
-                    currentState,
-                    guides: {
-                        activeGuide: guides.activeGuide, isOrthogonalVisible: guides.isOrthogonalVisible, rulerGuides: guides.rulerGuides,
-                        mirrorGuides: guides.mirrorGuides, perspectiveGuide: guides.perspectiveGuide, orthogonalGuide: guides.orthogonalGuide,
-                        gridGuide: guides.gridGuide, areGuidesLocked: guides.areGuidesLocked, isPerspectiveStrokeLockEnabled: guides.isPerspectiveStrokeLockEnabled,
-                        isSnapToGridEnabled: guides.isSnapToGridEnabled,
-                    },
-                    toolSettings: { ...toolSettings },
-                    quickAccess: quickAccess.quickAccessSettings,
-                    archRenderState: renderState.getFullState(),
-                    freeModeState: freeModeRef.current?.getFullState()
-                }))}
-                onLoad={projects.loadProject}
+                onSave={handleAppSaveProject}
+                onSaveAs={handleAppSaveAsProject}
+                onLoad={handleAppLoadProject}
                 onDelete={projects.deleteProject}
-                onSaveLocally={(name) => projects.saveLocally(name, () => ({
-                    currentState,
-                    guides: {
-                        activeGuide: guides.activeGuide, isOrthogonalVisible: guides.isOrthogonalVisible, rulerGuides: guides.rulerGuides,
-                        mirrorGuides: guides.mirrorGuides, perspectiveGuide: guides.perspectiveGuide, orthogonalGuide: guides.orthogonalGuide,
-                        gridGuide: guides.gridGuide, areGuidesLocked: guides.areGuidesLocked, isPerspectiveStrokeLockEnabled: guides.isPerspectiveStrokeLockEnabled,
-                        isSnapToGridEnabled: guides.isSnapToGridEnabled,
-                    },
-                    toolSettings: { ...toolSettings },
-                    quickAccess: quickAccess.quickAccessSettings,
-                    archRenderState: renderState.getFullState(),
-                    freeModeState: freeModeRef.current?.getFullState()
-                }))}
-                onLoadFromFile={projects.loadFromFile}
+                onSaveLocally={handleAppSaveLocally}
+                onLoadFromFile={handleAppLoadFromFile}
+                onDuplicate={projects.duplicateProject}
+                onOverwrite={handleAppOverwriteProject}
+                onProjectCreateFolder={projects.createFolder}
+                onMoveProject={projects.moveProject}
                 libraryItems={library.libraryItems}
                 onAddLibraryItemToScene={(item) => {
                     if (activeView === 'render') {
-                        // In Unified, just add to canvas
-                        addItem(item.type, item.dataUrl);
+                        // Switch to sketch to show transform
+                        setActiveView('sketch');
+                        handleStartPendingImportRef.current?.(item.dataUrl);
                         ui.setProjectGalleryOpen(false);
                     } else {
-                        addItem(item.type, item.dataUrl);
+                        handleStartPendingImportRef.current?.(item.dataUrl);
                     }
                 }}
                 onPublishLibraryItem={(item) => library.publishToPublicGallery(item, item.name || 'Sin Título')}
@@ -2763,6 +3097,16 @@ export function App() {
 
                         <div className="flex items-center gap-2">
                             <div className="flex items-center gap-1 mr-2 px-2 py-1 bg-theme-bg-secondary rounded-md border border-theme-bg-tertiary">
+                                {/* Palm Rejection Toggle */}
+                                <button
+                                    onClick={() => setIsPalmRejectionEnabled(prev => !prev)}
+                                    className={`p-1.5 rounded-md transition-colors ${isPalmRejectionEnabled ? 'text-theme-accent-primary bg-theme-bg-tertiary' : 'text-theme-text-secondary hover:bg-theme-bg-tertiary hover:text-theme-text-primary'}`}
+                                    title={isPalmRejectionEnabled ? "Rechazo de Palma: ACTIVADO (Solo Lápiz)" : "Rechazo de Palma: DESACTIVADO (Lápiz y Dedo)"}
+                                >
+                                    <HandRaisedIcon className="w-4 h-4" />
+                                </button>
+                                <div className="w-px h-4 bg-theme-bg-tertiary mx-1" />
+
                                 {/* App Reset - Desktop */}
                                 <button
                                     onClick={() => ui.setIsResetConfirmOpen(true)}
@@ -2847,17 +3191,6 @@ export function App() {
             >
                 <UnifiedLeftSidebar
                     isOpen={ui.isLeftSidebarVisible}
-                    activeTab={leftSidebarTab}
-                    onTabChange={(tab) => {
-                        setLeftSidebarTab(tab);
-                        // Reset Visual Prompting tools logic
-                        if (tab !== 'visual-prompting') {
-                            vp.setActiveTool('pan'); // Deactivate markup
-                        } else {
-                            vp.setActiveTool('pan'); // Reset to safe state when entering
-                        }
-                    }}
-                    visualPromptingNode={visualPromptingNode}
                     drawingToolsNode={drawingToolsNode}
                 />
             </aside>
@@ -2952,14 +3285,7 @@ export function App() {
 
                         <div className="absolute top-4 left-4 flex items-center gap-2 z-30 transition-all duration-300">
                             {dimensionDisplay && <button ref={scaleButtonRef} onClick={() => setIsScalePopoverOpen(p => !p)} className="bg-theme-bg-primary/80 backdrop-blur-sm text-theme-text-secondary text-xs rounded-md px-2 py-1 pointer-events-auto hover:bg-theme-bg-secondary transition-colors" title="Ajustar escala del lienzo">{dimensionDisplay}</button>}
-                            <button
-                                onClick={() => setIsPalmRejectionEnabled(prev => !prev)}
-                                className={`bg-theme-bg-primary/80 backdrop-blur-sm text-xs rounded-md px-2 py-1 pointer-events-auto hover:bg-theme-bg-secondary transition-colors flex items-center gap-1 ${isPalmRejectionEnabled ? 'text-theme-accent-primary font-bold' : 'text-theme-text-secondary'}`}
-                                title={isPalmRejectionEnabled ? "Rechazo de Palma: ACTIVADO (Solo Lápiz)" : "Rechazo de Palma: DESACTIVADO (Lápiz y Dedo)"}
-                            >
-                                <HandRaisedIcon className="w-4 h-4" />
-                                <span className="hidden md:inline">{isPalmRejectionEnabled ? "Solo Lápiz" : "Táctil + Lápiz"}</span>
-                            </button>
+
                         </div>
 
                         <ScalePopover isOpen={isScalePopoverOpen} onClose={() => setIsScalePopoverOpen(false)} anchorEl={scaleButtonRef.current} scaleFactor={scaleFactor} scaleUnit={scaleUnit} onSetScaleFactor={handleSetScaleFactor} onSetScaleUnit={handleSetScaleUnit} />
@@ -3044,7 +3370,8 @@ export function App() {
                     </div>
                 </main>
                 {/* Result Overlay - High Z-Index to cover everything */}
-                {activeView === 'sketch' && renderState.resultImage && (
+                {/* Result Overlay - DEPRECATED (Moved to root) */}
+                {false && activeView === 'sketch' && renderState.resultImage && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
                         <div className="bg-theme-bg-secondary rounded-xl shadow-2xl border border-theme-bg-tertiary flex flex-col w-full max-w-4xl max-h-[90vh] overflow-hidden">
                             {/* Header */}
@@ -3105,8 +3432,35 @@ export function App() {
                                 <button
                                     onClick={() => {
                                         if (renderState.resultImage) {
-                                            handleImportRenderToSketch(renderState.resultImage);
-                                            renderState.setResultImage(null);
+                                            // Handle "Add to Canvas" logic based on context
+                                            if (activeView === 'sketch' && leftSidebarTab === 'visual-prompting') {
+                                                // VISUAL PROMPTING: Replace Background with Result
+                                                const img = new Image();
+                                                img.onload = () => {
+                                                    const finalCanvas = document.createElement('canvas');
+                                                    finalCanvas.width = canvasSize.width;
+                                                    finalCanvas.height = canvasSize.height;
+                                                    const fCtx = finalCanvas.getContext('2d');
+                                                    if (fCtx) {
+                                                        // We scale the result to exactly match the canvas dimensions
+                                                        fCtx.drawImage(img, 0, 0, canvasSize.width, canvasSize.height);
+                                                        const finalImg = new Image();
+                                                        finalImg.onload = () => {
+                                                            dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: finalImg } });
+                                                            // Clear VP regions after commit? User might want to keep them.
+                                                            // For now, keep them.
+                                                        };
+                                                        finalImg.src = finalCanvas.toDataURL('image/png');
+                                                    }
+                                                };
+                                                img.src = renderState.resultImage;
+                                                renderState.setResultImage(null);
+                                            } else {
+                                                // STANDARD RENDER/SKETCH: Import as Object via Delayed Rasterization
+                                                setActiveView('sketch');
+                                                handleStartPendingImportRef.current?.(renderState.resultImage);
+                                                renderState.setResultImage(null);
+                                            }
                                         }
                                     }}
                                     className="px-6 py-2 bg-theme-accent-primary hover:bg-theme-accent-hover text-white rounded-md font-bold shadow-lg transition flex items-center gap-2"
@@ -3166,6 +3520,7 @@ export function App() {
                                 userId={user?.uid}
                             />
                         }
+                        visualPromptingNode={visualPromptingNode}
                         overrideContent={undefined}
                     />
                 </aside>
@@ -3231,6 +3586,108 @@ export function App() {
                     </div>
                 </div>
             )}
+            {/* Result Overlay - High Z-Index to cover everything */}
+            {activeView === 'sketch' && renderState.resultImage && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-theme-bg-secondary rounded-xl shadow-2xl border border-theme-bg-tertiary flex flex-col w-full max-w-4xl max-h-[90vh] overflow-hidden">
+                        {/* Header */}
+                        <div className="flex justify-between items-center p-4 border-b border-theme-bg-tertiary bg-theme-bg-primary">
+                            <h3 className="text-theme-text-primary font-bold text-lg flex items-center gap-2">
+                                <SparklesIcon className="w-5 h-5 text-theme-accent-primary" />
+                                Resultado Render
+                            </h3>
+                            <button
+                                onClick={() => renderState.setResultImage(null)}
+                                className="p-1.5 hover:bg-theme-bg-tertiary rounded-full text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                            >
+                                <XIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        {/* Image Area */}
+                        <div className="flex-grow overflow-hidden bg-[url('/checker.png')] relative group">
+                            <img
+                                src={renderState.resultImage}
+                                alt="Render Result"
+                                className="w-full h-full object-contain"
+                            />
+                        </div>
+
+                        {/* Footer Actions */}
+                        <div className="p-4 border-t border-theme-bg-tertiary bg-theme-bg-primary flex flex-wrap justify-end gap-3">
+                            <button
+                                onClick={() => {
+                                    if (renderState.resultImage) {
+                                        const link = document.createElement('a');
+                                        link.download = `Render_${Date.now()}.png`;
+                                        link.href = renderState.resultImage;
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                    }
+                                }}
+                                className="px-4 py-2 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-md font-medium transition flex items-center gap-2"
+                            >
+                                <DownloadIcon className="w-4 h-4" />
+                                Descargar
+                            </button>
+
+                            <button
+                                onClick={() => {
+                                    if (renderState.resultImage) {
+                                        // Pass DataURL directly
+                                        handleSaveItemToLibrary(renderState.resultImage, `Render ${new Date().toLocaleTimeString()}`);
+                                    }
+                                }}
+                                className="px-4 py-2 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-md font-medium transition flex items-center gap-2"
+                            >
+                                <BookmarkIcon className="w-4 h-4" />
+                                Guardar en Librería
+                            </button>
+
+                            <button
+                                onClick={() => {
+                                    if (renderState.resultImage) {
+                                        // Handle "Add to Canvas" logic based on context
+                                        if (activeView === 'sketch' && leftSidebarTab === 'visual-prompting') {
+                                            // VISUAL PROMPTING: Replace Background with Result
+                                            const img = new Image();
+                                            img.onload = () => {
+                                                const finalCanvas = document.createElement('canvas');
+                                                finalCanvas.width = canvasSize.width;
+                                                finalCanvas.height = canvasSize.height;
+                                                const fCtx = finalCanvas.getContext('2d');
+                                                if (fCtx) {
+                                                    // We scale the result to exactly match the canvas dimensions
+                                                    fCtx.drawImage(img, 0, 0, canvasSize.width, canvasSize.height);
+                                                    const finalImg = new Image();
+                                                    finalImg.onload = () => {
+                                                        dispatch({ type: 'UPDATE_BACKGROUND', payload: { image: finalImg } });
+                                                        // Clear VP regions after commit? User might want to keep them.
+                                                        // For now, keep them.
+                                                    };
+                                                    finalImg.src = finalCanvas.toDataURL('image/png');
+                                                }
+                                            };
+                                            img.src = renderState.resultImage;
+                                            renderState.setResultImage(null);
+                                        } else {
+                                            // STANDARD RENDER/SKETCH: Import as Object via Delayed Rasterization
+                                            setActiveView('sketch');
+                                            handleStartPendingImportRef.current?.(renderState.resultImage);
+                                            renderState.setResultImage(null);
+                                        }
+                                    }
+                                }}
+                                className="px-6 py-2 bg-theme-accent-primary hover:bg-theme-accent-hover text-white rounded-md font-bold shadow-lg transition flex items-center gap-2"
+                            >
+                                <CheckIcon className="w-4 h-4" />
+                                Añadir al Lienzo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 }
@@ -3240,27 +3697,118 @@ export function App() {
 // ===================================================================================
 
 interface ProjectGalleryModalProps {
-    isOpen: boolean; onClose: () => void; user: User | null; projects: Project[]; isLoading: boolean;
-    onSave: (name: string) => Promise<void>; onLoad: (project: Project) => Promise<void>; onDelete: (project: Project) => Promise<void>;
-    onSaveLocally: (name: string) => Promise<void>; onLoadFromFile: (file: File) => Promise<void>;
-    libraryItems: any[]; onAddLibraryItemToScene: (item: any) => void; onPublishLibraryItem: (item: any) => void; onDeleteLibraryItem: (item: any) => void;
-    onImportImage: (file: File, parentId: string | null) => void;
+    isOpen: boolean;
+    onClose: () => void;
+    user: User | null;
+    projects: Project[];
+    isLoading: boolean;
+    onSave: (name: string, parentId?: string | null) => Promise<void>;
+    onSaveAs?: (name: string, parentId?: string | null) => Promise<void>;
+    onLoad: (project: Project) => void;
+    onDelete: (project: Project) => Promise<void>;
+    onSaveLocally: (name: string) => Promise<void>;
+    onLoadFromFile: (file: File) => Promise<void>;
+    libraryItems: LibraryItem[];
+    onAddLibraryItemToScene: (item: LibraryItem) => void;
+    onPublishLibraryItem: (item: LibraryItem) => Promise<void>;
+    onDeleteLibraryItem: (item: LibraryItem) => Promise<void>;
+    onImportImage: (file: File, parentId: string | null) => Promise<void>;
     onCreateFolder: (name: string, parentId: string | null) => void;
-    onEditItem: (id: string) => void;
-    onMoveItems: (itemIds: string[], targetParentId: string | null) => void;
+    onEditItem: (item: LibraryItem) => void;
+    onMoveItems: (itemIds: string[], targetParentId: string | null) => Promise<void>;
     onOpenPublicGallery?: () => void;
     initialTab?: 'projects' | 'library';
+    activeProjectId?: string | null;
+
+    // New props for Overwrite & Copy
+    onDuplicate?: (project: Project) => Promise<void>;
+    onOverwrite?: (project: Project) => Promise<void>;
+    onProjectCreateFolder?: (name: string, parentId: string | null) => void;
+    onMoveProject?: (project: Project, targetParentId: string | null) => void;
 }
 
 const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({
     isOpen, onClose, user, projects, isLoading, onSave, onLoad, onDelete, onSaveLocally, onLoadFromFile,
     libraryItems, onAddLibraryItemToScene, onPublishLibraryItem, onDeleteLibraryItem,
-    onImportImage, onCreateFolder, onEditItem, onMoveItems, onOpenPublicGallery, initialTab = 'projects'
+    onImportImage, onCreateFolder, onEditItem, onMoveItems, onOpenPublicGallery, initialTab = 'projects', activeProjectId, onSaveAs,
+    onDuplicate, onOverwrite, onProjectCreateFolder, onMoveProject
 }) => {
     const [activeTab, setActiveTab] = useState<'projects' | 'library'>(initialTab);
     const [newProjectName, setNewProjectName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [deletingProject, setDeletingProject] = useState<Project | null>(null);
+    const [overwritingProject, setOverwritingProject] = useState<Project | null>(null);
+    const [movingProject, setMovingProject] = useState<Project | null>(null); // State for move operation
+
+    // Folder State
+    const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+    const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null); // For selection-based interaction
+
+    // Derived: Folder path? Naive approach for now (map of id->name needed or search parent chain)
+    // We can compute breadcrumbs if we have all projects/folders.
+    const getBreadcrumbs = () => {
+        const crumbs = [{ id: null, name: 'Proyectos' }];
+        let current = currentFolderId;
+        const path = [];
+        while (current) {
+            const folder = projects.find(p => p.id === current);
+            if (folder) {
+                path.unshift({ id: folder.id, name: folder.name });
+                current = folder.parentId || null;
+            } else {
+                break;
+            }
+        }
+        return [...crumbs, ...path];
+    };
+    const breadcrumbs = getBreadcrumbs();
+
+    const filteredProjects = projects.filter(p => p.parentId === (currentFolderId || null));
+    const folders = filteredProjects.filter(p => p.type === 'folder');
+    const items = filteredProjects.filter(p => p.type !== 'folder'); // legacy projects are 'project' or undefined (default to project)
+
+    const handleCreateProjectFolder = () => {
+        const name = prompt("Nombre de la carpeta:");
+        if (name && onProjectCreateFolder) {
+            onProjectCreateFolder(name, currentFolderId);
+        }
+    };
+
+    // Clear selection when folder changes
+    useEffect(() => setSelectedProjectId(null), [currentFolderId]);
+
+    const handleProjectClick = (project: Project) => {
+        if (project.type === 'folder') {
+            setCurrentFolderId(project.id);
+        } else {
+            if (!movingProject) {
+                setSelectedProjectId(project.id === selectedProjectId ? null : project.id);
+            }
+        }
+    };
+
+    const handleConfirmMove = async () => {
+        if (movingProject && onMoveProject) {
+            // Cannot move folder into itself (simple check, though detailed check needs tree traversal)
+            if (movingProject.id === currentFolderId) { alert("Cannot move folder into itself."); return; }
+            await onMoveProject(movingProject, currentFolderId);
+            setMovingProject(null);
+            setSelectedProjectId(null);
+        }
+    };
+
+
+    // Initialize name from active project if available
+    useEffect(() => {
+        if (activeProjectId && projects.length > 0) {
+            const currentProject = projects.find(p => p.id === activeProjectId);
+            if (currentProject) {
+                setNewProjectName(currentProject.name);
+            }
+        } else {
+            if (isOpen && !activeProjectId) setNewProjectName('');
+        }
+    }, [activeProjectId, projects, isOpen]);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isSavingLocal, setIsSavingLocal] = useState(false);
@@ -3269,9 +3817,10 @@ const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({
 
     useEffect(() => {
         if (isOpen) {
-            setNewProjectName('');
+            // Only reset name if we are not editing an active one, or logic handled above
             setIsSaving(false);
             setDeletingProject(null);
+            setOverwritingProject(null);
             setIsSavingLocal(false);
             setActiveTab(initialTab);
         }
@@ -3280,8 +3829,39 @@ const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({
     const handleHeaderSaveLocalClick = () => { setIsSavingLocal(true); setTimeout(() => { localSaveInputRef.current?.focus(); localSaveInputRef.current?.select(); }, 0); };
     const handleConfirmSaveLocal = async () => { if (localFileName.trim()) { try { await onSaveLocally(localFileName.trim()); setIsSavingLocal(false); } catch (error) { console.error("Failed to save project locally:", error); alert(`Error al guardar el proyecto localmente: ${error instanceof Error ? error.message : String(error)} `); } } };
     const handleCancelSaveLocal = () => setIsSavingLocal(false);
-    const handleSave = async () => { if (!newProjectName.trim()) { alert("Please enter a project name."); return; } setIsSaving(true); try { await onSave(newProjectName.trim()); setNewProjectName(''); } catch (error) { console.error("Failed to save project:", error); alert(`Error saving project: ${error instanceof Error ? error.message : String(error)} `); } finally { setIsSaving(false); } };
+
+    const handleSave = async () => {
+        if (!newProjectName.trim()) { alert("Please enter a project name."); return; }
+        setIsSaving(true);
+        try {
+            await onSave(newProjectName.trim(), currentFolderId);
+            // set name empty only if it was a new creation?
+            if (!activeProjectId) setNewProjectName('');
+        } catch (error) {
+            console.error("Failed to save project:", error);
+            alert(`Error saving project: ${error instanceof Error ? error.message : String(error)} `);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleSaveAs = async () => {
+        if (!newProjectName.trim()) { alert("Please enter a project name."); return; }
+        if (!onSaveAs) return;
+        setIsSaving(true);
+        try {
+            await onSaveAs(newProjectName.trim(), currentFolderId);
+            // setNewProjectName(''); // Keep or clear?
+        } catch (error) {
+            console.error("Failed to save project as new:", error);
+            alert(`Error saving project: ${error instanceof Error ? error.message : String(error)} `);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const handleDeleteConfirm = async () => { if (deletingProject) { await onDelete(deletingProject); setDeletingProject(null); } };
+    const handleOverwriteConfirm = async () => { if (overwritingProject && onOverwrite) { await onOverwrite(overwritingProject); setOverwritingProject(null); } };
 
     const handleFileLoadClick = () => fileInputRef.current?.click();
     const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files?.[0]) { await onLoadFromFile(e.target.files[0]); } if (e.target) e.target.value = ''; };
@@ -3324,28 +3904,124 @@ const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({
                     activeTab === 'projects' ? (
                         <>
                             <div className="bg-theme-bg-primary p-4 rounded-lg mb-4 flex-shrink-0 border border-theme-bg-tertiary">
-                                <h3 className="text-lg font-semibold mb-2">Guardar Lienzo Actual en Proyectos</h3>
+                                <h3 className="text-lg font-semibold mb-2">
+                                    {activeProjectId ? "Guardar Proyecto" : "Guardar Nuevo Proyecto"}
+                                </h3>
                                 <div className="flex items-center gap-2">
-                                    <input type="text" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="Nombre del nuevo proyecto..." className="flex-grow bg-theme-bg-secondary text-theme-text-primary text-sm rounded-md p-2 border border-theme-bg-tertiary focus:ring-1 focus:ring-theme-accent-primary focus:outline-none" disabled={isSaving} />
-                                    <button onClick={handleSave} disabled={!newProjectName.trim() || isSaving || !user} className="px-4 py-2 rounded-md bg-theme-accent-primary hover:bg-theme-accent-hover text-white font-semibold disabled:bg-gray-500 disabled:cursor-not-allowed"> {isSaving ? 'Guardando...' : 'Guardar Nuevo'} </button>
+                                    <input type="text" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="Nombre del proyecto..." className="flex-grow bg-theme-bg-secondary text-theme-text-primary text-sm rounded-md p-2 border border-theme-bg-tertiary focus:ring-1 focus:ring-theme-accent-primary focus:outline-none" disabled={isSaving} />
+
+                                    {activeProjectId ? (
+                                        <>
+                                            <button onClick={handleSave} disabled={!newProjectName.trim() || isSaving || !user} className="px-4 py-2 rounded-md bg-theme-accent-primary hover:bg-theme-accent-hover text-white font-semibold disabled:bg-gray-500 disabled:cursor-not-allowed">
+                                                {isSaving ? 'Guardando...' : 'Guardar'}
+                                            </button>
+                                            <button onClick={handleSaveAs} disabled={!newProjectName.trim() || isSaving || !user} className="px-4 py-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+                                                Guardar como...
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <button onClick={handleSave} disabled={!newProjectName.trim() || isSaving || !user} className="px-4 py-2 rounded-md bg-theme-accent-primary hover:bg-theme-accent-hover text-white font-semibold disabled:bg-gray-500 disabled:cursor-not-allowed">
+                                            {isSaving ? 'Guardando...' : 'Guardar Nuevo'}
+                                        </button>
+                                    )}
                                 </div>
                             </div>
-                            <div className="flex-grow overflow-y-auto pr-2 custom-scrollbar">
-                                {isLoading ? <div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-4 border-theme-accent-primary border-t-transparent rounded-full animate-spin"></div></div>
-                                    : projects.length === 0 ? <div className="text-center text-theme-text-secondary py-16"> <p>No se encontraron proyectos guardados.</p> <p className="text-sm">¡Guarda tu lienzo actual para empezar!</p> </div>
-                                        : <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                            {projects.map(p => (
-                                                <div key={p.id} className="group relative bg-theme-bg-tertiary rounded-lg overflow-hidden shadow-md hover:shadow-xl transition-all border border-theme-bg-tertiary/50">
-                                                    <div className="aspect-video bg-white/5 flex items-center justify-center overflow-hidden"><img src={p.thumbnailUrl} alt={p.name} className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500" /></div>
-                                                    <div className="p-3"><p className="font-semibold text-sm truncate text-theme-text-primary">{p.name}</p></div>
-                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 backdrop-blur-sm">
-                                                        <button onClick={() => onLoad(p)} className="px-4 py-2 rounded-md bg-theme-accent-primary hover:bg-theme-accent-hover text-white w-3/4 font-medium shadow-lg">Cargar</button>
-                                                        <button onClick={() => setDeletingProject(p)} className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-500 text-white w-3/4 font-medium shadow-lg">Eliminar</button>
-                                                    </div>
-                                                </div>
-                                            ))}
+                            <div className="flex-grow flex flex-col overflow-hidden min-h-0">
+                                <div className="flex items-center gap-2 mb-2 overflow-x-auto pb-2 flex-shrink-0">
+                                    {breadcrumbs.map((crumb, idx) => (
+                                        <React.Fragment key={crumb.id || 'root'}>
+                                            {idx > 0 && <span className="text-theme-text-secondary">/</span>}
+                                            <button
+                                                onClick={() => setCurrentFolderId(crumb.id as string | null)}
+                                                className={`hover:text-theme-accent-primary whitespace-nowrap ${idx === breadcrumbs.length - 1 ? 'font-bold' : ''}`}
+                                            >
+                                                {crumb.name}
+                                            </button>
+                                        </React.Fragment>
+                                    ))}
+                                    <div className="flex-grow"></div>
+                                    <button onClick={handleCreateProjectFolder} className="p-1 hover:bg-theme-bg-tertiary rounded" title="Nueva Carpeta">
+                                        <FolderOpenIcon className="w-5 h-5" />
+                                    </button>
+                                </div>
+
+                                <div className="flex-grow overflow-y-auto pr-2 custom-scrollbar">
+                                    {/* Moving Mode UI */}
+                                    {movingProject && (
+                                        <div className="bg-theme-bg-tertiary border border-theme-accent-primary/50 rounded-md p-3 mb-4 flex items-center justify-between animate-in slide-in-from-top-2 flex-shrink-0">
+                                            <div className="flex items-center gap-2">
+                                                <ChevronRightIcon className="w-4 h-4 text-theme-accent-primary" />
+                                                <span className="text-sm">
+                                                    Moviendo <span className="font-bold text-theme-text-primary">"{movingProject.name}"</span> a:
+                                                    <span className="ml-2 px-2 py-0.5 bg-theme-bg-secondary rounded text-xs font-mono">
+                                                        {currentFolderId ? (projects.find(p => p.id === currentFolderId)?.name || 'Carpeta') : 'Raíz'}
+                                                    </span>
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button onClick={() => setMovingProject(null)} className="px-3 py-1 bg-theme-bg-secondary text-theme-text-secondary hover:text-theme-text-primary rounded text-sm transition-colors">Cancelar</button>
+                                                <button onClick={handleConfirmMove} className="px-3 py-1 bg-theme-accent-primary text-white rounded text-sm hover:opacity-90 shadow-sm font-medium">Mover Aquí</button>
+                                            </div>
                                         </div>
-                                }
+                                    )}
+
+                                    {/* Action Bar Removed - Actions are now on the card overlay */}
+
+                                    {/* Grid */}
+                                    {isLoading ? <div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-4 border-theme-accent-primary border-t-transparent rounded-full animate-spin"></div></div>
+                                        : (folders.length === 0 && items.length === 0) ? <div className="text-center text-theme-text-secondary py-16"> <p>Carpeta vacía.</p> </div>
+                                            : <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pb-20">
+                                                {/* Folders */}
+                                                {folders.map(folder => (
+                                                    <div key={folder.id} onClick={() => handleProjectClick(folder)} className="group relative bg-theme-bg-tertiary rounded-lg overflow-hidden shadow-sm hover:shadow-md cursor-pointer border border-theme-bg-hover flex flex-col items-center justify-center p-6 aspect-video">
+                                                        <FolderOpenIcon className="w-16 h-16 text-theme-accent-primary opacity-80" />
+                                                        <p className="mt-2 font-semibold text-sm truncate text-theme-text-primary w-full text-center">{folder.name}</p>
+                                                    </div>
+                                                ))}
+                                                {/* Projects */}
+                                                {items.map(p => (
+                                                    <div
+                                                        key={p.id}
+                                                        onClick={() => handleProjectClick(p)}
+                                                        className={`group relative bg-theme-bg-tertiary rounded-lg overflow-hidden shadow-md transition-all border 
+                                                            ${selectedProjectId === p.id ? 'ring-2 ring-theme-accent-primary border-theme-accent-primary' : 'border-theme-bg-tertiary/50 hover:border-theme-text-secondary'}`}
+                                                    >
+                                                        <div className="aspect-video bg-white/5 flex items-center justify-center overflow-hidden relative">
+                                                            {p.thumbnailUrl ? <img src={p.thumbnailUrl} alt={p.name} className="w-full h-full object-cover" /> : <div className="text-xs text-theme-text-secondary">Sin imagen</div>}
+
+                                                            {/* Overlay Actions */}
+                                                            {selectedProjectId === p.id && !movingProject && (
+                                                                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-2 z-10 animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+                                                                    <div className="grid grid-cols-2 gap-1 w-full max-w-[200px]">
+                                                                        <button onClick={(e) => { e.stopPropagation(); onLoad(p); }} className="col-span-2 py-1.5 bg-theme-accent-primary text-white rounded text-xs font-bold shadow hover:scale-105 transition-transform mb-1">Cargar</button>
+
+                                                                        {onOverwrite && <button onClick={(e) => { e.stopPropagation(); setOverwritingProject(p); }} className="py-1 bg-theme-bg-tertiary text-white rounded text-[10px] font-medium hover:bg-theme-bg-hover flex flex-col items-center justify-center gap-0.5"><SaveIcon className="w-3 h-3" />Guardar</button>}
+
+                                                                        {onDuplicate && <button onClick={(e) => { e.stopPropagation(); onDuplicate(p); }} className="py-1 bg-theme-bg-tertiary text-white rounded text-[10px] font-medium hover:bg-theme-bg-hover flex flex-col items-center justify-center gap-0.5"><CopyIcon className="w-3 h-3" />Copiar</button>}
+
+                                                                        {onMoveProject && <button onClick={(e) => { e.stopPropagation(); setMovingProject(p); }} className="py-1 bg-theme-bg-tertiary text-white rounded text-[10px] font-medium hover:bg-theme-bg-hover flex flex-col items-center justify-center gap-0.5"><ChevronRightIcon className="w-3 h-3" />Mover</button>}
+
+                                                                        <button onClick={(e) => { e.stopPropagation(); setDeletingProject(p); }} className="col-span-2 py-1 bg-red-600/80 text-white rounded text-[10px] hover:bg-red-600 mt-0.5">Eliminar</button>
+                                                                    </div>
+                                                                    <button onClick={(e) => { e.stopPropagation(); setSelectedProjectId(null); }} className="absolute top-1 right-1 text-white/50 hover:text-white p-1 rounded-full hover:bg-white/10" title="Cerrar"><XIcon className="w-4 h-4" /></button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="p-3 bg-theme-bg-secondary">
+                                                            <p className="font-semibold text-sm truncate text-theme-text-primary">{p.name}</p>
+                                                            <p className="text-[10px] text-theme-text-secondary">{new Date(p.updatedAt).toLocaleDateString()}</p>
+                                                        </div>
+                                                        {/* Selection Indicator (Render only if NOT showing overlay actions, e.g. multi-select in future or moving mode) */}
+                                                        {selectedProjectId === p.id && movingProject && (
+                                                            <div className="absolute top-2 right-2 bg-theme-accent-primary text-white rounded-full p-1 shadow z-20">
+                                                                <CheckIcon className="w-4 h-4" />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                    }
+                                </div>
                             </div>
                         </>
                     ) : (
@@ -3369,7 +4045,8 @@ const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({
                 )}
             </div>
             {deletingProject && <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"> <div className="bg-theme-bg-secondary rounded-lg p-6 shadow-xl border border-theme-bg-tertiary max-w-sm w-full mx-4"> <h3 className="text-lg font-bold text-theme-text-primary">Confirmar Eliminación</h3> <p className="my-4 text-theme-text-secondary">¿Estás seguro de que quieres eliminar el proyecto <span className="text-theme-text-primary font-bold">"{deletingProject.name}"</span>?<br />Esta acción no se puede deshacer.</p> <div className="flex justify-end gap-3"> <button onClick={() => setDeletingProject(null)} className="px-4 py-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary">Cancelar</button> <button onClick={handleDeleteConfirm} className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-500 text-white font-medium shadow-lg">Eliminar</button> </div> </div> </div>}
-        </div>
+            {overwritingProject && <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"> <div className="bg-theme-bg-secondary rounded-lg p-6 shadow-xl border border-theme-bg-tertiary max-w-sm w-full mx-4"> <h3 className="text-lg font-bold text-theme-text-primary">Confirmar Sobreescritura</h3> <p className="my-4 text-theme-text-secondary">¿Estás seguro de que quieres sobreescribir el proyecto <span className="text-theme-text-primary font-bold">"{overwritingProject.name}"</span> con el lienzo actual?<br />Esta acción no se puede deshacer.</p> <div className="flex justify-end gap-3"> <button onClick={() => setOverwritingProject(null)} className="px-4 py-2 rounded-md bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary">Cancelar</button> <button onClick={handleOverwriteConfirm} className="px-4 py-2 rounded-md bg-theme-accent-primary hover:bg-theme-accent-hover text-white font-medium shadow-lg">Sobreescribir</button> </div> </div> </div>}
+        </div >
     );
 };
 

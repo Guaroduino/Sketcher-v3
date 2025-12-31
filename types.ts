@@ -311,6 +311,7 @@ export type AffineTransformState = {
   width: number;
   height: number;
   rotation: number; // in radians
+  pendingImage?: HTMLImageElement;
 }
 
 export type FreeTransformState = {
@@ -483,9 +484,25 @@ export interface ProjectFile {
 export interface Project {
   id: string;
   name: string;
-  projectFilePath: string;
-  thumbnailPath: string;
-  thumbnailUrl: string;
+  type?: 'project' | 'folder'; // Default 'project'
+  parentId?: string | null;
+
+  // File props (optional for folders)
+  projectFilePath?: string;
+  thumbnailPath?: string;
+  thumbnailUrl?: string;
+
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export interface UserProfile {
+  id: string; // uid
+  email: string;
+  displayName?: string;
+  photoURL?: string;
+  quickAccessColors?: string[]; // Persisted palette
+  // Add other persisted settings here
 }
 
 // -- Saved Instruction Presets --

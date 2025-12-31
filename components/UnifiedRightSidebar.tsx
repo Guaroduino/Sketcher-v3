@@ -1,16 +1,17 @@
 
 import React, { useState } from 'react';
-import { LayersIcon, SparklesIcon, XIcon } from './icons';
+import { LayersIcon, SparklesIcon, XIcon, EyeIcon } from './icons';
 
 interface UnifiedRightSidebarProps {
     isOpen: boolean;
     onClose: () => void;
-    activeTab: 'sketch' | 'render' | 'simple_render';
-    onTabChange: (tab: 'sketch' | 'render' | 'simple_render') => void;
+    activeTab: 'sketch' | 'render' | 'simple_render' | 'visual_prompting';
+    onTabChange: (tab: 'sketch' | 'render' | 'simple_render' | 'visual_prompting') => void;
     outlinerNode: React.ReactNode;
     libraryNode: React.ReactNode;
     renderNode: React.ReactNode;
     simpleRenderNode: React.ReactNode;
+    visualPromptingNode: React.ReactNode;
 
     // Resize Props for Outliner/Library split
     rightSidebarTopHeight: number;
@@ -28,6 +29,7 @@ export const UnifiedRightSidebar: React.FC<UnifiedRightSidebarProps> = React.mem
     libraryNode,
     renderNode,
     simpleRenderNode,
+    visualPromptingNode,
     rightSidebarTopHeight,
     onResizeStart,
     sidebarRef,
@@ -52,12 +54,12 @@ export const UnifiedRightSidebar: React.FC<UnifiedRightSidebarProps> = React.mem
             <div className="flex items-center border-b border-theme-bg-tertiary bg-theme-bg-primary overflow-x-auto scrollbar-hide shrink-0 h-11">
                 <button
                     onClick={() => onTabChange('sketch')}
-                    className={`flex-1 min-w-[80px] py-3 px-2 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-colors relative ${activeTab === 'sketch'
+                    className={`flex-1 min-w-[60px] py-3 px-1 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-colors relative ${activeTab === 'sketch'
                         ? 'text-theme-accent-primary bg-theme-bg-secondary'
                         : 'text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary'
                         }`}
                 >
-                    <LayersIcon className="w-4 h-4 ml-1" />
+                    <LayersIcon className="w-3 h-3 ml-1" />
                     Boceto
                     {activeTab === 'sketch' && (
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-theme-accent-primary" />
@@ -66,12 +68,12 @@ export const UnifiedRightSidebar: React.FC<UnifiedRightSidebarProps> = React.mem
                 <div className="w-px h-6 bg-theme-bg-tertiary" />
                 <button
                     onClick={() => onTabChange('render')}
-                    className={`flex-1 min-w-[80px] py-3 px-2 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-colors relative ${activeTab === 'render'
+                    className={`flex-1 min-w-[60px] py-3 px-1 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-colors relative ${activeTab === 'render'
                         ? 'text-theme-accent-primary bg-theme-bg-secondary'
                         : 'text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary'
                         }`}
                 >
-                    <SparklesIcon className="w-4 h-4 ml-1" />
+                    <SparklesIcon className="w-3 h-3 ml-1" />
                     Render
                     {activeTab === 'render' && (
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-theme-accent-primary" />
@@ -80,15 +82,29 @@ export const UnifiedRightSidebar: React.FC<UnifiedRightSidebarProps> = React.mem
                 <div className="w-px h-6 bg-theme-bg-tertiary" />
                 <button
                     onClick={() => onTabChange('simple_render')}
-                    className={`flex-1 min-w-[80px] py-3 px-2 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-colors relative ${activeTab === 'simple_render'
+                    className={`flex-1 min-w-[60px] py-3 px-1 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-colors relative ${activeTab === 'simple_render'
                         ? 'text-blue-500 bg-theme-bg-secondary'
                         : 'text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary'
                         }`}
                 >
-                    <SparklesIcon className="w-4 h-4" />
+                    <SparklesIcon className="w-3 h-3" />
                     Simp.
                     {activeTab === 'simple_render' && (
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500" />
+                    )}
+                </button>
+                <div className="w-px h-6 bg-theme-bg-tertiary" />
+                <button
+                    onClick={() => onTabChange('visual_prompting')}
+                    className={`flex-1 min-w-[60px] py-3 px-1 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-colors relative ${activeTab === 'visual_prompting'
+                        ? 'text-purple-500 bg-theme-bg-secondary'
+                        : 'text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary'
+                        }`}
+                >
+                    <EyeIcon className="w-3 h-3" />
+                    Visual
+                    {activeTab === 'visual_prompting' && (
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500" />
                     )}
                 </button>
             </div>
@@ -114,9 +130,13 @@ export const UnifiedRightSidebar: React.FC<UnifiedRightSidebarProps> = React.mem
                     <div className="flex-grow flex flex-col min-h-0 relative bg-theme-bg-secondary">
                         {renderNode}
                     </div>
-                ) : (
+                ) : activeTab === 'simple_render' ? (
                     <div className="flex-grow flex flex-col min-h-0 relative bg-theme-bg-secondary">
                         {simpleRenderNode}
+                    </div>
+                ) : (
+                    <div className="flex-grow flex flex-col min-h-0 relative bg-theme-bg-secondary">
+                        {visualPromptingNode}
                     </div>
                 )}
             </div>

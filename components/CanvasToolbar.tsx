@@ -68,7 +68,8 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = React.memo(({
   hasClipboardContent,
   gridGuide, onSetGridSpacing,
   activeGuide, isPerspectiveStrokeLockEnabled, onSetIsPerspectiveStrokeLockEnabled,
-  strokeMode, isSolidBox, setIsSolidBox, zoomLevel
+  strokeMode, isSolidBox, setIsSolidBox, zoomLevel,
+  isAngleSnapEnabled, onToggleAngleSnap, angleSnapValue
 }) => {
   const [gridSpacing, setGridSpacing] = useState('50');
   const [isGridSettingsOpen, setIsGridSettingsOpen] = useState(false);
@@ -122,6 +123,26 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = React.memo(({
         {/* === Buttons === */}
         {(isCropping || isTransforming) ? (
           <>
+            {isTransforming && (
+              <>
+                <button
+                  onClick={onToggleAngleSnap}
+                  className={`p-2 rounded-md transition-colors ${isAngleSnapEnabled ? 'bg-theme-accent-primary text-white' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                  title={`Ajuste de Ángulo (${angleSnapValue}°)`}
+                >
+                  <SnapIcon className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={onToggleSnapToGrid}
+                  className={`p-2 rounded-md transition-colors ${isSnapToGridEnabled ? 'bg-theme-accent-primary text-white' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                  title="Ajustar a Cuadrícula"
+                  disabled={!gridGuide || gridGuide.type === 'none'}
+                >
+                  <GridIcon className="w-5 h-5" />
+                </button>
+                <div className="w-px h-6 bg-theme-bg-tertiary mx-1" />
+              </>
+            )}
             <button onClick={isCropping ? onCancelCrop : onCancelTransform} className="p-2 rounded-md bg-red-600 text-white hover:bg-red-500 transition-colors" title="Cancelar">
               <XIcon className="w-5 h-5" />
             </button>

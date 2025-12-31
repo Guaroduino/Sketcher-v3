@@ -96,7 +96,12 @@ export function useCanvasView(
 
         setViewTransform(currentTransform => {
             const minZoom = getMinZoom();
-            const newZoom = Math.max(minZoom, Math.min(currentTransform.zoom * zoomFactor, MAX_ZOOM));
+            let newZoom = Math.max(minZoom, Math.min(currentTransform.zoom * zoomFactor, MAX_ZOOM));
+
+            // Snap to 100% if close
+            if (newZoom > 0.95 && newZoom < 1.05) {
+                newZoom = 1;
+            }
             const pointerCanvasX = (pointerViewX - currentTransform.pan.x) / currentTransform.zoom;
             const pointerCanvasY = (pointerViewY - currentTransform.pan.y) / currentTransform.zoom;
             const newPanX = pointerViewX - pointerCanvasX * newZoom;

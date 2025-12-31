@@ -311,7 +311,9 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
 
             if (newImageBase64 || responseText) {
                 // Deduct Credit
-                if (deductCredit) await deductCredit();
+                // Deduct Credit
+                const cost = (selectedModel || GEMINI_MODEL_ID).includes('gemini-3') ? 5 : 1;
+                if (deductCredit) await deductCredit(cost);
 
                 const aiMessage: Message = {
                     id: (Date.now() + 1).toString(),
