@@ -3,7 +3,7 @@ import { SendIcon, PaperClipIcon, SparklesIcon, SaveIcon, FolderIcon, TrashIcon,
 // import { GoogleGenAI } from "@google/genai";
 import { GEMINI_MODEL_ID } from '../utils/constants';
 import { generateContentWithRetry } from '../utils/aiUtils';
-import { resizeImageForAI } from '../utils/imageUtils';
+import { resizeImageForAI, downloadFile } from '../utils/imageUtils';
 import { collection, addDoc, query, orderBy, onSnapshot, deleteDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { User } from 'firebase/auth';
@@ -434,12 +434,7 @@ export const FreeModeView = forwardRef<FreeModeViewHandle, FreeModeViewProps>(({
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                const link = document.createElement('a');
-                                                                link.href = att;
-                                                                link.download = `generated-image-${Date.now()}.png`;
-                                                                document.body.appendChild(link);
-                                                                link.click();
-                                                                document.body.removeChild(link);
+                                                                downloadFile(att, `generated-image-${Date.now()}.png`);
                                                             }}
                                                             className="p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full"
                                                             title="Descargar"

@@ -1,7 +1,8 @@
 import React, { useState, useRef, useMemo } from 'react';
 import type { LibraryItem, LibraryImage } from '../types';
-import { UploadIcon, CubeIcon, MagicWandIcon, TrashIcon, UserIcon, PlusIcon, FolderIcon, ChevronRightIcon, ArrowUpIcon, CheckIcon } from './icons';
+import { UploadIcon, CubeIcon, MagicWandIcon, TrashIcon, UserIcon, PlusIcon, FolderIcon, ChevronRightIcon, ArrowUpIcon, CheckIcon, DownloadIcon } from './icons';
 import { User } from 'firebase/auth';
+import { downloadFile } from '../utils/imageUtils';
 
 interface LibraryProps {
   user: User | null;
@@ -24,6 +25,11 @@ export const Library: React.FC<LibraryProps> = React.memo(({ user, items, onImpo
   const [newFolderName, setNewFolderName] = useState('');
   const newFolderInputRef = useRef<HTMLInputElement>(null);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+
+  const handleDownloadImage = (item: LibraryImage) => {
+    if (!item.dataUrl) return;
+    downloadFile(item.dataUrl, `${item.name}.png`);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -214,47 +220,57 @@ export const Library: React.FC<LibraryProps> = React.memo(({ user, items, onImpo
                   </div>
                 ) : (
                   <>
-                    <img src={item.dataUrl} alt={item.name} className="w-full h-full object-contain p-1" loading="lazy" />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-1">
-                      <div className="flex justify-between items-start">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleToggleSelection(item.id); }} // Use toggle logic 
-                          className={`w-4 h-4 rounded border ${selectedItemIds.has(item.id) ? 'bg-blue-500 border-blue-500' : 'bg-white/20 border-white/50'}`}
-                        />
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onDeleteItem(item); }}
-                          className="bg-red-500/80 hover:bg-red-600 text-white rounded p-0.5"
-                          title="Eliminar"
-                        >
-                          <TrashIcon className="w-3 h-3" />
-                        </button>
-                      </div>
-                      <div className="flex justify-between items-end gap-1">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onAddItemToScene(item.id); }}
-                          className="flex-grow bg-theme-bg-primary/80 hover:bg-theme-bg-secondary text-theme-text-primary text-[10px] py-0.5 rounded text-center flex items-center justify-center"
-                          title="Añadir al lienzo"
-                        >
-                          <PlusIcon className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onEditItem(item.id); }}
-                          className="bg-theme-bg-primary/80 hover:bg-theme-bg-secondary text-theme-text-primary p-0.5 rounded"
-                          title="Editar Transparencia"
-                        >
-                          <MagicWandIcon className="w-3 h-3" />
-                        </button>
-                        {item.type === 'image' && allowPublish && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onPublish(item as LibraryImage); }}
-                            aria-label={`Publish ${item.name}`}
-                            className="bg-blue-500/80 hover:bg-blue-600 text-white p-0.5 rounded"
-                            title="Publicar en Galería"
-                          >
-                            <UploadIcon className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
+                    <div className="bg-white/5 w-full h-full flex items-center justify-center relative overflow-hidden">
+                      <img src={item.dataUrl} alt={item.name} className="w-full h-full object-contain p-1" loading="lazy" />
+                      {selectedItemIds.has(item.id) && (
+                        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-2 z-10 animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+                          <div className="grid grid-cols-2 gap-1 w-full max-w-[200px]">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onAddItemToScene(item.id); }}
+                              className="col-span-2 py-1 bg-theme-accent-primary text-white rounded text-xs font-bold shadow hover:scale-105 transition-transform mb-0.5"
+                            >
+                              Añadir
+                            </button>
+
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onEditItem(item.id); }}
+                              className="py-0.5 bg-theme-bg-tertiary text-white rounded text-[10px] font-medium hover:bg-theme-bg-hover flex flex-col items-center justify-center gap-0.5"
+                            >
+                              <MagicWandIcon className="w-3 h-3" />
+                              Editar
+                            </button>
+
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDownloadImage(item as LibraryImage); }}
+                              className="py-0.5 bg-theme-bg-tertiary text-white rounded text-[10px] font-medium hover:bg-theme-bg-hover flex flex-col items-center justify-center gap-0.5"
+                            >
+                              <DownloadIcon className="w-3 h-3" />
+                              Descargar
+                            </button>
+
+                            {allowPublish && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onPublish(item as LibraryImage); }}
+                                className="py-0.5 bg-theme-bg-tertiary text-white rounded text-[10px] font-medium hover:bg-theme-bg-hover flex flex-col items-center justify-center gap-0.5"
+                              >
+                                <UploadIcon className="w-3 h-3" />
+                                Publicar
+                              </button>
+                            )}
+
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onDeleteItem(item); }}
+                              className="col-span-2 py-1 bg-red-600/80 text-white rounded text-[10px] hover:bg-red-600 mt-0.5"
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                          <button onClick={(e) => { e.stopPropagation(); handleToggleSelection(item.id); }} className="absolute top-1 right-1 text-white/50 hover:text-white p-1 rounded-full hover:bg-white/10" title="Cerrar"><CheckIcon className="w-4 h-4" /></button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-2 bg-theme-bg-secondary w-full border-t border-theme-bg-tertiary">
+                      <p className="font-semibold text-xs truncate text-theme-text-primary text-center">{item.name}</p>
                     </div>
                   </>
                 )}

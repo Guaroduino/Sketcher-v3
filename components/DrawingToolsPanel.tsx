@@ -488,7 +488,7 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                         {/* HERRAMIENTAS PRINCIPALES */}
                         <section>
                             <label className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider mb-2 block">Selección y Dibujo</label>
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap gap-2 mb-3">
                                 <button
                                     onClick={() => setTool('select')}
                                     className={`w-8 h-8 rounded flex items-center justify-center transition-all ${tool === 'select'
@@ -589,9 +589,13 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                                 >
                                     <FreeTransformIcon className="w-4 h-4" />
                                 </button>
+                            </div>
 
+                            <div className="h-px bg-theme-bg-tertiary opacity-50 mb-3"></div>
+
+                            <div className="flex flex-col gap-1.5 w-full">
                                 {/* HERRAMIENTAS DE DIBUJO (Flyout Trigger) */}
-                                <section className="relative">
+                                <div className="relative w-full">
                                     <button
                                         ref={brushToolsButtonRef}
                                         onClick={() => {
@@ -609,7 +613,10 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                                         className={`w-full flex items-center justify-between text-[10px] font-bold uppercase tracking-wider py-2 px-2 rounded transition-colors ${isBrushToolsOpen ? 'bg-theme-bg-tertiary text-theme-text-primary' : 'text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary'
                                             }`}
                                     >
-                                        <span>Herramientas de Dibujo</span>
+                                        <span className="flex items-center gap-2">
+                                            {BRUSH_TOOLS.find(b => b.id === tool)?.icon || <BrushIcon className="w-4 h-4" />}
+                                            {BRUSH_TOOLS.find(b => b.id === tool)?.label || 'Herramientas de Dibujo'}
+                                        </span>
                                         <ChevronRightIcon className={`w-3 h-3 transition-transform ${isBrushToolsOpen ? 'rotate-90' : ''}`} />
                                     </button>
 
@@ -620,9 +627,6 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                                             className="fixed w-56 bg-theme-bg-secondary border border-theme-bg-tertiary rounded-lg shadow-xl z-50 flex flex-col p-1 max-h-[80vh] overflow-y-auto custom-scrollbar"
                                             style={{ top: brushFlyoutPos.top, left: brushFlyoutPos.left }}
                                         >
-                                            <div className="text-[10px] font-bold text-theme-text-tertiary px-2 py-1 border-b border-theme-bg-tertiary mb-1">
-                                                Pinceles y Herramientas
-                                            </div>
                                             {BRUSH_TOOLS.map(brushTool => {
                                                 const isActive = tool === brushTool.id;
                                                 const settingsData = getToolSettings(brushTool.id);
@@ -639,10 +643,10 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                                             })}
                                         </div>
                                     )}
-                                </section>
+                                </div>
 
                                 {/* MODO DE TRAZO (Flyout Trigger) */}
-                                <section className="relative w-full">
+                                <div className="relative w-full">
                                     <button
                                         ref={strokeModeButtonRef}
                                         onClick={() => {
@@ -692,10 +696,10 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                                             ))}
                                         </div>
                                     )}
-                                </section>
+                                </div>
 
                                 {/* ESTILO DE TRAZO (Flyout Trigger) */}
-                                <section className="relative w-full">
+                                <div className="relative w-full">
                                     <button
                                         ref={strokeStyleButtonRef}
                                         onClick={() => {
@@ -745,7 +749,7 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                                             ))}
                                         </div>
                                     )}
-                                </section>
+                                </div>
                             </div>
                         </section>
                         <div className="h-px bg-theme-bg-tertiary opacity-50 my-2"></div>
@@ -1077,7 +1081,7 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
 
                             <div className="grid grid-cols-2 gap-2">
                                 <button onClick={onImportBackground} className="flex items-center justify-center gap-2 p-2 bg-theme-bg-primary border border-theme-bg-tertiary rounded hover:bg-theme-bg-hover text-theme-text-secondary text-[10px]">
-                                    <UploadIcon className="w-3 h-3" /> Fondo
+                                    <UploadIcon className="w-3 h-3" /> Importar
                                 </button>
                                 <button onClick={onExportImage} className="flex items-center justify-center gap-2 p-2 bg-theme-bg-primary border border-theme-bg-tertiary rounded hover:bg-theme-bg-hover text-theme-text-secondary text-[10px]">
                                     <DownloadIcon className="w-3 h-3" /> Exportar
@@ -1087,7 +1091,7 @@ export const DrawingToolsPanel: React.FC<DrawingToolsPanelProps> = ({
                                 <CropIcon className="w-3 h-3" /> Recortar Lienzo
                             </button>
                             <button onClick={onOpenCanvasSizeModal} className="w-full flex items-center justify-center gap-2 p-2 bg-theme-bg-primary border border-theme-bg-tertiary rounded hover:bg-theme-bg-hover text-theme-text-secondary text-[10px] mt-1">
-                                <ExpandIcon className="w-3 h-3" /> Cambiar tamaño imagen
+                                <ExpandIcon className="w-3 h-3" /> Cambiar tamaño de lienzo
                             </button>
 
                             {/* Canvas Controls Moved from Right Sidebar */}

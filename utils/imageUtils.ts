@@ -40,3 +40,44 @@ export const resizeImageForAI = async (base64Str: string, maxSide: number = 1536
         img.src = base64Str;
     });
 };
+
+export const downloadFile = async (url: string, filename: string) => {
+    // If it's a data URL or blob URL, we can use the simple anchor tag method
+    if (url.startsWith('data:') || url.startsWith('blob:')) {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+    }
+
+    // For remote URLs (like Firebase Storage), we fetch as blob to bypass CORS download restrictions
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to fetch file: ${response.statusText}`);
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // Cleanup
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+    } catch (error) {
+        console.error("Error downloading file:", error);
+        // Fallback: try direct download as a last resort (might fail for cross-origin)
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.target = "_blank"; // At least don't take over the current tab
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+};

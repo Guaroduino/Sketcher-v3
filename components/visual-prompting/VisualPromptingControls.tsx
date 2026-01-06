@@ -35,11 +35,9 @@ interface VisualPromptingControlsProps {
     onClearAll: () => void;
     isGenerating?: boolean;
 
-    // Structured Prompt Editor
-    structuredPrompt: string;
-    onStructuredPromptChange: (text: string) => void;
-    onResetStructuredPrompt: () => void;
-    isPromptModified: boolean;
+    // structuredPrompt, ...
+    onClose?: () => void;
+    selectedModel: string;
 }
 
 export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = ({
@@ -60,19 +58,17 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
     onProcessChanges,
     onClearAll,
     isGenerating = false,
-    structuredPrompt,
-    onStructuredPromptChange,
     onResetStructuredPrompt,
-    isPromptModified
+    isPromptModified,
+    onClose,
+    selectedModel
 }) => {
+    const cost = selectedModel.includes('gemini-3') ? 5 : 1;
+
     return (
         <div className="flex flex-col h-full bg-theme-bg-secondary border-r border-theme-bg-tertiary">
             {/* Header & Tools */}
             <div className="p-4 border-b border-theme-bg-tertiary space-y-4">
-                {/* Tools Grid */}
-
-                {/* Tools Grid */}
-                {/* Tools Grid for Annotations */}
                 {/* Tools Grid for Annotations */}
                 <div className="flex bg-theme-bg-primary p-1 rounded-lg gap-1 border border-theme-bg-tertiary justify-start">
 
@@ -99,8 +95,18 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
                     >
                         <TrashIcon className="w-4 h-4" />
                     </button>
+                    {onClose && (
+                        <button
+                            onClick={onClose}
+                            className="bg-theme-bg-tertiary p-2 rounded hover:bg-theme-bg-hover text-theme-text-secondary transition-all ml-1"
+                            title="Cerrar Herramientas Visual Prompting"
+                        >
+                            <CloseIcon className="w-4 h-4" />
+                        </button>
+                    )}
                 </div>
             </div>
+
 
             {/* Global Instructions & Ref Image */}
             <div className="px-4 py-2 border-b border-theme-bg-tertiary space-y-3">
@@ -230,41 +236,6 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
                 </div>
             </div>
 
-            {/* AI Structured Prompt Editor (Advanced) */}
-            {/* AI Structured Prompt Editor (Hidden per user request) */}
-            {/* <div className="p-4 border-t border-theme-bg-tertiary bg-theme-bg-secondary space-y-2">
-                <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-bold text-theme-accent-primary uppercase tracking-wider">Prompt Estructurado (AI)</label>
-                    {isPromptModified && (
-                        <button
-                            onClick={onResetStructuredPrompt}
-                            className="text-[9px] text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1"
-                        >
-                            <UndoIcon className="w-2.5 h-2.5" />
-                            Reset Auto
-                        </button>
-                    )}
-                </div>
-                <div className="relative group/prompt">
-                    <textarea
-                        value={structuredPrompt}
-                        onChange={(e) => onStructuredPromptChange(e.target.value)}
-                        placeholder="El prompt estructurado se generará aquí..."
-                        className={`w-full h-40 bg-theme-bg-primary text-[10px] font-mono p-2 rounded border transition-colors outline-none resize-none leading-relaxed ${isPromptModified ? 'border-theme-accent-primary/50 text-theme-accent-primary' : 'border-theme-bg-tertiary text-theme-text-secondary'}`}
-                    />
-                    {!isPromptModified && (
-                        <div className="absolute top-2 right-2 opacity-0 group-hover/prompt:opacity-100 transition-opacity pointer-events-none">
-                            <span className="bg-theme-bg-tertiary text-[8px] px-1 py-0.5 rounded border border-theme-bg-hover text-theme-text-secondary">Auto-Generado</span>
-                        </div>
-                    )}
-                </div>
-                <p className="text-[8px] text-theme-text-tertiary italic leading-tight">
-                    {isPromptModified
-                        ? "Has editado manualmente el prompt. Se usará exactamente este texto."
-                        : "Este es el objeto que se envía a Gemini. Haz clic para personalizar."}
-                </p>
-            </div> */}
-
             {/* Footer Action Button */}
             <div className="p-4 border-t border-theme-bg-tertiary bg-theme-bg-secondary">
                 <button
@@ -275,12 +246,12 @@ export const VisualPromptingControls: React.FC<VisualPromptingControlsProps> = (
                     {isGenerating ? "Procesando..." : (
                         <>
                             <SparklesIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-                            Hacer Cambios
+                            Hacer Cambios ({cost} Créditos)
                         </>
                     )}
                 </button>
             </div>
-        </div>
+        </div >
     );
 };
 

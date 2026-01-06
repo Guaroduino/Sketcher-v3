@@ -6,6 +6,7 @@ import { prepareVisualPromptingRequest, Region, buildVisualPrompt } from '../ser
 import { LayeredCanvas, LayeredCanvasRef } from './visual-prompting/LayeredCanvas';
 import { VisualPromptingControls } from './visual-prompting/VisualPromptingControls';
 import { GEMINI_MODEL_ID } from '../utils/constants';
+import { downloadFile } from '../utils/imageUtils';
 
 
 interface ArchitecturalRenderViewProps {
@@ -713,7 +714,7 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
             height: data.height,
             prompt: ''
         };
-        setRegions([...regions, newRegion]);
+        setRegions(prev => [...prev, newRegion]);
         // Keep active to add more?
         if (!isLeftPanelOpen) setIsLeftPanelOpen(true);
     };
@@ -1107,13 +1108,7 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
                     canvas.toBlob((blob) => {
                         if (blob) {
                             const downloadUrl = URL.createObjectURL(blob);
-                            const link = document.createElement('a');
-                            link.href = downloadUrl;
-                            link.download = `Architectural_Render_4K_${Date.now()}.png`;
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                            URL.revokeObjectURL(downloadUrl);
+                            downloadFile(downloadUrl, `Architectural_Render_4K_${Date.now()}.png`);
                         }
                     }, 'image/png');
                 }
@@ -1405,14 +1400,13 @@ export const ArchitecturalRenderView = React.memo(React.forwardRef<Architectural
 
 
                         {/* Download */}
-                        <a
-                            href={resultImage || '#'}
-                            download={resultImage ? `Render_${Date.now()}.png` : undefined}
+                        <button
+                            onClick={() => resultImage && downloadFile(resultImage, `Render_${Date.now()}.png`)}
+                            disabled={!resultImage}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${resultImage ? 'bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary' : 'bg-transparent text-gray-500 cursor-not-allowed'}`}
-                            onClick={(e) => !resultImage && e.preventDefault()}
                         >
                             <SaveIcon className="w-3 h-3" /> Descargar
-                        </a>
+                        </button>
 
                         {/* Clear */}
                         <button onClick={handleReset} className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900/30 text-xs font-bold transition-all" title="Limpiar Todo">

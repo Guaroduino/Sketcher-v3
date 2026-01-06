@@ -19,7 +19,7 @@ export const UnifiedLeftSidebar: React.FC<UnifiedLeftSidebarProps> = React.memo(
             <div className="flex items-center border-b border-theme-bg-tertiary bg-theme-bg-primary h-11 shrink-0">
                 <div className="flex-1 min-w-[60px] py-3 px-1 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 text-theme-accent-primary bg-theme-bg-secondary">
                     <BrushIcon className="w-3 h-3" />
-                    Tools
+                    Herramientas
                     <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-theme-accent-primary" />
                 </div>
             </div>

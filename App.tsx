@@ -55,6 +55,7 @@ import { LayeredCanvas, LayeredCanvasRef } from './components/visual-prompting/L
 import { useVisualPrompting } from './hooks/useVisualPrompting';
 import { FreeModeView, FreeModeViewHandle } from './components/FreeModeView';
 import { LandingGalleryCarousel } from './components/LandingGalleryCarousel';
+import { RenderWorkspace } from './components/RenderWorkspace';
 
 
 import { AIRequestInspectorModal } from './components/modals/AIRequestInspectorModal';
@@ -1158,7 +1159,7 @@ export function App() {
     const [debugPointers, setDebugPointers] = useState<Map<number, { x: number, y: number }>>(new Map());
 
     // -- View State --
-    const [activeView, setActiveView] = useState<'sketch' | 'free'>('sketch'); // 'render' merged into 'sketch'
+    const [activeView, setActiveView] = useState<'sketch' | 'free' | 'render'>('sketch'); // 'render' merged into 'sketch'
     const [sidebarTab, setSidebarTab] = useState<'sketch' | 'render' | 'simple_render' | 'visual_prompting'>('sketch');
     const [leftSidebarTab, setLeftSidebarTab] = useState<'visual-prompting' | 'tools'>('tools');
 
@@ -1308,10 +1309,21 @@ export function App() {
 
     const handleSelectItem = useCallback((id: string | null) => {
         setSelectedItemIds(id ? [id] : []);
+
+        // Auto-switch Sidebar for Annotations
+        if (id === 'annotations-root-id') {
+            // Fix: Show VP checks in Right Sidebar, not Left
+            setSidebarTab('visual_prompting');
+            if (!ui.isRightSidebarVisible) ui.setIsRightSidebarVisible(true);
+
+            // Ensure Left sidebar is tools (fix for "missing tools" bug)
+            setLeftSidebarTab('tools');
+        }
+
         if (!id || (selection && selection.sourceItemId !== id)) {
             setSelection(null);
         }
-    }, [selection]);
+    }, [selection, ui]);
 
     const handleStartPendingImportRef = useRef<((img: string | HTMLImageElement, scale?: number) => void) | null>(null);
     const handleAIImportRef = useRef<((img: string | HTMLImageElement, scale?: number) => void) | null>(null);
@@ -2523,11 +2535,7 @@ export function App() {
                 return;
             }
 
-            // 4. Call AI
-            const genAI = new GoogleGenAI({ apiKey });
-
             // Calculate Aspect Ratio string for Gemini 3
-            // Supported: "1:1", "3:4", "4:3", "9:16", "16:9"
             const ratio = canvasSize.width / canvasSize.height;
             let targetAspectRatio = "1:1";
             if (Math.abs(ratio - 16 / 9) < 0.2) targetAspectRatio = "16:9";
@@ -2535,16 +2543,14 @@ export function App() {
             else if (Math.abs(ratio - 4 / 3) < 0.2) targetAspectRatio = "4:3";
             else if (Math.abs(ratio - 3 / 4) < 0.2) targetAspectRatio = "3:4";
 
-            // @ts-ignore
-            const response = await genAI.models.generateContent({
-                model: selectedModel,
-                contents,
-                config: {
-                    responseMimeType: "image/jpeg",
-                    aspectRatio: targetAspectRatio,
-                    sampleCount: 1
-                } as any
-            });
+            // Use the centralized retry utility
+            const config = {
+                // responseMimeType: "image/jpeg", // INVALID for generateContent
+                // aspectRatio: targetAspectRatio, // INVALID
+                // sampleCount: 1 // INVALID
+            };
+
+            const response = await generateContentWithRetry(apiKey, selectedModel, contents, config);
 
             // Extract Image
             let newImageBase64: string | null = null;
@@ -2568,12 +2574,17 @@ export function App() {
                 // Show Result Modal instead of auto-applying
                 renderState.setResultImage(aiResultUrl);
             } else {
-                alert("La IA no generó una imagen.");
+                console.error("AI Response Missing Image:", response);
+                alert("La IA no generó una imagen. Revisa la consola para más detalles.");
             }
 
         } catch (error) {
-            console.error("Error visual prompting:", error);
-            alert("Error al procesar cambios.");
+            console.error("Error visual prompting FULL DETAILS:", error);
+            if (error instanceof Error) {
+                alert(`Error al procesar cambios: ${error.message}`);
+            } else {
+                alert("Error desconocido al procesar cambios. Revisa la consola.");
+            }
         } finally {
             renderState.setIsGenerating(false);
         }
@@ -2607,8 +2618,12 @@ export function App() {
             onStructuredPromptChange={vp.setStructuredPrompt}
             onResetStructuredPrompt={() => vp.setIsPromptManuallyEdited(false)}
             isPromptModified={vp.isPromptManuallyEdited}
+            onClose={() => {
+                if (sidebarTab === 'visual_prompting') setSidebarTab('sketch');
+            }}
+            selectedModel={selectedModel}
         />
-    ), [vp, handleVisualPromptingEnhance, renderState.isGenerating]);
+    ), [vp, handleVisualPromptingEnhance, renderState.isGenerating, sidebarTab, selectedModel]);
 
     const drawingToolsNode = useMemo(() => (
         <DrawingToolsPanel
@@ -3039,6 +3054,17 @@ export function App() {
 
             <ConfirmDiscardChangesModal isOpen={isDiscardConfirmOpen} onCancel={() => setIsDiscardConfirmOpen(false)} onConfirm={handleConfirmDiscard} />
 
+            {inspectorPayload && (
+                <AIRequestInspectorModal
+                    isOpen={!!inspectorPayload}
+                    model={inspectorPayload.model}
+                    parts={inspectorPayload.parts}
+                    config={inspectorPayload.config}
+                    onConfirm={confirmInspector}
+                    onCancel={cancelInspector}
+                />
+            )}
+
             <ProjectGalleryModal
                 isOpen={ui.isProjectGalleryOpen}
                 onClose={() => ui.setProjectGalleryOpen(false)}
@@ -3136,13 +3162,22 @@ export function App() {
                                 Sketch
                             </button>
                             <button
-                                onClick={() => { setActiveView('free'); ui.setIsRightSidebarVisible(false); }}
+                                onClick={() => setActiveView('free')}
                                 className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeView === 'free'
                                     ? 'bg-theme-bg-primary text-theme-text-primary shadow-sm'
                                     : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'
                                     }`}
                             >
                                 Libre
+                            </button>
+                            <button
+                                onClick={() => setActiveView('render')}
+                                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeView === 'render'
+                                    ? 'bg-theme-bg-primary text-theme-text-primary shadow-sm'
+                                    : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'
+                                    }`}
+                            >
+                                Render
                             </button>
                         </div>
 
@@ -3224,8 +3259,8 @@ export function App() {
                                     <label className="text-[10px] uppercase font-bold text-theme-text-tertiary">Modo</label>
                                     <div className="grid grid-cols-3 gap-2">
                                         <button onClick={() => { setActiveView('sketch'); setIsMobileMenuOpen(false); }} className={`p-2 rounded text-xs font-bold text-center ${activeView === 'sketch' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-primary'}`}>Sketch</button>
-                                        <button onClick={() => { setActiveView('render'); ui.setIsRightSidebarVisible(true); setIsMobileMenuOpen(false); }} className={`p-2 rounded text-xs font-bold text-center ${activeView === 'render' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-primary'}`}>Render</button>
                                         <button onClick={() => { setActiveView('free'); ui.setIsRightSidebarVisible(false); setIsMobileMenuOpen(false); }} className={`p-2 rounded text-xs font-bold text-center ${activeView === 'free' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-primary'}`}>Libre</button>
+                                        <button onClick={() => { setActiveView('render'); setIsMobileMenuOpen(false); }} className={`p-2 rounded text-xs font-bold text-center ${activeView === 'render' ? 'bg-theme-accent-primary text-white' : 'bg-theme-bg-primary'}`}>Render</button>
                                     </div>
                                 </div>
                             </div>
@@ -3238,7 +3273,7 @@ export function App() {
 
             {/* Left Sidebar: Unified (Visual Prompting & Tools) */}
             <aside
-                className={`fixed left-0 bottom-0 z-40  transition-transform duration-300 w-80 shadow-xl ${(ui.isLeftSidebarVisible && activeView !== 'free') ? 'translate-x-0' : '-translate-x-full'} ${ui.isHeaderVisible ? 'top-16' : 'top-0'}`}
+                className={`fixed left-0 bottom-0 z-40  transition-transform duration-300 w-80 shadow-xl ${(ui.isLeftSidebarVisible && activeView === 'sketch') ? 'translate-x-0' : '-translate-x-full'} ${ui.isHeaderVisible ? 'top-16' : 'top-0'}`}
             >
                 <UnifiedLeftSidebar
                     isOpen={ui.isLeftSidebarVisible}
@@ -3247,7 +3282,7 @@ export function App() {
             </aside>
 
             {/* Toggle Button for Left Sidebar */}
-            {activeView !== 'free' && (
+            {activeView === 'sketch' && (
                 <button
                     onClick={() => ui.setIsLeftSidebarVisible(!ui.isLeftSidebarVisible)}
                     className={`fixed top-1/2 -translate-y-1/2 z-40 w-6 h-24 rounded-r-xl bg-theme-bg-secondary border-y border-r border-theme-bg-tertiary shadow-md transition-all duration-300 hover:bg-theme-bg-hover flex items-center justify-center ${ui.isLeftSidebarVisible ? 'left-80' : 'left-0'}`}
@@ -3311,10 +3346,10 @@ export function App() {
                             isSolidBox={isSolidBox}
                         />
 
-                        {/* Visual Prompting Overlay - Only show if Annotations Layer is visible */}
-                        {isAnnotationsVisible && (
-                            <div className={`absolute inset-0 z-20 ${leftSidebarTab === 'visual-prompting' ? 'pointer-events-auto' : 'pointer-events-none'}`}>
-                                <div className={`w-full h-full ${leftSidebarTab === 'visual-prompting' ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+                        {/* Visual Prompting Overlay - Only show if Annotations Layer is visible or Tab is active */}
+                        {(isAnnotationsVisible || sidebarTab === 'visual_prompting' || leftSidebarTab === 'visual-prompting') && (
+                            <div className={`absolute inset-0 z-20 ${(leftSidebarTab === 'visual-prompting' || sidebarTab === 'visual_prompting') ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+                                <div className={`w-full h-full ${(leftSidebarTab === 'visual-prompting' || sidebarTab === 'visual_prompting') ? 'pointer-events-auto' : 'pointer-events-none'}`}>
                                     <LayeredCanvas
                                         ref={layeredCanvasRef}
                                         baseImage={null} // Transparent to see underlying sketch
@@ -3417,6 +3452,19 @@ export function App() {
                             libraryItems={library.libraryItems}
                             selectedModel={selectedModel}
                             onSendToSketch={(url) => handleSendFreeToSketch(url)}
+                        />
+                    </div>
+
+                    <div className={activeView === 'render' ? 'flex flex-col h-full w-full relative' : 'hidden'}>
+                        <RenderWorkspace
+                            imageSrc={renderState.resultImage || (simpleRenderCompositeImage && simpleRenderCompositeImage) || (backgroundObject?.canvas?.toDataURL()) || null}
+                            onImport={() => setIsBgImportModalOpen(true)}
+                            user={user}
+                            credits={credits}
+                            deductCredit={deductCredit}
+                            role={role}
+                            onInspectRequest={role === 'admin' ? inspectAIRequest : undefined}
+                            selectedModel={selectedModel}
                         />
                     </div>
                 </main>
@@ -3526,7 +3574,7 @@ export function App() {
 
                 {/* Right Sidebar: Unified (Outliner, Library, Render) */}
                 <aside
-                    className={`fixed right-0 bottom-0 z-40 transition-transform duration-300 w-80 shadow-xl ${(ui.isRightSidebarVisible && activeView !== 'free') ? 'translate-x-0' : 'translate-x-full'} ${ui.isHeaderVisible ? 'top-16' : 'top-0'}`}
+                    className={`fixed right-0 bottom-0 z-40 transition-transform duration-300 w-80 shadow-xl ${(ui.isRightSidebarVisible && activeView === 'sketch') ? 'translate-x-0' : 'translate-x-full'} ${ui.isHeaderVisible ? 'top-16' : 'top-0'}`}
                 >
                     <UnifiedRightSidebar
                         isOpen={ui.isRightSidebarVisible}
@@ -3579,7 +3627,7 @@ export function App() {
                 </aside>
 
                 {/* Toggle Button for Right Sidebar */}
-                {activeView !== 'free' && (
+                {activeView === 'sketch' && (
                     <button
                         onClick={() => ui.setIsRightSidebarVisible(!ui.isRightSidebarVisible)}
                         className={`fixed top-1/2 -translate-y-1/2 z-40 w-6 h-24 rounded-l-xl bg-theme-bg-secondary border-y border-l border-theme-bg-tertiary shadow-md transition-all duration-300 hover:bg-theme-bg-hover flex items-center justify-center ${ui.isRightSidebarVisible ? 'right-80' : 'right-0'}`}
@@ -4046,13 +4094,13 @@ const ProjectGalleryModal: React.FC<ProjectGalleryModalProps> = ({
                                                             {selectedProjectId === p.id && !movingProject && (
                                                                 <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-2 z-10 animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
                                                                     <div className="grid grid-cols-2 gap-1 w-full max-w-[200px]">
-                                                                        <button onClick={(e) => { e.stopPropagation(); onLoad(p); }} className="col-span-2 py-1.5 bg-theme-accent-primary text-white rounded text-xs font-bold shadow hover:scale-105 transition-transform mb-1">Cargar</button>
+                                                                        <button onClick={(e) => { e.stopPropagation(); onLoad(p); }} className="col-span-2 py-1 bg-theme-accent-primary text-white rounded text-xs font-bold shadow hover:scale-105 transition-transform mb-0.5">Cargar</button>
 
-                                                                        {onOverwrite && <button onClick={(e) => { e.stopPropagation(); setOverwritingProject(p); }} className="py-1 bg-theme-bg-tertiary text-white rounded text-[10px] font-medium hover:bg-theme-bg-hover flex flex-col items-center justify-center gap-0.5"><SaveIcon className="w-3 h-3" />Guardar</button>}
+                                                                        {onOverwrite && <button onClick={(e) => { e.stopPropagation(); setOverwritingProject(p); }} className="py-0.5 bg-theme-bg-tertiary text-white rounded text-[10px] font-medium hover:bg-theme-bg-hover flex flex-col items-center justify-center gap-0.5"><SaveIcon className="w-3 h-3" />Guardar</button>}
 
-                                                                        {onDuplicate && <button onClick={(e) => { e.stopPropagation(); onDuplicate(p); }} className="py-1 bg-theme-bg-tertiary text-white rounded text-[10px] font-medium hover:bg-theme-bg-hover flex flex-col items-center justify-center gap-0.5"><CopyIcon className="w-3 h-3" />Copiar</button>}
+                                                                        {onDuplicate && <button onClick={(e) => { e.stopPropagation(); onDuplicate(p); }} className="py-0.5 bg-theme-bg-tertiary text-white rounded text-[10px] font-medium hover:bg-theme-bg-hover flex flex-col items-center justify-center gap-0.5"><CopyIcon className="w-3 h-3" />Copiar</button>}
 
-                                                                        {onMoveProject && <button onClick={(e) => { e.stopPropagation(); setMovingProject(p); }} className="py-1 bg-theme-bg-tertiary text-white rounded text-[10px] font-medium hover:bg-theme-bg-hover flex flex-col items-center justify-center gap-0.5"><ChevronRightIcon className="w-3 h-3" />Mover</button>}
+                                                                        {onMoveProject && <button onClick={(e) => { e.stopPropagation(); setMovingProject(p); }} className="py-0.5 bg-theme-bg-tertiary text-white rounded text-[10px] font-medium hover:bg-theme-bg-hover flex flex-col items-center justify-center gap-0.5"><ChevronRightIcon className="w-3 h-3" />Mover</button>}
 
                                                                         <button onClick={(e) => { e.stopPropagation(); setDeletingProject(p); }} className="col-span-2 py-1 bg-red-600/80 text-white rounded text-[10px] hover:bg-red-600 mt-0.5">Eliminar</button>
                                                                     </div>
