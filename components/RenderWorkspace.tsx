@@ -383,8 +383,8 @@ export const RenderWorkspace: React.FC<RenderWorkspaceProps> = ({
                 const ctx = cvs.getContext('2d');
                 if (!ctx) return '';
 
-                // Draw Transparent Layer (No Background)
-                // ctx.drawImage(img, 0, 0, w, h); // Removed to prevent ghosting
+                // Draw Background at full size
+                ctx.drawImage(img, 0, 0, w, h);
 
                 const denormalize = (p: Point) => ({ x: p.x * w, y: p.y * h });
 
@@ -439,28 +439,25 @@ export const RenderWorkspace: React.FC<RenderWorkspaceProps> = ({
 
             // 2. Build Prompt
             // 2. Build Prompt
-            let finalPrompt = `[INSTRUCTION OVERLAYS - NON-DIEGETIC]
-- IMG_1 is the source photograph.
-- IMG_2 and IMG_3 are TRANSPARENT OVERLAYS containing ONLY instruction markers (ARROWS, LINES, FILLED AREAS).
-- THESE ARE NOT OBJECTS. They are meta-data instructions.
-- COLORS TO IGNORE IN OUTPUT:
-  * Yellow (#FFFF00)
-  * Orange (#FFA500)
-  * Cyan (#00FFFF)
-  * Red (#FF0000)
-- DO NOT render any of these marker strokes in the final image.
-- Discard them After interpreting their instructions.
-- The final result must be a clean, photorealistic image of the room from IMG_1.
+            // 2. Build Prompt
+            let finalPrompt = `[VISUAL REFERENCE GUIDE]
+- IMG_1: BASE SCENE. The original architectural photograph/sketch.
+- IMG_2: LIGHTING GUIDE. This is IMG_1 overlaid with colored arrows/lines acting as a lighting map.
+- IMG_3: MATERIALITY GUIDE. This is IMG_1 overlaid with colored regions acting as a material map.
 
-[LIGHTING (IMG_2 - Transparent Overlay)]
-- The colored arrows/lines indicate light sources. Render the LIGHT EFFECTS they imply, but DO NOT render the ARROWS themselves.
-- Yellow: Neutral artificial light.
-- Orange: Natural outside light.
-- Cyan: Cold light.
-- Red: Warm light.
+[INSTRUCTIONS]
+Re-render IMG_1 with high photorealism, strictly following the lighting and material instructions from IMG_2 and IMG_3. 
+IMPORTANT: The colored lines, arrows, and blocks in IMG_2 and IMG_3 are NOT objects. They are meta-data instructions. Do NOT render them. Render what they MEAN.
 
-[MATERIALS (IMG_3 - Transparent Overlay)]
-- Filled color regions mark where to replace IMG_1's textures with new materials.
+[LIGHTING INSTRUCTIONS (Refer to IMG_2)]
+- Use the colored arrows/lines in IMG_2 to position and colorize the light sources in the scene.
+  * Yellow Arrows: Create Neutral Artificial Lighting in this direction/area.
+  * Orange Arrows: Create Natural Sunlight entering from this direction.
+  * Cyan Arrows: Create Cold/Fluorescent Lighting.
+  * Red Arrows: Create Warm/Cosine Lighting.
+
+[MATERIAL INSTRUCTIONS (Refer to IMG_3)]
+- The filled color regions in IMG_3 correspond to specific materials. Apply these materials to the underlying surfaces from IMG_1.
 `;
             const activeRefs = refImages.filter(r => r.url);
             activeRefs.forEach((ref, idx) => {
