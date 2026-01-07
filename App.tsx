@@ -1223,26 +1223,36 @@ export function App() {
     const [inspectorResolve, setInspectorResolve] = useState<((result: { confirmed: boolean; modifiedParts?: any[]; modifiedConfig?: any }) => void) | null>(null);
 
     const inspectAIRequest = useCallback((payload: { model: string; parts: any[]; config?: any }) => {
+        console.log("App: inspectAIRequest called", { role: roleRef.current });
         return new Promise<{ confirmed: boolean; modifiedParts?: any[]; modifiedConfig?: any }>((resolve) => {
             // ONLY SHOW DEBUG MODAL FOR ADMINS
             if (roleRef.current !== 'admin') {
+                console.log("App: Auto-confirming (not admin)");
                 resolve({ confirmed: true });
                 return;
             }
 
+            console.log("App: Opening inspector modal");
             setInspectorPayload(payload);
             setInspectorResolve(() => resolve);
         });
     }, []);
 
     const confirmInspector = (modifiedParts?: any[], modifiedConfig?: any) => {
+        console.log("App: confirmInspector called", { hasResolve: !!inspectorResolve });
         if (inspectorResolve) inspectorResolve({ confirmed: true, modifiedParts, modifiedConfig });
         setInspectorPayload(null);
         setInspectorResolve(null);
     };
 
     const cancelInspector = () => {
-        if (inspectorResolve) inspectorResolve({ confirmed: false });
+        console.log("App: cancelInspector called", { hasResolve: !!inspectorResolve });
+        if (inspectorResolve) {
+            console.log("App: Resolving with confirmed: false");
+            inspectorResolve({ confirmed: false });
+        } else {
+            console.warn("App: cancelInspector called but no resolver found!");
+        }
         setInspectorPayload(null);
         setInspectorResolve(null);
     };

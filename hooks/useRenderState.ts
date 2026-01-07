@@ -239,6 +239,15 @@ export function useRenderState(
 
             // INSPECTOR CHECK
             if (onInspectRequest) {
+                const inspectionConfig = {
+                    sceneType,
+                    renderStyle,
+                    creativeFreedom,
+                    archStyle,
+                    generationConfig // Current gen config
+                };
+
+                console.log("useRenderState: Requesting inspection...");
                 const inspectionResult = await onInspectRequest({
                     model: activeModel,
                     parts: contents.parts,
@@ -247,12 +256,14 @@ export function useRenderState(
                         generationConfig
                     }
                 });
+                console.log("useRenderState: Inspection result:", inspectionResult);
 
                 // Handle new object return type or legacy boolean if needed (but we changed App.tsx to always return obj)
                 // To be safe against type mismatch if App.tsx wasn't fully updated (it was), we cast or check properties.
                 const confirmed = typeof inspectionResult === 'object' ? inspectionResult.confirmed : inspectionResult;
 
                 if (!confirmed) {
+                    console.log("useRenderState: Render cancelled by inspector.");
                     setIsGenerating(false);
                     return;
                 }
