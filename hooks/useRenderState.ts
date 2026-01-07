@@ -413,7 +413,6 @@ export function useRenderState(
                     }
                 }
             }
-
             setStyleReferenceDescription(text);
         } catch (e) {
             console.error(e);

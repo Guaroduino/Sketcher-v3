@@ -2521,13 +2521,16 @@ export function App() {
             };
 
             // Debug Inspector
+            console.log("App: Requesting inspection for Visual Prompting...");
             const inspectionResult = await inspectAIRequest({
                 model: selectedModel,
                 parts: contents.parts,
                 config: config
             });
+            console.log("App: Visual Prompting Inspection result:", inspectionResult);
 
             if (!inspectionResult.confirmed) {
+                console.log("App: Visual Prompting cancelled by USER.");
                 renderState.setIsGenerating(false);
                 return;
             }
