@@ -439,30 +439,59 @@ export const RenderWorkspace: React.FC<RenderWorkspaceProps> = ({
 
             // 2. Build Prompt
             // 2. Build Prompt
-            // 2. Build Prompt
-            let finalPrompt = `[VISUAL REFERENCE GUIDE]
-- IMG_1: BASE SCENE. The original architectural photograph/sketch.
-- IMG_2: LIGHTING GUIDE. This is IMG_1 overlaid with colored arrows/lines acting as a lighting map.
-- IMG_3: MATERIALITY GUIDE. This is IMG_1 overlaid with colored regions acting as a material map.
+            const hasLighting = lightingStrokes.length > 0;
+            const hasMateriality = materialityStrokes.length > 0;
+            const activeRefs = refImages.filter(r => r.url);
+            const activeCurrentRenders = currentRenders.filter(r => r.url);
 
-[INSTRUCTIONS]
-Re-render IMG_1 with high photorealism, strictly following the lighting and material instructions from IMG_2 and IMG_3. 
-IMPORTANT: The colored lines, arrows, and blocks in IMG_2 and IMG_3 are NOT objects. They are meta-data instructions. Do NOT render them. Render what they MEAN.
+            let finalPrompt = `[VISUAL REFERENCE GUIDE]\n`;
+            let imgIndex = 1;
 
-[LIGHTING INSTRUCTIONS (Refer to IMG_2)]
-- Use the colored arrows/lines in IMG_2 to position and colorize the light sources in the scene.
+            finalPrompt += `- IMG_${imgIndex}: BASE SCENE. The original architectural photograph/sketch.\n`;
+
+            let lightingImgIndex = -1;
+            if (hasLighting) {
+                imgIndex++;
+                lightingImgIndex = imgIndex;
+                finalPrompt += `- IMG_${imgIndex}: LIGHTING GUIDE. This is IMG_1 overlaid with colored arrows/lines acting as a lighting map.\n`;
+            }
+
+            let materialityImgIndex = -1;
+            if (hasMateriality) {
+                imgIndex++;
+                materialityImgIndex = imgIndex;
+                finalPrompt += `- IMG_${imgIndex}: MATERIALITY GUIDE. This is IMG_1 overlaid with colored regions acting as a material map.\n`;
+            }
+
+            finalPrompt += `\n[INSTRUCTIONS]
+Re-render IMG_1 with high photorealism. `;
+
+            if (hasLighting || hasMateriality) {
+                finalPrompt += `Strictly follow the instructions from the guide images. 
+IMPORTANT: The colored lines, arrows, and blocks in the guide images are NOT objects. They are meta-data instructions. Do NOT render them. Render what they MEAN.\n`;
+            } else {
+                finalPrompt += `Enhance the architectural quality and realism.\n`;
+            }
+
+            if (hasLighting) {
+                finalPrompt += `\n[LIGHTING INSTRUCTIONS (Refer to IMG_${lightingImgIndex})]
+- Use the colored arrows/lines in IMG_${lightingImgIndex} to position and colorize the light sources in the scene.
   * Yellow Arrows: Create Neutral Artificial Lighting in this direction/area.
   * Orange Arrows: Create Natural Sunlight entering from this direction.
   * Cyan Arrows: Create Cold/Fluorescent Lighting.
-  * Red Arrows: Create Warm/Cosine Lighting.
+  * Red Arrows: Create Warm/Cosine Lighting.\n`;
+            }
 
-[MATERIAL INSTRUCTIONS (Refer to IMG_3)]
-- The filled color regions in IMG_3 correspond to specific materials. Apply these materials to the underlying surfaces from IMG_1.
-`;
-            const activeRefs = refImages.filter(r => r.url);
-            activeRefs.forEach((ref, idx) => {
-                finalPrompt += `- Surface covered by ${ref.color} in IMG_3: Apply material from Reference Image IMG_${4 + idx}.\n`;
-            });
+            if (hasMateriality) {
+                finalPrompt += `\n[MATERIAL INSTRUCTIONS (Refer to IMG_${materialityImgIndex})]
+- The filled color regions in IMG_${materialityImgIndex} correspond to specific materials. Apply these materials to the underlying surfaces from IMG_1.\n`;
+
+                activeRefs.forEach((ref, idx) => {
+                    // Refs are added after guides. First ref is at imgIndex + 1
+                    const refImgIndex = imgIndex + 1 + idx;
+                    finalPrompt += `- Surface covered by ${ref.color} in IMG_${materialityImgIndex}: Apply material from Reference Image IMG_${refImgIndex}.\n`;
+                });
+            }
 
             finalPrompt += `\n[MANDATORY GEOMETRIC CONSTRAINT]
 - Resolution: ${w}x${h}.
@@ -470,12 +499,13 @@ IMPORTANT: The colored lines, arrows, and blocks in IMG_2 and IMG_3 are NOT obje
 - NO white bars. NO padding.
 - Creative Freedom: ${creativeFreedom}/200.\n\n`;
 
-            // Current Renders Influence (Style Reference)
-            const activeCurrentRenders = currentRenders.filter(r => r.url);
             if (activeCurrentRenders.length > 0) {
-                const startIndex = 4 + activeRefs.length;
+                // Style refs start after active refs
+                // Current imgIndex counts Base + Guides
+                // Refs take 'activeRefs.length' slots
+                const startStyleIndex = imgIndex + activeRefs.length + 1;
                 finalPrompt += `\n[Style & Consistency - Use Previous Renders]\n`;
-                finalPrompt += `I have provided ${activeCurrentRenders.length} previous renders for consistency (starting from IMG_${startIndex}).\n`;
+                finalPrompt += `I have provided ${activeCurrentRenders.length} previous renders for consistency (starting from IMG_${startStyleIndex}).\n`;
                 finalPrompt += `GOAL: Match the EXACT Architectural Style, Color Grade, and Camera Quality of these renders. The new image must look like it belongs to the same professional photographic series.\n`;
             }
 
@@ -483,14 +513,18 @@ IMPORTANT: The colored lines, arrows, and blocks in IMG_2 and IMG_3 are NOT obje
             const parts: any[] = [];
             parts.push({ text: finalPrompt });
 
-            // Image 0: Background
+            // Image 0: Background (Always IMG_1)
             parts.push({ inlineData: { mimeType: 'image/png', data: backgroundBase64 } });
 
-            // Image 1: Lighting Map
-            parts.push({ inlineData: { mimeType: 'image/png', data: lightingBase64 } });
+            // Image 1: Lighting Map (Optional)
+            if (hasLighting) {
+                parts.push({ inlineData: { mimeType: 'image/png', data: lightingBase64 } });
+            }
 
-            // Image 2: Materiality Map
-            parts.push({ inlineData: { mimeType: 'image/png', data: materialityBase64 } });
+            // Image 2: Materiality Map (Optional)
+            if (hasMateriality) {
+                parts.push({ inlineData: { mimeType: 'image/png', data: materialityBase64 } });
+            }
 
             // References
             activeRefs.forEach(ref => {
