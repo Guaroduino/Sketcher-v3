@@ -35,6 +35,15 @@ export const AIRequestInspectorModal: React.FC<AIRequestInspectorModalProps> = (
         onConfirm(parts);
     };
 
+    const handleDownloadImage = (base64Data: string, mimeType: string = 'image/png', index: number) => {
+        const link = document.createElement('a');
+        link.href = `data:${mimeType};base64,${base64Data}`;
+        link.download = `debug_image_${index + 1}_${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     const images = parts.filter(p => p.inlineData);
     const textPartIndices = parts.map((p, i) => p.text ? i : -1).filter(i => i !== -1);
 
@@ -73,7 +82,18 @@ export const AIRequestInspectorModal: React.FC<AIRequestInspectorModalProps> = (
                                             alt={`Input ${idx}`}
                                             className="w-full h-48 object-contain"
                                         />
-                                        <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 text-[10px] text-gray-300 font-mono flex justify-between">
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => img.inlineData && handleDownloadImage(img.inlineData.data, img.inlineData.mimeType, idx)}
+                                                className="p-2 bg-theme-bg-secondary hover:bg-theme-bg-hover text-white rounded-full shadow-lg transform hover:scale-110 transition-all font-bold flex items-center gap-2 px-4"
+                                                title="Descargar Imagen"
+                                            >
+                                                <DownloadIcon className="w-5 h-5" />
+                                                <span className="text-xs">Descargar</span>
+                                            </button>
+                                        </div>
+                                        <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 text-[10px] text-gray-300 font-mono flex justify-between pointer-events-none">
                                             <span>IMG_{idx + 1}</span>
                                             <span>{Math.round((img.inlineData?.data.length || 0) / 1024)} KB</span>
                                         </div>
@@ -120,12 +140,14 @@ export const AIRequestInspectorModal: React.FC<AIRequestInspectorModalProps> = (
                 {/* Footer */}
                 <div className="p-4 border-t border-theme-bg-tertiary bg-theme-bg-primary/50 rounded-b-xl flex justify-end gap-3">
                     <button
+                        type="button"
                         onClick={onClose}
                         className="px-4 py-2 rounded-lg text-sm font-medium text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary transition-colors"
                     >
                         Cancelar Envío
                     </button>
                     <button
+                        type="button"
                         onClick={handleConfirm}
                         className="px-6 py-2 rounded-lg text-sm font-bold bg-green-600 hover:bg-green-500 text-white shadow-lg shadow-green-900/20 flex items-center gap-2 transition-all hover:scale-105"
                     >
