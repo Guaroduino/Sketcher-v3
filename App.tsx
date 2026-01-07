@@ -1220,7 +1220,7 @@ export function App() {
 
     // AI Inspector State
     const [inspectorPayload, setInspectorPayload] = useState<{ model: string; parts: any[]; config?: any } | null>(null);
-    const [inspectorResolve, setInspectorResolve] = useState<((result: { confirmed: boolean; modifiedParts?: any[]; modifiedConfig?: any }) => void) | null>(null);
+    const inspectorResolveRef = useRef<((result: { confirmed: boolean; modifiedParts?: any[]; modifiedConfig?: any }) => void) | null>(null);
 
     const inspectAIRequest = useCallback((payload: { model: string; parts: any[]; config?: any }) => {
         console.log("App: inspectAIRequest called", { role: roleRef.current });
@@ -1234,27 +1234,27 @@ export function App() {
 
             console.log("App: Opening inspector modal");
             setInspectorPayload(payload);
-            setInspectorResolve(() => resolve);
+            inspectorResolveRef.current = resolve;
         });
     }, []);
 
     const confirmInspector = (modifiedParts?: any[], modifiedConfig?: any) => {
-        console.log("App: confirmInspector called", { hasResolve: !!inspectorResolve });
-        if (inspectorResolve) inspectorResolve({ confirmed: true, modifiedParts, modifiedConfig });
+        console.log("App: confirmInspector called", { hasResolve: !!inspectorResolveRef.current });
+        if (inspectorResolveRef.current) inspectorResolveRef.current({ confirmed: true, modifiedParts, modifiedConfig });
         setInspectorPayload(null);
-        setInspectorResolve(null);
+        inspectorResolveRef.current = null;
     };
 
     const cancelInspector = () => {
-        console.log("App: cancelInspector called", { hasResolve: !!inspectorResolve });
-        if (inspectorResolve) {
+        console.log("App: cancelInspector called", { hasResolve: !!inspectorResolveRef.current });
+        if (inspectorResolveRef.current) {
             console.log("App: Resolving with confirmed: false");
-            inspectorResolve({ confirmed: false });
+            inspectorResolveRef.current({ confirmed: false });
         } else {
             console.warn("App: cancelInspector called but no resolver found!");
         }
         setInspectorPayload(null);
-        setInspectorResolve(null);
+        inspectorResolveRef.current = null;
     };
 
     const ui = useAppUI();
