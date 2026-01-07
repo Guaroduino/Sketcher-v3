@@ -4,7 +4,7 @@ import { XIcon, CheckIcon, DownloadIcon } from '../icons';
 interface AIRequestInspectorModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onConfirm: (modifiedParts?: { text?: string; inlineData?: { mimeType: string; data: string } }[]) => void;
+    onConfirm: (modifiedParts?: { text?: string; inlineData?: { mimeType: string; data: string } }[], modifiedConfig?: any) => void;
     payload: {
         model: string;
         parts: { text?: string; inlineData?: { mimeType: string; data: string } }[];
@@ -14,10 +14,16 @@ interface AIRequestInspectorModalProps {
 
 export const AIRequestInspectorModal: React.FC<AIRequestInspectorModalProps> = ({ isOpen, onClose, onConfirm, payload }) => {
     const [parts, setParts] = React.useState<typeof payload.parts>([]);
+    const [localConfigString, setLocalConfigString] = React.useState('');
 
     React.useEffect(() => {
         if (payload?.parts) {
             setParts(JSON.parse(JSON.stringify(payload.parts))); // Deep copy
+        }
+        if (payload?.config) {
+            setLocalConfigString(JSON.stringify(payload.config, null, 2));
+        } else {
+            setLocalConfigString('');
         }
     }, [payload]);
 
@@ -32,7 +38,16 @@ export const AIRequestInspectorModal: React.FC<AIRequestInspectorModalProps> = (
     };
 
     const handleConfirm = () => {
-        onConfirm(parts);
+        let parsedConfig = undefined;
+        if (localConfigString.trim()) {
+            try {
+                parsedConfig = JSON.parse(localConfigString);
+            } catch (e) {
+                alert("Error en el formato JSON de la configuración. Por favor corrige la sintaxis.");
+                return;
+            }
+        }
+        onConfirm(parts, parsedConfig);
     };
 
     const handleDownloadImage = (base64Data: string, mimeType: string = 'image/png', index: number) => {
@@ -124,13 +139,12 @@ export const AIRequestInspectorModal: React.FC<AIRequestInspectorModalProps> = (
                     {/* Config Section */}
                     {payload.config && (
                         <div>
-                            <h4 className="text-xs font-bold text-theme-text-secondary uppercase mb-3 tracking-wider">Configuración</h4>
-                            <div className="bg-[#121212] rounded-lg border border-theme-bg-tertiary overflow-hidden">
+                            <h4 className="text-xs font-bold text-theme-text-secondary uppercase mb-3 tracking-wider">Configuración - EDITABLE (JSON)</h4>
+                            <div className="bg-[#121212] rounded-lg border border-theme-bg-tertiary overflow-hidden ring-1 ring-transparent focus-within:ring-purple-500 transition-all">
                                 <textarea
-                                    readOnly
                                     className="w-full h-32 bg-transparent p-3 font-mono text-xs text-green-400 resize-y outline-none"
-                                    value={JSON.stringify(payload.config, null, 2)}
-                                    onClick={(e) => e.currentTarget.select()}
+                                    value={localConfigString}
+                                    onChange={(e) => setLocalConfigString(e.target.value)}
                                 />
                             </div>
                         </div>

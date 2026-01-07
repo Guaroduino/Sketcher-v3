@@ -12,7 +12,7 @@ export function useRenderState(
     deductCredit: ((amount?: number) => Promise<boolean>) | undefined,
     selectedModel: string,
     onRenderCompleteRequest?: (dataUrl: string) => void,
-    onInspectRequest?: (payload: { model: string; parts: any[]; config?: any }) => Promise<boolean | { confirmed: boolean; modifiedParts?: any[] }>
+    onInspectRequest?: (payload: { model: string; parts: any[]; config?: any }) => Promise<boolean | { confirmed: boolean; modifiedParts?: any[]; modifiedConfig?: any }>
 ) {
     // --- State ---
     const [sceneType, setSceneType] = useState<SceneType>('exterior');
@@ -218,7 +218,7 @@ export function useRenderState(
             const contents = { parts };
 
             // Config construction
-            const generationConfig: any = {};
+            let generationConfig: any = {};
 
             // Calculate Aspect Ratio string if aspect ratio is provided
             if (aspectRatio) {
@@ -242,12 +242,8 @@ export function useRenderState(
                 const inspectionResult = await onInspectRequest({
                     model: activeModel,
                     parts: contents.parts,
-                    config: lastOptions.current || {
-                        sceneType,
-                        renderStyle,
-                        creativeFreedom,
-                        archStyle,
-                        aspectRatio: canvasAspectRatio.current,
+                    config: {
+                        ...(lastOptions.current || {}),
                         generationConfig
                     }
                 });
@@ -261,8 +257,13 @@ export function useRenderState(
                     return;
                 }
 
-                if (typeof inspectionResult === 'object' && inspectionResult.modifiedParts) {
-                    contents.parts = inspectionResult.modifiedParts;
+                if (typeof inspectionResult === 'object') {
+                    if (inspectionResult.modifiedParts) {
+                        contents.parts = inspectionResult.modifiedParts;
+                    }
+                    if (inspectionResult.modifiedConfig && inspectionResult.modifiedConfig.generationConfig) {
+                        generationConfig = inspectionResult.modifiedConfig.generationConfig;
+                    }
                 }
             }
 

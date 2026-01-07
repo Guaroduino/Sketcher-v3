@@ -1220,10 +1220,10 @@ export function App() {
 
     // AI Inspector State
     const [inspectorPayload, setInspectorPayload] = useState<{ model: string; parts: any[]; config?: any } | null>(null);
-    const [inspectorResolve, setInspectorResolve] = useState<((result: { confirmed: boolean; modifiedParts?: any[] }) => void) | null>(null);
+    const [inspectorResolve, setInspectorResolve] = useState<((result: { confirmed: boolean; modifiedParts?: any[]; modifiedConfig?: any }) => void) | null>(null);
 
     const inspectAIRequest = useCallback((payload: { model: string; parts: any[]; config?: any }) => {
-        return new Promise<{ confirmed: boolean; modifiedParts?: any[] }>((resolve) => {
+        return new Promise<{ confirmed: boolean; modifiedParts?: any[]; modifiedConfig?: any }>((resolve) => {
             // ONLY SHOW DEBUG MODAL FOR ADMINS
             if (roleRef.current !== 'admin') {
                 resolve({ confirmed: true });
@@ -1235,8 +1235,8 @@ export function App() {
         });
     }, []);
 
-    const confirmInspector = (modifiedParts?: any[]) => {
-        if (inspectorResolve) inspectorResolve({ confirmed: true, modifiedParts });
+    const confirmInspector = (modifiedParts?: any[], modifiedConfig?: any) => {
+        if (inspectorResolve) inspectorResolve({ confirmed: true, modifiedParts, modifiedConfig });
         setInspectorPayload(null);
         setInspectorResolve(null);
     };
@@ -2503,16 +2503,18 @@ export function App() {
             const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
             const { contents } = await prepareVisualPromptingRequest(payload, apiKey, vp.isPromptManuallyEdited ? vp.structuredPrompt : undefined);
 
+            // Use the centralized retry utility
+            let config: any = {
+                // responseMimeType: "image/jpeg", // INVALID for generateContent
+                // aspectRatio: targetAspectRatio, // INVALID
+                // sampleCount: 1 // INVALID
+            };
+
             // Debug Inspector
             const inspectionResult = await inspectAIRequest({
                 model: selectedModel,
                 parts: contents.parts,
-                config: {
-                    ...payload,
-                    baseImage: payload.baseImage ? "(image data)" : "none",
-                    layersImage: payload.layersImage ? "(image data)" : "none",
-                    globalReferenceImage: payload.globalReferenceImage ? "(image data)" : "none"
-                }
+                config: config
             });
 
             if (!inspectionResult.confirmed) {
@@ -2523,6 +2525,9 @@ export function App() {
             if (inspectionResult.modifiedParts) {
                 contents.parts = inspectionResult.modifiedParts;
             }
+            if (inspectionResult.modifiedConfig) {
+                config = inspectionResult.modifiedConfig;
+            }
 
             // Calculate Aspect Ratio string for Gemini 3
             const ratio = canvasSize.width / canvasSize.height;
@@ -2531,13 +2536,6 @@ export function App() {
             else if (Math.abs(ratio - 9 / 16) < 0.2) targetAspectRatio = "9:16";
             else if (Math.abs(ratio - 4 / 3) < 0.2) targetAspectRatio = "4:3";
             else if (Math.abs(ratio - 3 / 4) < 0.2) targetAspectRatio = "3:4";
-
-            // Use the centralized retry utility
-            const config = {
-                // responseMimeType: "image/jpeg", // INVALID for generateContent
-                // aspectRatio: targetAspectRatio, // INVALID
-                // sampleCount: 1 // INVALID
-            };
 
             const response = await generateContentWithRetry(apiKey, selectedModel, contents, config);
 
