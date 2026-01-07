@@ -24,25 +24,36 @@ export function useCredits(user: User | null) {
         const unsubscribe = onSnapshot(userDocRef, async (docSnapshot) => {
             if (docSnapshot.exists()) {
                 const data = docSnapshot.data();
-                console.log("useCredits: Fetched user data:", data); // DEBUG LOG
+                // console.log("useCredits: Fetched user data:", data); 
 
-                if (typeof data.credits === 'number') {
-                    setCredits(data.credits);
-                } else {
+                const val = data.credits;
+                if (typeof val === 'number') {
+                    setCredits(val);
+                } else if (val === undefined || val === null) {
+                    // Initialize if missing
+                    console.log("useCredits: Credits field missing, initializing to default.");
                     await updateDoc(userDocRef, { credits: DEFAULT_CREDITS });
+                } else {
+                    // Try to recover if it's a string
+                    const num = Number(val);
+                    if (!isNaN(num)) {
+                        setCredits(num);
+                    } else {
+                        console.warn("useCredits: Invalid credits format, resetting.");
+                        await updateDoc(userDocRef, { credits: DEFAULT_CREDITS });
+                    }
                 }
 
                 // Role handling
                 if (data.role && (data.role === 'admin' || data.role === 'regular')) {
-                    console.log("useCredits: Setting role to:", data.role); // DEBUG LOG
                     setRole(data.role);
                 } else {
-                    console.warn("useCredits: Role missing or invalid, defaulting to regular. Found:", data.role); // DEBUG LOG
                     setRole('regular');
                 }
 
             } else {
-                console.log("useCredits: User document does not exist, creating new one."); // DEBUG LOG
+                console.log("useCredits: First time user? Creating profile.");
+                // Use setDoc with merge to be safe, though !exists implies it's new
                 await setDoc(userDocRef, {
                     email: user.email,
                     createdAt: new Date(),
