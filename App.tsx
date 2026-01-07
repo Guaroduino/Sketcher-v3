@@ -1220,29 +1220,13 @@ export function App() {
 
     // AI Inspector State
     const [inspectorPayload, setInspectorPayload] = useState<{ model: string; parts: any[]; config?: any } | null>(null);
-    const [inspectorResolve, setInspectorResolve] = useState<((confirm: boolean) => void) | null>(null);
+    const [inspectorResolve, setInspectorResolve] = useState<((result: { confirmed: boolean; modifiedParts?: any[] }) => void) | null>(null);
 
     const inspectAIRequest = useCallback((payload: { model: string; parts: any[]; config?: any }) => {
-        return new Promise<boolean>((resolve) => {
+        return new Promise<{ confirmed: boolean; modifiedParts?: any[] }>((resolve) => {
             // ONLY SHOW DEBUG MODAL FOR ADMINS
-            // We need to access 'role' here. Since 'role' comes from useCredits which is used below,
-            // we have a closure issue if useCredits is defined after.
-            // However, useCredits is called inside App component, but 'inspectAIRequest' is also defined inside App.
-            // We just need to ensure 'role' is available in the dependency array or accessible via ref if needed.
-            // OR just add 'role' to dependency array (which might re-create it often, but that's fine for this app).
-
-            // Actually, let's look at where useCredits is called. Line 919.
-            // inspectAIRequest is line 891.
-            // I should access 'role' from a Ref to avoid breaking changes or re-ordering too much code?
-            // Or just check it inside. But I can't check 'role' if it's not defined yet.
-            // BETTER PLAN: Move 'useCredits' call to top of App component (standard hook practice)
-            // or just rely on 'ai' which passes it?
-            // 'ai' hook uses 'inspectAIRequest' as a prop.
-
-            // Let's rely on a 'roleRef' that we verify.
-
             if (roleRef.current !== 'admin') {
-                resolve(true);
+                resolve({ confirmed: true });
                 return;
             }
 
@@ -1251,14 +1235,14 @@ export function App() {
         });
     }, []);
 
-    const confirmInspector = () => {
-        if (inspectorResolve) inspectorResolve(true);
+    const confirmInspector = (modifiedParts?: any[]) => {
+        if (inspectorResolve) inspectorResolve({ confirmed: true, modifiedParts });
         setInspectorPayload(null);
         setInspectorResolve(null);
     };
 
     const cancelInspector = () => {
-        if (inspectorResolve) inspectorResolve(false);
+        if (inspectorResolve) inspectorResolve({ confirmed: false });
         setInspectorPayload(null);
         setInspectorResolve(null);
     };
@@ -2520,7 +2504,7 @@ export function App() {
             const { contents } = await prepareVisualPromptingRequest(payload, apiKey, vp.isPromptManuallyEdited ? vp.structuredPrompt : undefined);
 
             // Debug Inspector
-            const shouldProceed = await inspectAIRequest({
+            const inspectionResult = await inspectAIRequest({
                 model: selectedModel,
                 parts: contents.parts,
                 config: {
@@ -2530,9 +2514,14 @@ export function App() {
                     globalReferenceImage: payload.globalReferenceImage ? "(image data)" : "none"
                 }
             });
-            if (!shouldProceed) {
+
+            if (!inspectionResult.confirmed) {
                 renderState.setIsGenerating(false);
                 return;
+            }
+
+            if (inspectionResult.modifiedParts) {
+                contents.parts = inspectionResult.modifiedParts;
             }
 
             // Calculate Aspect Ratio string for Gemini 3

@@ -12,7 +12,7 @@ export function useRenderState(
     deductCredit: ((amount?: number) => Promise<boolean>) | undefined,
     selectedModel: string,
     onRenderCompleteRequest?: (dataUrl: string) => void,
-    onInspectRequest?: (payload: { model: string; parts: any[]; config?: any }) => Promise<boolean>
+    onInspectRequest?: (payload: { model: string; parts: any[]; config?: any }) => Promise<boolean | { confirmed: boolean; modifiedParts?: any[] }>
 ) {
     // --- State ---
     const [sceneType, setSceneType] = useState<SceneType>('exterior');
@@ -239,7 +239,7 @@ export function useRenderState(
 
             // INSPECTOR CHECK
             if (onInspectRequest) {
-                const confirmed = await onInspectRequest({
+                const inspectionResult = await onInspectRequest({
                     model: activeModel,
                     parts: contents.parts,
                     config: lastOptions.current || {
@@ -251,9 +251,18 @@ export function useRenderState(
                         generationConfig
                     }
                 });
+
+                // Handle new object return type or legacy boolean if needed (but we changed App.tsx to always return obj)
+                // To be safe against type mismatch if App.tsx wasn't fully updated (it was), we cast or check properties.
+                const confirmed = typeof inspectionResult === 'object' ? inspectionResult.confirmed : inspectionResult;
+
                 if (!confirmed) {
                     setIsGenerating(false);
                     return;
+                }
+
+                if (typeof inspectionResult === 'object' && inspectionResult.modifiedParts) {
+                    contents.parts = inspectionResult.modifiedParts;
                 }
             }
 

@@ -4,7 +4,7 @@ import { XIcon, CheckIcon, DownloadIcon } from '../icons';
 interface AIRequestInspectorModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onConfirm: () => void;
+    onConfirm: (modifiedParts?: { text?: string; inlineData?: { mimeType: string; data: string } }[]) => void;
     payload: {
         model: string;
         parts: { text?: string; inlineData?: { mimeType: string; data: string } }[];
@@ -13,10 +13,30 @@ interface AIRequestInspectorModalProps {
 }
 
 export const AIRequestInspectorModal: React.FC<AIRequestInspectorModalProps> = ({ isOpen, onClose, onConfirm, payload }) => {
+    const [parts, setParts] = React.useState<typeof payload.parts>([]);
+
+    React.useEffect(() => {
+        if (payload?.parts) {
+            setParts(JSON.parse(JSON.stringify(payload.parts))); // Deep copy
+        }
+    }, [payload]);
+
     if (!isOpen || !payload) return null;
 
-    const images = payload.parts.filter(p => p.inlineData);
-    const texts = payload.parts.filter(p => p.text);
+    const handleTextChange = (index: number, newText: string) => {
+        const newParts = [...parts];
+        if (newParts[index]) {
+            newParts[index] = { ...newParts[index], text: newText };
+            setParts(newParts);
+        }
+    };
+
+    const handleConfirm = () => {
+        onConfirm(parts);
+    };
+
+    const images = parts.filter(p => p.inlineData);
+    const textPartIndices = parts.map((p, i) => p.text ? i : -1).filter(i => i !== -1);
 
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -64,17 +84,16 @@ export const AIRequestInspectorModal: React.FC<AIRequestInspectorModalProps> = (
                     )}
 
                     {/* Text Prompts Section */}
-                    {texts.length > 0 && (
+                    {textPartIndices.length > 0 && (
                         <div>
-                            <h4 className="text-xs font-bold text-theme-text-secondary uppercase mb-3 tracking-wider">Prompts de Texto ({texts.length})</h4>
+                            <h4 className="text-xs font-bold text-theme-text-secondary uppercase mb-3 tracking-wider">Prompts de Texto ({textPartIndices.length}) - EDITABLE</h4>
                             <div className="space-y-3">
-                                {texts.map((txt, idx) => (
-                                    <div key={idx} className="bg-[#121212] rounded-lg border border-theme-bg-tertiary overflow-hidden">
+                                {textPartIndices.map((originalIndex) => (
+                                    <div key={originalIndex} className="bg-[#121212] rounded-lg border border-theme-bg-tertiary overflow-hidden ring-1 ring-transparent focus-within:ring-purple-500 transition-all">
                                         <textarea
-                                            readOnly
-                                            className="w-full h-48 bg-transparent p-4 font-mono text-sm text-gray-300 resize-y outline-none focus:ring-1 focus:ring-purple-500/50"
-                                            value={txt.text}
-                                            onClick={(e) => e.currentTarget.select()}
+                                            className="w-full h-64 bg-transparent p-4 font-mono text-sm text-gray-300 resize-y outline-none"
+                                            value={parts[originalIndex].text || ''}
+                                            onChange={(e) => handleTextChange(originalIndex, e.target.value)}
                                         />
                                     </div>
                                 ))}
@@ -107,7 +126,7 @@ export const AIRequestInspectorModal: React.FC<AIRequestInspectorModalProps> = (
                         Cancelar Envío
                     </button>
                     <button
-                        onClick={onConfirm}
+                        onClick={handleConfirm}
                         className="px-6 py-2 rounded-lg text-sm font-bold bg-green-600 hover:bg-green-500 text-white shadow-lg shadow-green-900/20 flex items-center gap-2 transition-all hover:scale-105"
                     >
                         <CheckIcon className="w-4 h-4" />
