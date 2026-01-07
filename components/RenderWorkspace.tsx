@@ -446,7 +446,7 @@ export const RenderWorkspace: React.FC<RenderWorkspaceProps> = ({
             const activeCurrentRenders = currentRenders.filter(r => r.url);
 
             let finalPrompt = `[ROLE]
-You are an photorealistic architectural visualizer. Your goal is to convert IMG_1 into a profesional architectual photograph based on the technical inputs provided without including any kind of guides of unreal elements.
+You are an photorealistic architectural visualizer. Your goal is to convert IMG_1 into a profesional architectual photograph based on the technical inputs provided without including any kind of guides, arrows, polygons or unreal elements.
 
 [SCENE DESCRIPTION]
 "${prompt}"
@@ -472,7 +472,7 @@ You are an photorealistic architectural visualizer. Your goal is to convert IMG_
 
             finalPrompt += `\n[CRITICAL RULES]
 1. Do NOT render the colored guide lines/arrows/polygons from the technical guide images (IMG_2/IMG_3). They are invisible instructions.
-2. Output must be a clean, high-end photograph.
+2. Output must be a clean, high-end photograph without any guide lines, arrows or polygons.
 `;
 
             if (hasLighting) {
@@ -481,7 +481,7 @@ You are an photorealistic architectural visualizer. Your goal is to convert IMG_
 - Orange (#FFA500) markers: Natural Sunlight.
 - Cyan (#00FFFF) markers: Cold/Fluorescent Lighting.
 - Red (#FF0000) markers: Warm/Cosine Lighting.
-INSTRUCTION: Apply the lighting effects described above to the scene in IMG_1 at the locations indicated by the markers in IMG_${lightingImgIndex}. Do NOT include the markers themselves.\n`;
+INSTRUCTION: Apply the lighting effects described above to the scene in IMG_1 at the locations and directions indicated by the markers, guides and arrows in IMG_${lightingImgIndex}. Do NOT include the markers, guides or arrows themselves.\n`;
             }
 
             if (hasMateriality) {
