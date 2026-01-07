@@ -67,7 +67,7 @@ interface RenderWorkspaceProps {
     credits: number | null;
     deductCredit: (amount: number) => Promise<boolean>;
     role: string;
-    onInspectRequest?: (payload: { model: string; parts: any[]; config?: any }) => Promise<boolean>;
+    onInspectRequest?: (payload: { model: string; parts: any[]; config?: any }) => Promise<{ confirmed: boolean; modifiedParts?: any[]; modifiedConfig?: any }>;
     selectedModel: string;
 }
 
@@ -472,15 +472,16 @@ You are an photorealistic architectural visualizer. Your goal is to convert IMG_
 
             finalPrompt += `\n[CRITICAL RULES]
 1. Do NOT render the colored guide lines/arrows/polygons from the technical guide images (IMG_2/IMG_3). They are invisible instructions.
-2. Output must be a clean, high-end photograph without any guide lines, arrows or polygons.
+2. Output must be a clean, high-end photograph without any guide lines, arrows, polygons, or graphic overlays.
+3. Treat the colored markers as STRICTLY INVISIBLE metadata for lighting/material placement only.
 `;
 
             if (hasLighting) {
                 finalPrompt += `\n[LIGHTING DATA MAPPING (IMG_${lightingImgIndex})]
 - Yellow (#FFFF00) markers: Neutral Artificial Lighting.
 - Orange (#FFA500) markers: Natural Sunlight.
-- Cyan (#00FFFF) markers: Cold/Fluorescent Lighting.
-- Red (#FF0000) markers: Warm/Cosine Lighting.
+- Cyan (#00FFFF) markers: Cold/Fluorescent artificial white Lighting.
+- Red (#FF0000) markers: Warm artificialLighting.
 INSTRUCTION: Apply the lighting effects described above to the scene in IMG_1 at the locations and directions indicated by the markers, guides and arrows in IMG_${lightingImgIndex}. Do NOT include the markers, guides or arrows themselves.\n`;
             }
 
@@ -498,8 +499,7 @@ INSTRUCTION: Apply the following materials to the regions defined by their respe
             finalPrompt += `\n[MANDATORY GEOMETRIC CONSTRAINT]
 - Resolution: ${w}x${h}.
 - Preserve ALL original edges and structural lines from IMG_1. 
-- NO white bars. NO padding.
-- Creative Freedom: ${creativeFreedom}/200.\n\n`;
+- NO white bars. NO padding.\n\n`;
 
             if (activeCurrentRenders.length > 0) {
                 const startStyleIndex = imgIndex + activeRefs.length + 1;
@@ -550,15 +550,50 @@ INSTRUCTION: Apply the following materials to the regions defined by their respe
             const contents = { parts };
 
             // 4. Debug Inspector
+            // 4. Debug Inspector with FULL visibility
+            let generationConfig = {
+                temperature: Math.max(0, creativeFreedom / 200),
+                topP: 0.95,
+                topK: 40,
+                maxOutputTokens: 2048,
+            };
+
             if (onInspectRequest) {
-                const shouldProceed = await onInspectRequest({
+                // @ts-ignore - TS might complain about mismatch if not fully propagated, but runtime is safe because App.tsx is updated.
+                // We cast result to expected shape.
+                const inspectionResult = await onInspectRequest({
                     model,
                     parts: parts,
-                    config: { creativeFreedom, sceneType, renderStyle, archStyle, lighting }
+                    config: {
+                        generationConfig,
+                        notes: "You can edit 'generationConfig' here to override temperature."
+                    }
                 });
-                if (!shouldProceed) {
+
+                // Handle Object or Boolean return (backward compat)
+                let confirmed = false;
+                let modifiedConfig = null;
+
+                if (typeof inspectionResult === 'boolean') {
+                    confirmed = inspectionResult;
+                } else if (inspectionResult && typeof inspectionResult === 'object') {
+                    confirmed = inspectionResult.confirmed;
+                    modifiedConfig = inspectionResult.modifiedConfig;
+                    if (inspectionResult.modifiedParts) {
+                        // In case text prompts were edited
+                        contents.parts = inspectionResult.modifiedParts;
+                    }
+                }
+
+                if (!confirmed) {
                     setIsGenerating(false);
                     return;
+                }
+
+                // Apply Debug Overrides
+                if (modifiedConfig && modifiedConfig.generationConfig) {
+                    console.log("Applying modified generation config:", modifiedConfig.generationConfig);
+                    generationConfig = { ...generationConfig, ...modifiedConfig.generationConfig };
                 }
             }
 
@@ -570,14 +605,7 @@ INSTRUCTION: Apply the following materials to the regions defined by their respe
                 return;
             }
 
-            // 6. Call AI with Generation Config
-            const generationConfig = {
-                temperature: Math.max(0, creativeFreedom / 200),
-                topP: 0.95,
-                topK: 40,
-                maxOutputTokens: 2048,
-            };
-
+            // 6. Call AI
             // @ts-ignore
             const response = await ai.models.generateContent({
                 model,
@@ -1765,34 +1793,7 @@ INSTRUCTION: Apply the following materials to the regions defined by their respe
                     <div className="h-px bg-theme-bg-tertiary my-4"></div>
 
                     {/* New Render Controls */}
-                    <div className="space-y-4">
-                        <CollapsiblePillGroup label="Tipo de Escena" options={sceneTypeOptions} value={sceneType} onChange={setSceneType} />
-
-                        <CollapsibleSection title="Estilos" defaultOpen={true}>
-                            <CollapsiblePillGroup label="Iluminación" options={lightingOptions} value={lighting} onChange={setLighting} />
-                            <CollapsiblePillGroup label="Estilo Arquitectónico" options={archStyleOptions} value={archStyle} onChange={setArchStyle} />
-                        </CollapsibleSection>
-
-                        {/* Creativity Slider */}
-                        <div className="space-y-2 border border-theme-bg-tertiary rounded-lg p-3 bg-theme-bg-primary/20">
-                            <div className="flex justify-between items-center mb-1">
-                                <label className="text-[10px] font-black text-theme-accent-primary uppercase tracking-[0.2em]">Creatividad</label>
-                                <span className="text-xs text-theme-text-secondary font-mono">{creativeFreedom}</span>
-                            </div>
-                            <input
-                                type="range"
-                                min="0"
-                                max="200"
-                                value={creativeFreedom}
-                                onChange={(e) => setCreativeFreedom(parseInt(e.target.value))}
-                                className="w-full h-1.5 bg-theme-bg-tertiary rounded-lg appearance-none cursor-pointer accent-theme-accent-primary"
-                            />
-                            <div className="flex justify-between text-[8px] text-theme-text-tertiary uppercase font-bold tracking-widest px-1">
-                                <span>Fiel (0)</span>
-                                <span>Libre (200)</span>
-                            </div>
-                        </div>
-                    </div>
+                    {/* Configuration Removed as per request */}
                 </div>
 
                 {/* Render Footer */}

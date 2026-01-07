@@ -1225,7 +1225,8 @@ export function App() {
     const inspectAIRequest = useCallback((payload: { model: string; parts: any[]; config?: any }) => {
         console.log("App: inspectAIRequest called", { role: roleRef.current });
         return new Promise<{ confirmed: boolean; modifiedParts?: any[]; modifiedConfig?: any }>((resolve) => {
-            // ONLY SHOW DEBUG MODAL FOR ADMINS
+            // ONLY SHOW DEBUG MODAL FOR GENEROUS
+            // Use debug mode or role if needed, currently assumes role='admin' check is desired
             if (roleRef.current !== 'admin') {
                 console.log("App: Auto-confirming (not admin)");
                 resolve({ confirmed: true });
@@ -1239,7 +1240,7 @@ export function App() {
     }, []);
 
     const confirmInspector = (modifiedParts?: any[], modifiedConfig?: any) => {
-        console.log("App: confirmInspector called", { hasResolve: !!inspectorResolveRef.current });
+        console.log("App: confirmInspector called", { hasResolve: !!inspectorResolveRef.current, modifiedConfig });
         if (inspectorResolveRef.current) inspectorResolveRef.current({ confirmed: true, modifiedParts, modifiedConfig });
         setInspectorPayload(null);
         inspectorResolveRef.current = null;
