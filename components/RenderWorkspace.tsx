@@ -934,9 +934,10 @@ INSTRUCTION: Apply the following materials to the regions defined by their respe
         };
 
         // 3. Render Layers
+        const shouldDrawGuides = !resultImage || showOriginal;
 
         // --- Materiality Layer ---
-        if (materialityLayerVisible) {
+        if (materialityLayerVisible && shouldDrawGuides) {
             offCtx.clearRect(0, 0, canvas.width, canvas.height);
             materialityStrokes.forEach(s => drawStroke(offCtx, s));
             // Current Stroke (if Materiality active)
@@ -967,7 +968,7 @@ INSTRUCTION: Apply the following materials to the regions defined by their respe
         }
 
         // --- Lighting Layer ---
-        if (lightingLayerVisible) {
+        if (lightingLayerVisible && shouldDrawGuides) {
             offCtx.clearRect(0, 0, canvas.width, canvas.height);
             lightingStrokes.forEach(s => drawStroke(offCtx, s));
             if (activeSection === 'lighting' && currentStroke) {
