@@ -468,7 +468,8 @@ Re-render IMG_1 with high photorealism. `;
 
             if (hasLighting || hasMateriality) {
                 finalPrompt += `Strictly follow the instructions from the guide images. 
-IMPORTANT: The colored lines, arrows, and blocks in the guide images are NOT objects. They are meta-data instructions. Do NOT render them. Render what they MEAN.\n`;
+IMPORTANT: The colored lines, arrows, and blocks in the guide images are NOT objects. They are meta-data instructions. Do NOT render them. Render what they MEAN.
+CRITICAL: Do not include the guides in the final image.\n`;
             } else {
                 finalPrompt += `Enhance the architectural quality and realism.\n`;
             }
