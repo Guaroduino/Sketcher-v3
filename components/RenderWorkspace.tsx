@@ -439,58 +439,59 @@ export const RenderWorkspace: React.FC<RenderWorkspaceProps> = ({
 
             // 2. Build Prompt
             // 2. Build Prompt
+            // 2. Build Prompt
             const hasLighting = lightingStrokes.length > 0;
             const hasMateriality = materialityStrokes.length > 0;
             const activeRefs = refImages.filter(r => r.url);
             const activeCurrentRenders = currentRenders.filter(r => r.url);
 
-            let finalPrompt = `[VISUAL REFERENCE GUIDE]\n`;
+            let finalPrompt = `[ROLE]
+You are an architectural visualizer. Your goal is to render the scene described below based on specific technical inputs.
+
+[SCENE DESCRIPTION]
+"${prompt}"
+
+[INPUTS DEFINITION]
+- IMG_1 (Geometry Base): Use this strictly for perspective and form.
+`;
+
             let imgIndex = 1;
-
-            finalPrompt += `- IMG_${imgIndex}: BASE SCENE. The original architectural photograph/sketch.\n`;
-
             let lightingImgIndex = -1;
             if (hasLighting) {
                 imgIndex++;
                 lightingImgIndex = imgIndex;
-                finalPrompt += `- IMG_${imgIndex}: LIGHTING GUIDE. This is IMG_1 overlaid with colored arrows/lines acting as a lighting map.\n`;
+                finalPrompt += `- IMG_${imgIndex} (Lighting Data): Technical guide for light sources. The image contains colored lines, arrows, and areas representing light sources.\n`;
             }
 
             let materialityImgIndex = -1;
             if (hasMateriality) {
                 imgIndex++;
                 materialityImgIndex = imgIndex;
-                finalPrompt += `- IMG_${imgIndex}: MATERIALITY GUIDE. This is IMG_1 overlaid with colored regions acting as a material map.\n`;
+                finalPrompt += `- IMG_${imgIndex} (Material Data): Technical guide for textures. The image contains filled colored regions representing material assignments.\n`;
             }
 
-            finalPrompt += `\n[INSTRUCTIONS]
-Re-render IMG_1 with high photorealism. `;
-
-            if (hasLighting || hasMateriality) {
-                finalPrompt += `Strictly follow the instructions from the guide images. 
-IMPORTANT: The colored lines, arrows, and blocks in the guide images are NOT objects. They are meta-data instructions. Do NOT render them. Render what they MEAN.
-CRITICAL: Do not include the guides in the final image.\n`;
-            } else {
-                finalPrompt += `Enhance the architectural quality and realism.\n`;
-            }
+            finalPrompt += `\n[CRITICAL RULES]
+1. Do NOT render the colored guide lines/arrows/polygons from the technical guide images (IMG_2/IMG_3). They are invisible instructions.
+2. Output must be a clean, high-end photograph.
+`;
 
             if (hasLighting) {
-                finalPrompt += `\n[LIGHTING INSTRUCTIONS (Refer to IMG_${lightingImgIndex})]
-- Use the colored arrows/lines in IMG_${lightingImgIndex} to position and colorize the light sources in the scene.
-  * Yellow Arrows: Create Neutral Artificial Lighting in this direction/area.
-  * Orange Arrows: Create Natural Sunlight entering from this direction.
-  * Cyan Arrows: Create Cold/Fluorescent Lighting.
-  * Red Arrows: Create Warm/Cosine Lighting.\n`;
+                finalPrompt += `\n[LIGHTING DATA MAPPING (IMG_${lightingImgIndex})]
+- Yellow (#FFFF00) markers: Neutral Artificial Lighting.
+- Orange (#FFA500) markers: Natural Sunlight.
+- Cyan (#00FFFF) markers: Cold/Fluorescent Lighting.
+- Red (#FF0000) markers: Warm/Cosine Lighting.
+INSTRUCTION: Apply the lighting effects described above to the scene in IMG_1 at the locations indicated by the markers in IMG_${lightingImgIndex}. Do NOT render the markers themselves.\n`;
             }
 
             if (hasMateriality) {
-                finalPrompt += `\n[MATERIAL INSTRUCTIONS (Refer to IMG_${materialityImgIndex})]
-- The filled color regions in IMG_${materialityImgIndex} correspond to specific materials. Apply these materials to the underlying surfaces from IMG_1.\n`;
+                finalPrompt += `\n[MATERIAL DATA MAPPING (IMG_${materialityImgIndex})]
+- The filled color regions in IMG_${materialityImgIndex} correspond to specific materials.
+INSTRUCTION: Apply the following materials to the regions defined by their respective colors:\n`;
 
                 activeRefs.forEach((ref, idx) => {
-                    // Refs are added after guides. First ref is at imgIndex + 1
                     const refImgIndex = imgIndex + 1 + idx;
-                    finalPrompt += `- Surface covered by ${ref.color} in IMG_${materialityImgIndex}: Apply material from Reference Image IMG_${refImgIndex}.\n`;
+                    finalPrompt += `  * Region colored ${ref.color} in IMG_${materialityImgIndex}: Apply material shown in Reference Image IMG_${refImgIndex}.\n`;
                 });
             }
 
@@ -501,9 +502,6 @@ CRITICAL: Do not include the guides in the final image.\n`;
 - Creative Freedom: ${creativeFreedom}/200.\n\n`;
 
             if (activeCurrentRenders.length > 0) {
-                // Style refs start after active refs
-                // Current imgIndex counts Base + Guides
-                // Refs take 'activeRefs.length' slots
                 const startStyleIndex = imgIndex + activeRefs.length + 1;
                 finalPrompt += `\n[Style & Consistency - Use Previous Renders]\n`;
                 finalPrompt += `I have provided ${activeCurrentRenders.length} previous renders for consistency (starting from IMG_${startStyleIndex}).\n`;
